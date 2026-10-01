@@ -1,10 +1,10 @@
 /**
  * @leadmate/core
  *
- * Core pure domain logic and utilities for LeadMate.
- * Independent of database, network, and external API providers.
+ * Core pure domain logic, normalization, duplicate detection, and merge services.
  */
 
 export const CORE_PACKAGE_NAME = '@leadmate/core';
 
 export * from './normalization/index.js';
+export * from './duplicates/index.js';

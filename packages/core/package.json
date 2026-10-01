@@ -9,6 +9,7 @@
     "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {
+    "@leadmate/db": "*",
     "@leadmate/shared": "*"
   },
   "devDependencies": {
