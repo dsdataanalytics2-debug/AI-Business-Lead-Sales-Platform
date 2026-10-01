@@ -1,0 +1,139 @@
+export enum Role {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  SALES_MANAGER = 'SALES_MANAGER',
+  SALES_EXECUTIVE = 'SALES_EXECUTIVE',
+  VIEWER = 'VIEWER'
+}
+
+export enum ContactType {
+  PHONE = 'PHONE',
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL'
+}
+
+export enum PhoneType {
+  MOBILE = 'MOBILE',
+  LANDLINE = 'LANDLINE',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export enum ContactStatus {
+  FOUND = 'FOUND',
+  INVALID_FORMAT = 'INVALID_FORMAT',
+  VERIFIED = 'VERIFIED',
+  STALE = 'STALE'
+}
+
+export enum WhatsAppStatus {
+  UNKNOWN = 'UNKNOWN',
+  PUBLICLY_LISTED = 'PUBLICLY_LISTED',
+  CONFIRMED = 'CONFIRMED'
+}
+
+export enum EvidenceType {
+  WA_ME_LINK = 'WA_ME_LINK',
+  LISTING_FIELD = 'LISTING_FIELD',
+  OFFICIAL_PAGE_TEXT = 'OFFICIAL_PAGE_TEXT',
+  AUTHORIZED_API = 'AUTHORIZED_API',
+  MANUAL_CONFIRMED = 'MANUAL_CONFIRMED'
+}
+
+export enum WebsiteStatus {
+  UNKNOWN = 'UNKNOWN',
+  NONE_DETECTED = 'NONE_DETECTED',
+  REACHABLE = 'REACHABLE',
+  UNREACHABLE = 'UNREACHABLE'
+}
+
+export enum OnlinePresenceType {
+  WEBSITE = 'WEBSITE',
+  FACEBOOK_ONLY = 'FACEBOOK_ONLY',
+  INSTAGRAM_ONLY = 'INSTAGRAM_ONLY',
+  MARKETPLACE_ONLY = 'MARKETPLACE_ONLY',
+  NONE_DETECTED = 'NONE_DETECTED',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export enum CrmStage {
+  NEW = 'NEW',
+  ANALYZED = 'ANALYZED',
+  CONTACTED = 'CONTACTED',
+  REPLIED = 'REPLIED',
+  INTERESTED = 'INTERESTED',
+  DEMO_SENT = 'DEMO_SENT',
+  MEETING = 'MEETING',
+  PROPOSAL = 'PROPOSAL',
+  WON = 'WON'
+}
+
+export enum CrmOutcome {
+  NONE = 'NONE',
+  LOST = 'LOST',
+  NO_RESPONSE = 'NO_RESPONSE',
+  NOT_INTERESTED = 'NOT_INTERESTED',
+  INVALID_LEAD = 'INVALID_LEAD'
+}
+
+export enum JobStatus {
+  QUEUED = 'QUEUED',
+  RUNNING = 'RUNNING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+  RETRYING = 'RETRYING',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum DemoStatus {
+  QUEUED = 'QUEUED',
+  CREATING = 'CREATING',
+  READY = 'READY',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  DISABLED = 'DISABLED',
+  DELETED = 'DELETED'
+}
+
+export enum DataSourceStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  RESTRICTED = 'RESTRICTED',
+  REJECTED = 'REJECTED'
+}
+
+export enum DataSourceRole {
+  DISCOVERY = 'DISCOVERY',
+  ENRICHMENT = 'ENRICHMENT',
+  BOTH = 'BOTH'
+}
+
+export enum SuppressionType {
+  PHONE = 'PHONE',
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL',
+  DOMAIN = 'DOMAIN',
+  BUSINESS = 'BUSINESS'
+}
+
+export enum SuppressionReason {
+  OPT_OUT = 'OPT_OUT',
+  DO_NOT_CONTACT = 'DO_NOT_CONTACT',
+  COMPLAINT = 'COMPLAINT',
+  INVALID = 'INVALID',
+  LEGAL = 'LEGAL',
+  INTERNAL_POLICY = 'INTERNAL_POLICY'
+}
+
+export enum ChannelScope {
+  ALL = 'ALL',
+  CALL = 'CALL',
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL'
+}
+
+export enum Priority {
+  HIGH = 'HIGH',
+  MEDIUM = 'MEDIUM',
+  LOW = 'LOW',
+  NONE = 'NONE'
+}
