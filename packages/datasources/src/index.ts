@@ -1,9 +1,14 @@
 /**
  * @leadmate/datasources
  *
- * External datasource adapters and connectors package skeleton for LeadMate.
- * Datasource integrations (Google Places, directories, scraping, enrichment)
- * will be implemented in subsequent milestones.
+ * Datasource provider abstractions, registries, deterministic mock provider,
+ * and fixtures for LeadMate lead discovery.
  */
 
 export const DATASOURCES_PACKAGE_NAME = '@leadmate/datasources';
+
+export * from './types.js';
+export * from './errors.js';
+export * from './fixtures/mock-businesses.js';
+export * from './providers/mock-provider.js';
+export * from './registry.js';
