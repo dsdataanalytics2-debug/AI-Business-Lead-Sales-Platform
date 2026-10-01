@@ -52,6 +52,55 @@ enum ChannelScope {
   EMAIL
 }
 
+enum ContactType {
+  PHONE
+  WHATSAPP
+  EMAIL
+}
+
+enum PhoneType {
+  MOBILE
+  LANDLINE
+  UNKNOWN
+}
+
+enum ContactStatus {
+  FOUND
+  INVALID_FORMAT
+  VERIFIED
+  STALE
+}
+
+enum WhatsAppStatus {
+  UNKNOWN
+  PUBLICLY_LISTED
+  CONFIRMED
+}
+
+enum EvidenceType {
+  WA_ME_LINK
+  LISTING_FIELD
+  OFFICIAL_PAGE_TEXT
+  AUTHORIZED_API
+  MANUAL_CONFIRMED
+}
+
+enum WebsiteStatus {
+  UNKNOWN
+  NONE_DETECTED
+  REACHABLE
+  UNREACHABLE
+}
+
+enum OnlinePresenceType {
+  WEBSITE
+  FACEBOOK_ONLY
+  INSTAGRAM_ONLY
+  MARKETPLACE_ONLY
+  NONE_DETECTED
+  UNKNOWN
+}
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -66,6 +115,8 @@ model Organization {
   auditLogs        AuditLog[]
   suppressionLists SuppressionList[]
   usageLedgers     UsageLedger[]
+  leads            Lead[]
+  leadSources      LeadSource[]
 
   @@map("organizations")
 }
@@ -209,4 +260,101 @@ model UsageLedger {
   @@index([provider])
   @@index([createdAt])
   @@map("usage_ledgers")
+}
+
+model Lead {
+  id                 String             @id @default(uuid())
+  organizationId     String             @map("organization_id")
+  name               String
+  normalizedName     String             @map("normalized_name")
+  category           String
+  description        String?
+  address            String?
+  locality           String?
+  city               String             @default("Dhaka")
+  region             String?            @default("Dhaka Division")
+  country            String             @default("BD")
+  latitude           Float?
+  longitude          Float?
+  primaryPhone       String?            @map("primary_phone")
+  primaryEmail       String?            @map("primary_email")
+  website            String?
+  normalizedWebsite  String?            @map("normalized_website")
+  websiteStatus      WebsiteStatus      @default(UNKNOWN) @map("website_status")
+  onlinePresenceType OnlinePresenceType @default(UNKNOWN) @map("online_presence_type")
+  rating             Float?
+  reviewCount        Int?               @default(0) @map("review_count")
+  primarySource      String             @map("primary_source")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts     LeadContact[]
+  sources      LeadSource[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId])
+  @@index([organizationId, normalizedName])
+  @@index([organizationId, primaryPhone])
+  @@index([organizationId, normalizedWebsite])
+  @@index([organizationId, city])
+  @@index([organizationId, category])
+  @@map("leads")
+}
+
+model LeadContact {
+  id              String         @id @default(uuid())
+  leadId          String         @map("lead_id")
+  type            ContactType
+  rawValue        String         @map("raw_value")
+  normalizedValue String         @map("normalized_value")
+  phoneType       PhoneType?     @default(UNKNOWN) @map("phone_type")
+  status          ContactStatus  @default(FOUND)
+  whatsappStatus  WhatsAppStatus @default(UNKNOWN) @map("whatsapp_status")
+  isPrimary       Boolean        @default(false) @map("is_primary")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  lead     Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  evidence ContactEvidence[]
+
+  @@index([leadId])
+  @@index([normalizedValue])
+  @@index([type, normalizedValue])
+  @@map("lead_contacts")
+}
+
+model ContactEvidence {
+  id           String       @id @default(uuid())
+  contactId    String       @map("contact_id")
+  sourceName   String       @map("source_name")
+  sourceUrl    String?      @map("source_url")
+  evidenceType EvidenceType @map("evidence_type")
+  snippet      String?
+  discoveredAt DateTime     @default(now()) @map("discovered_at")
+
+  contact LeadContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@index([sourceName])
+  @@map("contact_evidences")
+}
+
+model LeadSource {
+  id               String   @id @default(uuid())
+  leadId           String   @map("lead_id")
+  organizationId   String   @map("organization_id")
+  sourceName       String   @map("source_name")
+  sourceExternalId String?  @map("source_external_id")
+  sourceUrl        String?  @map("source_url")
+  rawData          Json?    @map("raw_data")
+  fetchedAt        DateTime @default(now()) @map("fetched_at")
+
+  lead         Lead         @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sourceName, sourceExternalId])
+  @@index([leadId])
+  @@index([organizationId])
+  @@map("lead_sources")
 }
