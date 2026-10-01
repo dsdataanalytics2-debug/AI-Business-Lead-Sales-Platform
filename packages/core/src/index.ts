@@ -1,9 +1,10 @@
 /**
  * @leadmate/core
  *
- * Core pure domain logic package skeleton for LeadMate.
- * Domain business logic (phone normalization, scoring, deduplication, suppression)
- * will be implemented in subsequent milestones.
+ * Core pure domain logic and utilities for LeadMate.
+ * Independent of database, network, and external API providers.
  */
 
 export const CORE_PACKAGE_NAME = '@leadmate/core';
+
+export * from './normalization/index.js';
