@@ -9,6 +9,7 @@ import { NotFoundError } from './lib/errors.js';
 import { authRouter } from './routes/auth.routes.js';
 import { userRouter } from './routes/user.routes.js';
 import { healthRouter } from './routes/health.routes.js';
+import { businessSearchRouter } from './routes/business-search.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp(): Express {
   // API v1 module routes
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', userRouter);
+  app.use('/api/v1/business-search', businessSearchRouter);
 
   // 404 handler
   app.use((req: Request, _res: Response, next: NextFunction) => {

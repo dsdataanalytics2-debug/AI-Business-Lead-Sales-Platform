@@ -73,7 +73,6 @@ export const saveLeadRequestSchema = z
       .max(100, 'Provider cannot exceed 100 characters'),
     externalId: z
       .string()
-      .trim()
       .min(1, 'External business ID is required')
       .max(255, 'External ID cannot exceed 255 characters')
   })

@@ -44,3 +44,9 @@ export class ValidationError extends AppError {
     super(ErrorCodes.VALIDATION_ERROR, message, 422, details);
   }
 }
+
+export class BadRequestError extends AppError {
+  constructor(message = 'Bad request', details?: Record<string, unknown> | Array<unknown>) {
+    super(ErrorCodes.VALIDATION_ERROR, message, 400, details);
+  }
+}

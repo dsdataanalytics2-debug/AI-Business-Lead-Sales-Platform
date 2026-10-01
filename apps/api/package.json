@@ -11,6 +11,8 @@
     "test": "node ../../node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {
+    "@leadmate/core": "*",
+    "@leadmate/datasources": "*",
     "@leadmate/db": "*",
     "@leadmate/shared": "*",
     "argon2": "^0.41.1",
