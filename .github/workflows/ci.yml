@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate, Test & Build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: leadmate_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/leadmate_test
+      DATABASE_URL_TEST: postgresql://postgres:postgres@localhost:5432/leadmate_test
+      REDIS_URL: redis://localhost:6379/0
+      REDIS_URL_TEST: redis://localhost:6379/1
+      REDIS_KEY_PREFIX: leadmate
+      SESSION_SECRET: ci-test-session-secret-must-be-at-least-32-chars-long
+      CREDENTIAL_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      SEED_SUPER_ADMIN_EMAIL: admin@example.com
+      SEED_SUPER_ADMIN_PASSWORD: Admin12345!SecurePass
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify test database safety guard
+        run: |
+          node -e '
+            function checkUrl(name, val) {
+              if (!val) {
+                console.error("::error::Missing " + name + " environment variable.");
+                process.exit(1);
+              }
+              try {
+                const u = new URL(val);
+                const db = u.pathname.replace(/^\//, "");
+                if (!db || !db.endsWith("_test")) {
+                  console.error("::error::" + name + " database (" + db + ") violates safety guard: name must end with _test");
+                  process.exit(1);
+                }
+                console.log("[PASS] " + name + " targets safe test database: " + db);
+              } catch (err) {
+                console.error("::error::Invalid URL in " + name);
+                process.exit(1);
+              }
+            }
+            checkUrl("DATABASE_URL_TEST", process.env.DATABASE_URL_TEST);
+            checkUrl("DATABASE_URL", process.env.DATABASE_URL);
+          '
+
+      - name: Validate & Generate Prisma Client
+        run: |
+          npx prisma validate --schema=packages/db/prisma/schema.prisma
+          npx prisma generate --schema=packages/db/prisma/schema.prisma
+
+      - name: Apply DB migrations to test database
+        run: npx prisma migrate deploy --schema=packages/db/prisma/schema.prisma
+
+      - name: Run root typecheck
+        run: npm run typecheck
+
+      - name: Run automated test suite
+        run: npm test
+
+      - name: Build web application
+        run: npm run build -w apps/web
