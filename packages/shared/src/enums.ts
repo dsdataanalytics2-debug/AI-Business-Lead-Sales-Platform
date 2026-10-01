@@ -137,3 +137,15 @@ export enum Priority {
   LOW = 'LOW',
   NONE = 'NONE'
 }
+
+export enum DuplicateMatchLevel {
+  NONE = 'NONE',
+  DEFINITE = 'DEFINITE',
+  CANDIDATE = 'CANDIDATE'
+}
+
+export enum DuplicateAction {
+  CREATED = 'CREATED',
+  MERGED = 'MERGED',
+  CANDIDATE_REQUIRES_CONFIRMATION = 'CANDIDATE_REQUIRES_CONFIRMATION'
+}
