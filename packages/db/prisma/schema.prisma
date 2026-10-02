@@ -112,6 +112,24 @@ enum AnalysisWebsiteStatus {
   NON_HTML
 }
 
+enum CrmStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum CrmActivityType {
+  LEAD_ASSIGNED
+  LEAD_UNASSIGNED
+  LEAD_REASSIGNED
+  STAGE_CHANGED
+  NOTE_ADDED
+}
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -129,6 +147,8 @@ model Organization {
   leads                  Lead[]
   leadSources            LeadSource[]
   onlinePresenceAnalyses LeadOnlinePresenceAnalysis[]
+  crmNotes               CrmNote[]
+  crmActivities          CrmActivity[]
 
   @@map("organizations")
 }
@@ -148,7 +168,11 @@ model User {
   sessions      Session[]
   auditLogs     AuditLog[]
   notifications Notification[]
+  assignedLeads Lead[]         @relation("LeadAssignee")
+  crmNotes      CrmNote[]
+  crmActivities CrmActivity[]
 
+  @@unique([id, organizationId])
   @@index([organizationId])
   @@index([email])
   @@map("users")
@@ -294,6 +318,9 @@ model Lead {
   normalizedWebsite  String?            @map("normalized_website")
   websiteStatus      WebsiteStatus      @default(UNKNOWN) @map("website_status")
   onlinePresenceType OnlinePresenceType @default(UNKNOWN) @map("online_presence_type")
+  crmStage           CrmStage           @default(NEW) @map("crm_stage")
+  assignedUserId     String?            @map("assigned_user_id")
+  assignedAt         DateTime?          @map("assigned_at")
   rating             Float?
   reviewCount        Int?               @default(0) @map("review_count")
   primarySource      String             @map("primary_source")
@@ -304,6 +331,9 @@ model Lead {
   contacts               LeadContact[]
   sources                LeadSource[]
   onlinePresenceAnalysis LeadOnlinePresenceAnalysis?
+  assignedUser           User?                       @relation("LeadAssignee", fields: [assignedUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  crmNotes               CrmNote[]
+  crmActivities          CrmActivity[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -312,6 +342,8 @@ model Lead {
   @@index([organizationId, normalizedWebsite])
   @@index([organizationId, city])
   @@index([organizationId, category])
+  @@index([organizationId, crmStage])
+  @@index([organizationId, assignedUserId])
   @@map("leads")
 }
 
@@ -401,4 +433,40 @@ model LeadOnlinePresenceAnalysis {
 
   @@unique([leadId, organizationId])
   @@map("lead_online_presence_analyses")
+}
+
+model CrmNote {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  leadId         String   @map("lead_id")
+  userId         String   @map("user_id")
+  content        String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  author       User         @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@index([organizationId, leadId, createdAt])
+  @@index([organizationId, userId])
+  @@map("crm_notes")
+}
+
+model CrmActivity {
+  id             String          @id @default(uuid())
+  organizationId String          @map("organization_id")
+  leadId         String          @map("lead_id")
+  actorUserId    String          @map("actor_user_id")
+  type           CrmActivityType
+  metadata       Json            @default("{}")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  actor        User         @relation(fields: [actorUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@index([organizationId, leadId, createdAt])
+  @@index([organizationId, actorUserId])
+  @@map("crm_activities")
 }
