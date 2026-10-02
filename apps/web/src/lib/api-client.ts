@@ -1,4 +1,12 @@
-import { ApiErrorResponse, ApiSuccessResponse, AuthUser, Permission } from '@leadmate/shared';
+import {
+  ApiErrorResponse,
+  ApiSuccessResponse,
+  AuthUser,
+  Permission,
+  DuplicateAction,
+  type BusinessSearchResult,
+  type SaveLeadRequest
+} from '@leadmate/shared';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 
@@ -21,6 +29,20 @@ export class ApiClientError extends Error {
 export interface AuthSessionData {
   user: AuthUser;
   permissions: Permission[];
+}
+
+export interface BusinessSearchQueryParams {
+  q: string;
+  location: string;
+  category?: string;
+  limit?: number;
+  provider?: string;
+}
+
+export interface SaveLeadResponse {
+  action: DuplicateAction;
+  leadId: string;
+  matchReason?: string;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -66,6 +88,25 @@ export const apiClient = {
     me: (): Promise<AuthSessionData> =>
       request<AuthSessionData>('/auth/me', {
         method: 'GET'
+      })
+  },
+  businessSearch: {
+    search: (params: BusinessSearchQueryParams): Promise<BusinessSearchResult[]> => {
+      const searchParams = new URLSearchParams();
+      searchParams.set('q', params.q);
+      searchParams.set('location', params.location);
+      if (params.category) searchParams.set('category', params.category);
+      if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+      if (params.provider) searchParams.set('provider', params.provider);
+
+      return request<BusinessSearchResult[]>(`/business-search?${searchParams.toString()}`, {
+        method: 'GET'
+      });
+    },
+    saveLead: (input: SaveLeadRequest): Promise<SaveLeadResponse> =>
+      request<SaveLeadResponse>('/business-search/save-lead', {
+        method: 'POST',
+        body: JSON.stringify(input)
       })
   }
 };

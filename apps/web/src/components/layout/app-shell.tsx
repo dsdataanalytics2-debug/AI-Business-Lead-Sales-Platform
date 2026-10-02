@@ -17,6 +17,7 @@ import {
   X,
   ShieldAlert
 } from 'lucide-react';
+import { Permissions, type Permission } from '@leadmate/shared';
 import { useAuth } from '@/lib/auth-context';
 
 interface NavItem {
@@ -25,25 +26,28 @@ interface NavItem {
   icon: React.ElementType;
   badge?: string;
   isPlaceholder?: boolean;
+  permission?: Permission;
 }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Leads', href: '/leads', icon: Users, isPlaceholder: true },
-  { label: 'Business Search', href: '/discover', icon: Search, isPlaceholder: true },
-  { label: 'Campaigns', href: '/campaigns', icon: Megaphone, isPlaceholder: true },
-  { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, isPlaceholder: true },
-  { label: 'StoreMate Demos', href: '/demos', icon: Globe, isPlaceholder: true },
-  { label: 'Team', href: '/team', icon: UserCheck, isPlaceholder: true },
-  { label: 'Settings', href: '/settings', icon: Settings, isPlaceholder: true }
+  { label: 'Leads', href: '/leads', icon: Users, isPlaceholder: true, permission: Permissions.LEADS_READ },
+  { label: 'Business Search', href: '/business-search', icon: Search, permission: Permissions.LEADS_READ },
+  { label: 'Campaigns', href: '/campaigns', icon: Megaphone, isPlaceholder: true, permission: Permissions.CAMPAIGNS_MANAGE },
+  { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, isPlaceholder: true, permission: Permissions.LEADS_READ },
+  { label: 'StoreMate Demos', href: '/demos', icon: Globe, isPlaceholder: true, permission: Permissions.DEMOS_GENERATE },
+  { label: 'Team', href: '/team', icon: UserCheck, isPlaceholder: true, permission: Permissions.USERS_MANAGE },
+  { label: 'Settings', href: '/settings', icon: Settings, isPlaceholder: true, permission: Permissions.USERS_MANAGE }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, hasPermission, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const visibleNavItems = navItems.filter((item) => !item.permission || hasPermission(item.permission));
 
   const handleLogout = async () => {
     try {
@@ -72,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (
@@ -146,24 +150,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <nav className="flex-1 py-4 space-y-1 overflow-y-auto">
-              {navItems.map((item) => (
-                <div key={item.label} onClick={() => !item.isPlaceholder && setMobileOpen(false)}>
-                  <div
-                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium ${
-                      item.isPlaceholder
-                        ? 'text-slate-500'
-                        : pathname === item.href
-                          ? 'bg-indigo-600 text-white'
-                          : 'text-slate-300'
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    {item.isPlaceholder && (
-                      <span className="text-[9px] bg-slate-800 text-slate-400 px-1 py-0.5 rounded">Soon</span>
+              {visibleNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <div key={item.label} onClick={() => !item.isPlaceholder && setMobileOpen(false)}>
+                    {item.isPlaceholder ? (
+                      <div className="flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-slate-500 cursor-not-allowed">
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4 text-slate-600" />
+                          <span>{item.label}</span>
+                        </div>
+                        <span className="text-[9px] bg-slate-800 text-slate-400 px-1 py-0.5 rounded font-mono uppercase">Soon</span>
+                      </div>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium ${
+                          isActive ? 'bg-indigo-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </div>
+                      </Link>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </nav>
             <button
               onClick={handleLogout}
