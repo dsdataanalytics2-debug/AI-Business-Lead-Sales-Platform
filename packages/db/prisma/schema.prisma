@@ -101,6 +101,17 @@ enum OnlinePresenceType {
   UNKNOWN
 }
 
+enum AnalysisWebsiteStatus {
+  NOT_APPLICABLE
+  REACHABLE
+  UNREACHABLE
+  TIMEOUT
+  ACCESS_RESTRICTED
+  BLOCKED_SSRF
+  INVALID_URL
+  NON_HTML
+}
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -111,12 +122,13 @@ model Organization {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  users            User[]
-  auditLogs        AuditLog[]
-  suppressionLists SuppressionList[]
-  usageLedgers     UsageLedger[]
-  leads            Lead[]
-  leadSources      LeadSource[]
+  users                  User[]
+  auditLogs              AuditLog[]
+  suppressionLists       SuppressionList[]
+  usageLedgers           UsageLedger[]
+  leads                  Lead[]
+  leadSources            LeadSource[]
+  onlinePresenceAnalyses LeadOnlinePresenceAnalysis[]
 
   @@map("organizations")
 }
@@ -288,9 +300,10 @@ model Lead {
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  contacts     LeadContact[]
-  sources      LeadSource[]
+  organization           Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contacts               LeadContact[]
+  sources                LeadSource[]
+  onlinePresenceAnalysis LeadOnlinePresenceAnalysis?
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -357,4 +370,35 @@ model LeadSource {
   @@index([leadId])
   @@index([organizationId])
   @@map("lead_sources")
+}
+
+model LeadOnlinePresenceAnalysis {
+  id              String                @id @default(uuid())
+  organizationId  String                @map("organization_id")
+  leadId          String                @map("lead_id")
+  websiteUrl      String?               @map("website_url")
+  websiteStatus   AnalysisWebsiteStatus @map("website_status")
+  httpStatusCode  Int?                  @map("http_status_code")
+  isHttps         Boolean               @default(false) @map("is_https")
+  isRedirected    Boolean               @default(false) @map("is_redirected")
+  finalUrl        String?               @map("final_url")
+  responseTimeMs  Int?                  @map("response_time_ms")
+  pageTitle       String?               @map("page_title")
+  metaDescription String?               @map("meta_description")
+  hasWebsite      Boolean               @default(false) @map("has_website")
+  hasFacebook     Boolean               @default(false) @map("has_facebook")
+  hasInstagram    Boolean               @default(false) @map("has_instagram")
+  hasMarketplace  Boolean               @default(false) @map("has_marketplace")
+  campaignScores  Json                  @map("campaign_scores")
+  analyzerVersion String                @default("v1") @map("analyzer_version")
+  scoreVersion    String                @default("v1") @map("score_version")
+  analyzedAt      DateTime              @default(now()) @map("analyzed_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  lead         Lead         @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, organizationId])
+  @@map("lead_online_presence_analyses")
 }
