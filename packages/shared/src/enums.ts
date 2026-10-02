@@ -149,3 +149,51 @@ export enum DuplicateAction {
   MERGED = 'MERGED',
   CANDIDATE_REQUIRES_CONFIRMATION = 'CANDIDATE_REQUIRES_CONFIRMATION'
 }
+
+/* =========================================================
+ * M2: Online Presence Analysis & Qualification Enums
+ * ========================================================= */
+
+export enum AnalysisWebsiteStatus {
+  NOT_APPLICABLE = 'NOT_APPLICABLE',
+  REACHABLE = 'REACHABLE',
+  UNREACHABLE = 'UNREACHABLE',
+  TIMEOUT = 'TIMEOUT',
+  ACCESS_RESTRICTED = 'ACCESS_RESTRICTED',
+  BLOCKED_SSRF = 'BLOCKED_SSRF',
+  INVALID_URL = 'INVALID_URL',
+  NON_HTML = 'NON_HTML'
+}
+
+export enum CampaignType {
+  WEBSITE_ACQUISITION = 'WEBSITE_ACQUISITION',
+  WEBSITE_REDESIGN = 'WEBSITE_REDESIGN',
+  ONLINE_PRESENCE_IMPROVEMENT = 'ONLINE_PRESENCE_IMPROVEMENT'
+}
+
+export enum QualificationReasonCode {
+  // Website signals
+  NO_WEBSITE = 'NO_WEBSITE',
+  WEBSITE_UNREACHABLE = 'WEBSITE_UNREACHABLE',
+  WEBSITE_TIMEOUT = 'WEBSITE_TIMEOUT',
+
+  // Technical quality signals
+  NO_HTTPS = 'NO_HTTPS',
+  NO_META_DESCRIPTION = 'NO_META_DESCRIPTION',
+  SHORT_PAGE_TITLE = 'SHORT_PAGE_TITLE',
+  SLOW_RESPONSE = 'SLOW_RESPONSE',
+
+  // Presence signals
+  FACEBOOK_ONLY = 'FACEBOOK_ONLY',
+  INSTAGRAM_ONLY = 'INSTAGRAM_ONLY',
+  MULTI_CHANNEL_PRESENCE = 'MULTI_CHANNEL_PRESENCE',
+
+  // Business viability signals
+  HIGH_RATING_NO_WEB = 'HIGH_RATING_NO_WEB',
+  HAS_ESTABLISHED_REVIEWS = 'HAS_ESTABLISHED_REVIEWS',
+
+  // Contact signals
+  HAS_MOBILE_PHONE = 'HAS_MOBILE_PHONE',
+  HAS_PRIMARY_EMAIL = 'HAS_PRIMARY_EMAIL',
+  HAS_WHATSAPP = 'HAS_WHATSAPP'
+}
