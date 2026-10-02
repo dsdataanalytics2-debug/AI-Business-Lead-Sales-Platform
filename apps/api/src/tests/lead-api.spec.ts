@@ -23,6 +23,7 @@ import prisma, {
   OnlinePresenceType,
   EvidenceType
 } from '@leadmate/db';
+import { ensureTestDatabase } from '@leadmate/db/test-guard';
 import { ErrorCodes, Permissions } from '@leadmate/shared';
 import { app } from '../app.js';
 import { hashPassword, hashSessionToken } from '../lib/crypto.js';
@@ -63,6 +64,7 @@ describe('M1 Step 7: Master Lead Database Backend API Matrix', () => {
   }
 
   async function cleanupDatabase() {
+    await ensureTestDatabase(prisma);
     await prisma.contactEvidence.deleteMany({});
     await prisma.leadContact.deleteMany({});
     await prisma.leadSource.deleteMany({});
@@ -72,13 +74,8 @@ describe('M1 Step 7: Master Lead Database Backend API Matrix', () => {
   }
 
   beforeAll(async () => {
-    // 0. Safety Guard: Confirm database is test database
-    const dbUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL || '';
-    if (!dbUrl.includes('_test')) {
-      throw new Error(
-        `SAFETY GUARD TRIGGERED: Database URL "${dbUrl}" does not end with "_test". Destructive test cleanup aborted.`
-      );
-    }
+    // 0. Safety Guard: Confirm connected database ends with _test
+    await ensureTestDatabase(prisma);
 
     // 1. Setup Tenant Organizations
     await prisma.organization.upsert({
@@ -134,8 +131,11 @@ describe('M1 Step 7: Master Lead Database Backend API Matrix', () => {
   });
 
   afterAll(async () => {
-    await cleanupDatabase();
-    await prisma.$disconnect();
+    try {
+      await cleanupDatabase();
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   /* =========================================================================

@@ -3,14 +3,14 @@ import {
   assertTestDatabaseName,
   ensureTestDatabase,
   type MinimalPrismaClient
-} from './helpers/test-db-guard.js';
+} from '../test-guard.js';
 
-describe('Test Database Safety Guard (Web Helper Unit Tests)', () => {
+describe('Test Database Safety Guard (Shared DB Helper Unit Tests)', () => {
   describe('assertTestDatabaseName', () => {
     it('accepts database names ending strictly with _test', () => {
       expect(() => assertTestDatabaseName('leadmate_test')).not.toThrow();
       expect(() => assertTestDatabaseName('app_test')).not.toThrow();
-      expect(() => assertTestDatabaseName('production_integration_test')).not.toThrow();
+      expect(() => assertTestDatabaseName('custom_integration_test')).not.toThrow();
     });
 
     it('rejects database names not ending with _test', () => {
@@ -27,7 +27,16 @@ describe('Test Database Safety Guard (Web Helper Unit Tests)', () => {
   });
 
   describe('ensureTestDatabase', () => {
-    it('throws before any destruction if connected database does not end with _test', async () => {
+    it('succeeds and returns database name when connected database ends with _test', async () => {
+      const fakePrisma: MinimalPrismaClient = {
+        $queryRaw: vi.fn().mockResolvedValue([{ db_name: 'leadmate_test' }])
+      };
+
+      const name = await ensureTestDatabase(fakePrisma);
+      expect(name).toBe('leadmate_test');
+    });
+
+    it('throws BEFORE destructive operations when connected database is "leadmate" (negative proof)', async () => {
       const fakePrisma: MinimalPrismaClient = {
         $queryRaw: vi.fn().mockResolvedValue([{ db_name: 'leadmate' }])
       };
@@ -44,21 +53,12 @@ describe('Test Database Safety Guard (Web Helper Unit Tests)', () => {
       expect(destructiveActionExecuted).toBe(false);
     });
 
-    it('throws when fake Prisma query fails', async () => {
+    it('throws when fake Prisma query rejects or fails', async () => {
       const fakePrisma: MinimalPrismaClient = {
         $queryRaw: vi.fn().mockRejectedValue(new Error('Connection lost'))
       };
 
       await expect(ensureTestDatabase(fakePrisma)).rejects.toThrow('Connection lost');
-    });
-
-    it('succeeds and returns database name if connected database ends with _test', async () => {
-      const fakePrisma: MinimalPrismaClient = {
-        $queryRaw: vi.fn().mockResolvedValue([{ db_name: 'leadmate_test' }])
-      };
-
-      const name = await ensureTestDatabase(fakePrisma);
-      expect(name).toBe('leadmate_test');
     });
 
     it('throws when fake Prisma returns empty array []', async () => {
@@ -81,8 +81,11 @@ describe('Test Database Safety Guard (Web Helper Unit Tests)', () => {
       );
     });
 
-    it('throws when invalid Prisma client is passed', async () => {
+    it('throws when invalid or null Prisma client is passed', async () => {
       await expect(ensureTestDatabase(null as unknown as MinimalPrismaClient)).rejects.toThrow(
+        /SAFETY GUARD TRIGGERED: Invalid Prisma client/
+      );
+      await expect(ensureTestDatabase({} as unknown as MinimalPrismaClient)).rejects.toThrow(
         /SAFETY GUARD TRIGGERED: Invalid Prisma client/
       );
     });

@@ -3,6 +3,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import prisma, { Role } from '@leadmate/db';
+import { ensureTestDatabase } from './helpers/test-db-guard.js';
 import { app } from '../../../api/src/app.js';
 import { hashPassword } from '../../../api/src/lib/crypto.js';
 import { resetLoginRateLimiter } from '../../../api/src/middleware/rate-limiter.js';
@@ -17,6 +18,9 @@ describe('Step 7 Behavioral & Integration Verification: Web Auth, API Client & S
   const adminPassword = 'Admin12345!SecurePass';
 
   beforeAll(async () => {
+    // Strict Safety Guard: Confirm connected PostgreSQL database name ENDS WITH "_test"
+    await ensureTestDatabase(prisma);
+
     // Start backend API server for live fetch tests
     await new Promise<void>((resolve) => {
       server = app.listen(0, () => {

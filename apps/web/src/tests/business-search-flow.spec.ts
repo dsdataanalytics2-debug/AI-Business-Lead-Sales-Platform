@@ -16,6 +16,7 @@ import {
   Permissions,
   hasPermission
 } from '@leadmate/shared';
+import { ensureTestDatabase } from './helpers/test-db-guard.js';
 
 describe('M1 Step 8: Business Search Frontend Page & API Integration Matrix', () => {
   let server: http.Server;
@@ -30,13 +31,8 @@ describe('M1 Step 8: Business Search Frontend Page & API Integration Matrix', ()
   const viewerPassword = 'SearchViewer12345!V';
 
   beforeAll(async () => {
-    // 0. Safety Guard: Confirm database is test database
-    const dbUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL || '';
-    if (!dbUrl.includes('_test')) {
-      throw new Error(
-        `SAFETY GUARD TRIGGERED: Database URL "${dbUrl}" does not end with "_test". Destructive test cleanup aborted.`
-      );
-    }
+    // 0. Strict Safety Guard: Confirm connected PostgreSQL database name ENDS WITH "_test"
+    await ensureTestDatabase(prisma);
 
     // Start backend API server for live fetch tests
     await new Promise<void>((resolve) => {
@@ -96,6 +92,7 @@ describe('M1 Step 8: Business Search Frontend Page & API Integration Matrix', ()
   });
 
   async function cleanupDb() {
+    await ensureTestDatabase(prisma);
     await prisma.contactEvidence.deleteMany({});
     await prisma.leadContact.deleteMany({});
     await prisma.leadSource.deleteMany({});

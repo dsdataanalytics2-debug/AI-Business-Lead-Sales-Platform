@@ -21,6 +21,7 @@ import prisma, {
   WhatsAppStatus,
   EvidenceType
 } from '@leadmate/db';
+import { ensureTestDatabase } from '@leadmate/db/test-guard';
 import { ErrorCodes, Permissions, DuplicateAction } from '@leadmate/shared';
 import { app } from '../app.js';
 import { hashPassword, hashSessionToken } from '../lib/crypto.js';
@@ -61,6 +62,7 @@ describe('M1 Step 6: Business Search API & Trusted Save Handler Matrix', () => {
   }
 
   async function cleanupLeads() {
+    await ensureTestDatabase(prisma);
     await prisma.contactEvidence.deleteMany({});
     await prisma.leadContact.deleteMany({});
     await prisma.leadSource.deleteMany({});
@@ -69,13 +71,8 @@ describe('M1 Step 6: Business Search API & Trusted Save Handler Matrix', () => {
   }
 
   beforeAll(async () => {
-    // 0. Safety Guard: Confirm database is test database
-    const dbUrl = process.env.DATABASE_URL_TEST || process.env.DATABASE_URL || '';
-    if (!dbUrl.includes('_test')) {
-      throw new Error(
-        `SAFETY GUARD TRIGGERED: Database URL "${dbUrl}" does not end with "_test". Destructive test cleanup aborted.`
-      );
-    }
+    // 0. Strict Safety Guard: Confirm connected PostgreSQL database name ENDS WITH "_test"
+    await ensureTestDatabase(prisma);
 
     // 1. Setup Tenant Organizations
     await prisma.organization.upsert({
@@ -1054,6 +1051,7 @@ describe('M1 Step 6: Business Search API & Trusted Save Handler Matrix', () => {
     expect(lead!.contacts[0].normalizedValue).toBe('+8801711000001');
 
     // Clean up suppression list
+    await ensureTestDatabase(prisma);
     await prisma.suppressionList.deleteMany({ where: { organizationId: ORG_A_ID } });
   });
 

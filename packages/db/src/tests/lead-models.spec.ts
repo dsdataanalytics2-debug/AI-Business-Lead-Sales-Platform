@@ -8,6 +8,7 @@ import prisma, {
   WebsiteStatus,
   OnlinePresenceType
 } from '../index.js';
+import { ensureTestDatabase } from '../test-guard.js';
 
 describe('M1 Step 2: Database Schema & Migration Verification', () => {
   const orgAId = '00000000-0000-0000-0000-00000000000a';
@@ -17,6 +18,8 @@ describe('M1 Step 2: Database Schema & Migration Verification', () => {
   let leadBId: string;
 
   beforeAll(async () => {
+    await ensureTestDatabase(prisma);
+
     // Ensure Org A and Org B exist
     await prisma.organization.upsert({
       where: { id: orgAId },
@@ -40,16 +43,19 @@ describe('M1 Step 2: Database Schema & Migration Verification', () => {
   });
 
   afterAll(async () => {
-    // Clean up test data
-    await prisma.lead.deleteMany({
-      where: { organizationId: { in: [orgAId, orgBId] } }
-    }).catch(() => {});
+    try {
+      await ensureTestDatabase(prisma);
+      // Clean up test data
+      await prisma.lead.deleteMany({
+        where: { organizationId: { in: [orgAId, orgBId] } }
+      }).catch(() => {});
 
-    await prisma.organization.deleteMany({
-      where: { id: { in: [orgAId, orgBId] } }
-    }).catch(() => {});
-
-    await prisma.$disconnect();
+      await prisma.organization.deleteMany({
+        where: { id: { in: [orgAId, orgBId] } }
+      }).catch(() => {});
+    } finally {
+      await prisma.$disconnect();
+    }
   });
 
   it('1. Successfully creates Lead in Org A with nested LeadContact and ContactEvidence', async () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import prisma, { Role } from '@leadmate/db';
+import { ensureTestDatabase } from '@leadmate/db/test-guard';
 import { ErrorCodes, Permissions } from '@leadmate/shared';
 import { app } from '../app.js';
 import { hashPassword, hashSessionToken } from '../lib/crypto.js';
@@ -17,6 +18,9 @@ describe('Step 5 Behavioral Verification: AUTH, RBAC, Sessions & Rate Limiting',
   let viewerUserId: string;
 
   beforeAll(async () => {
+    // Strict Safety Guard: Confirm connected PostgreSQL database name ENDS WITH "_test"
+    await ensureTestDatabase(prisma);
+
     // Ensure default organization exists
     const org = await prisma.organization.upsert({
       where: { id: '00000000-0000-0000-0000-000000000001' },
