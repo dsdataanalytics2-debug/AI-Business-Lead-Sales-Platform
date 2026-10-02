@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { userRouter } from './routes/user.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { businessSearchRouter } from './routes/business-search.routes.js';
+import { leadRouter } from './routes/lead.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -37,6 +38,7 @@ export function createApp(): Express {
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', userRouter);
   app.use('/api/v1/business-search', businessSearchRouter);
+  app.use('/api/v1/leads', leadRouter);
 
   // 404 handler
   app.use((req: Request, _res: Response, next: NextFunction) => {

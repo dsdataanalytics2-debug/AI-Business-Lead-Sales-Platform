@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    fileParallelism: false,
     include: ['**/*.spec.ts', '**/*.test.ts'],
     alias: {
       '@leadmate/shared': path.resolve(__dirname, './packages/shared/src/index.ts'),
