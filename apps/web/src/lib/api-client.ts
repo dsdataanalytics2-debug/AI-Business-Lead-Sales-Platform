@@ -4,11 +4,19 @@ import {
   AuthUser,
   Permission,
   DuplicateAction,
+  ContactType,
   type BusinessSearchResult,
-  type SaveLeadRequest
+  type SaveLeadRequest,
+  type LeadSummary,
+  type LeadDetail,
+  type LeadContact,
+  type LeadListQuery,
+  type LeadUpdateRequest
 } from '@leadmate/shared';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+}
 
 export class ApiClientError extends Error {
   public readonly code: string;
@@ -45,8 +53,17 @@ export interface SaveLeadResponse {
   matchReason?: string;
 }
 
+export interface LeadListResponse {
+  data: LeadSummary[];
+  meta: {
+    nextCursor: string | null;
+    total: number;
+    hasMore: boolean;
+  };
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
+  const url = `${getApiBaseUrl()}${path}`;
 
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
@@ -72,6 +89,40 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   }
 
   return ((data as ApiSuccessResponse<T>)?.data !== undefined ? (data as ApiSuccessResponse<T>).data : data) as T;
+}
+
+async function requestEnvelope<T, M = Record<string, unknown>>(
+  path: string,
+  options: RequestInit = {}
+): Promise<{ data: T; meta?: M }> {
+  const url = `${getApiBaseUrl()}${path}`;
+
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && options.body && typeof options.body === 'string') {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include'
+  });
+
+  const isJson = res.headers.get('content-type')?.includes('application/json');
+  const data = isJson ? await res.json() : null;
+
+  if (!res.ok) {
+    if (data && (data as ApiErrorResponse).error) {
+      const { code, message, details, requestId } = (data as ApiErrorResponse).error;
+      throw new ApiClientError(code, message, res.status, details, requestId);
+    }
+    throw new ApiClientError('HTTP_ERROR', res.statusText || 'An error occurred', res.status);
+  }
+
+  return {
+    data: (data?.data !== undefined ? data.data : data) as T,
+    meta: data?.meta as M | undefined
+  };
 }
 
 export const apiClient = {
@@ -105,6 +156,58 @@ export const apiClient = {
     },
     saveLead: (input: SaveLeadRequest): Promise<SaveLeadResponse> =>
       request<SaveLeadResponse>('/business-search/save-lead', {
+        method: 'POST',
+        body: JSON.stringify(input)
+      })
+  },
+  leads: {
+    list: async (params: Partial<LeadListQuery> = {}, options: RequestInit = {}): Promise<LeadListResponse> => {
+      const searchParams = new URLSearchParams();
+      if (params.search) searchParams.set('search', params.search);
+      if (params.city) searchParams.set('city', params.city);
+      if (params.category) searchParams.set('category', params.category);
+      if (params.websiteStatus) searchParams.set('websiteStatus', params.websiteStatus);
+      if (params.onlinePresence) searchParams.set('onlinePresence', params.onlinePresence);
+      if (params.hasPhone !== undefined) searchParams.set('hasPhone', String(params.hasPhone));
+      if (params.hasEmail !== undefined) searchParams.set('hasEmail', String(params.hasEmail));
+      if (params.hasWhatsApp !== undefined) searchParams.set('hasWhatsApp', String(params.hasWhatsApp));
+      if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
+      if (params.cursor) searchParams.set('cursor', params.cursor);
+
+      const queryStr = searchParams.toString();
+      const path = queryStr ? `/leads?${queryStr}` : '/leads';
+      const res = await requestEnvelope<LeadSummary[], { nextCursor: string | null; total: number; hasMore: boolean }>(path, {
+        ...options,
+        method: 'GET'
+      });
+
+      return {
+        data: res.data || [],
+        meta: {
+          nextCursor: res.meta?.nextCursor ?? null,
+          total: res.meta?.total ?? (res.data?.length || 0),
+          hasMore: res.meta?.hasMore ?? false
+        }
+      };
+    },
+    get: (id: string, options: RequestInit = {}): Promise<LeadDetail> =>
+      request<LeadDetail>(`/leads/${encodeURIComponent(id)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    update: (id: string, input: LeadUpdateRequest, options: RequestInit = {}): Promise<LeadDetail> =>
+      request<LeadDetail>(`/leads/${encodeURIComponent(id)}`, {
+        ...options,
+        method: 'PATCH',
+        body: JSON.stringify(input)
+      }),
+    addContact: (
+      id: string,
+      input: { type: ContactType; rawValue: string; isPrimary?: boolean },
+      options: RequestInit = {}
+    ): Promise<LeadContact> =>
+      request<LeadContact>(`/leads/${encodeURIComponent(id)}/contacts`, {
+        ...options,
         method: 'POST',
         body: JSON.stringify(input)
       })

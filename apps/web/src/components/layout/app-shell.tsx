@@ -14,8 +14,7 @@ import {
   Settings,
   LogOut,
   Menu,
-  X,
-  ShieldAlert
+  X
 } from 'lucide-react';
 import { Permissions, type Permission } from '@leadmate/shared';
 import { useAuth } from '@/lib/auth-context';
@@ -31,7 +30,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Leads', href: '/leads', icon: Users, isPlaceholder: true, permission: Permissions.LEADS_READ },
+  { label: 'Leads', href: '/leads', icon: Users, permission: Permissions.LEADS_READ },
   { label: 'Business Search', href: '/business-search', icon: Search, permission: Permissions.LEADS_READ },
   { label: 'Campaigns', href: '/campaigns', icon: Megaphone, isPlaceholder: true, permission: Permissions.CAMPAIGNS_MANAGE },
   { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, isPlaceholder: true, permission: Permissions.LEADS_READ },
