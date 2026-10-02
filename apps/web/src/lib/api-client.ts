@@ -11,7 +11,8 @@ import {
   type LeadDetail,
   type LeadContact,
   type LeadListQuery,
-  type LeadUpdateRequest
+  type LeadUpdateRequest,
+  type LeadAnalysisResponse
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -210,6 +211,16 @@ export const apiClient = {
         ...options,
         method: 'POST',
         body: JSON.stringify(input)
+      }),
+    getAnalysis: (id: string, options: RequestInit = {}): Promise<LeadAnalysisResponse | null> =>
+      request<LeadAnalysisResponse | null>(`/leads/${encodeURIComponent(id)}/analysis`, {
+        ...options,
+        method: 'GET'
+      }),
+    analyze: (id: string, options: RequestInit = {}): Promise<LeadAnalysisResponse> =>
+      request<LeadAnalysisResponse>(`/leads/${encodeURIComponent(id)}/analyze`, {
+        ...options,
+        method: 'POST'
       })
   }
 };

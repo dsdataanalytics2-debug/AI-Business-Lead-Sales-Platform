@@ -16,12 +16,13 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     fileParallelism: false,
-    include: ['**/*.spec.ts', '**/*.test.ts'],
+    include: ['**/*.spec.ts', '**/*.test.ts', '**/*.spec.tsx', '**/*.test.tsx'],
     alias: {
       '@leadmate/shared': path.resolve(__dirname, './packages/shared/src/index.ts'),
       '@leadmate/db/test-guard': path.resolve(__dirname, './packages/db/src/test-guard.ts'),
       '@leadmate/db': path.resolve(__dirname, './packages/db/src/index.ts'),
-      '@leadmate/core': path.resolve(__dirname, './packages/core/src/index.ts')
+      '@leadmate/core': path.resolve(__dirname, './packages/core/src/index.ts'),
+      '@': path.resolve(__dirname, './apps/web/src')
     }
   }
 });

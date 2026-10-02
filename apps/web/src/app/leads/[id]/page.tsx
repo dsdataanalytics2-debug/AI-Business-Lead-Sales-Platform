@@ -45,6 +45,7 @@ import {
   initialLeadDetailState,
   classifyLeadDetailError
 } from '@/lib/leads/lead-detail-state';
+import { OnlinePresenceAnalysisCard } from '@/components/leads/online-presence-analysis-card';
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -747,8 +748,15 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
 
-          {/* Right Column: Verified Contacts & Evidence */}
+          {/* Right Column: Online Presence Analysis, Verified Contacts & Evidence */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Online Presence Analysis Card */}
+            <OnlinePresenceAnalysisCard
+              leadId={lead.id}
+              canWrite={canWriteLeads}
+              onAnalysisUpdated={() => fetchLeadDetail(true)}
+            />
+
             {/* Direct Contacts Section */}
             <div className="p-5 rounded-xl bg-slate-950/70 border border-slate-800 shadow-md space-y-4">
               <div className="flex items-center justify-between">
