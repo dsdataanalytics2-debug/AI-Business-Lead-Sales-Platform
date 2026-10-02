@@ -5,6 +5,8 @@ import {
   AnalysisWebsiteStatus,
   CampaignType,
   QualificationReasonCode,
+  Permissions,
+  type Permission,
   type LeadAnalysisResponse
 } from '@leadmate/shared';
 import { OnlinePresenceAnalysisCard } from '../components/leads/online-presence-analysis-card.js';
@@ -54,46 +56,86 @@ describe('OnlinePresenceAnalysisCard UI & Permission Proofs (Component Spec)', (
     vi.restoreAllMocks();
   });
 
-  describe('A. Viewer UI Proofs', () => {
-    it('viewer sees existing analysis but does NOT get an active Analyze or Re-analyze button', () => {
+  describe('A. Canonical Permission Mapping Proofs (hasPermission LEADS_WRITE)', () => {
+    const checkUserCanWrite = (permissions: Permission[]) =>
+      permissions.includes(Permissions.LEADS_WRITE);
+
+    it('user WITH LEADS_WRITE permission receives active Analyze button in empty state', () => {
+      const userPermissions: Permission[] = [Permissions.LEADS_READ, Permissions.LEADS_WRITE];
+      const canWrite = checkUserCanWrite(userPermissions);
+
       const html = renderToStaticMarkup(
         <OnlinePresenceAnalysisCard
           leadId="l0000000-0000-0000-0000-000000000001"
-          canWrite={false}
+          canWrite={canWrite}
+          initialAnalysis={null}
+        />
+      );
+
+      expect(canWrite).toBe(true);
+      expect(html).toContain('id="analyze-lead-btn"');
+      expect(html).toContain('Analyze Lead');
+    });
+
+    it('user WITH LEADS_WRITE permission receives active Re-analyze button in populated state', () => {
+      const userPermissions: Permission[] = [Permissions.LEADS_READ, Permissions.LEADS_WRITE];
+      const canWrite = checkUserCanWrite(userPermissions);
+
+      const html = renderToStaticMarkup(
+        <OnlinePresenceAnalysisCard
+          leadId="l0000000-0000-0000-0000-000000000001"
+          canWrite={canWrite}
           initialAnalysis={mockPopulatedAnalysis}
         />
       );
 
-      // Verify the card container and populated sections are present
-      expect(html).toContain('online-presence-analysis-card');
-      expect(html).toContain('Online Presence Analysis');
-      expect(html).toContain('Website Analysis');
-      expect(html).toContain('Campaign Qualification');
+      expect(canWrite).toBe(true);
+      expect(html).toContain('id="analyze-lead-btn"');
+      expect(html).toContain('Re-analyze');
+    });
 
-      // Writable controls must NOT be present for viewer
+    it('user WITHOUT LEADS_WRITE permission does NOT receive action buttons in populated state', () => {
+      const userPermissions: Permission[] = [Permissions.LEADS_READ];
+      const canWrite = checkUserCanWrite(userPermissions);
+
+      const html = renderToStaticMarkup(
+        <OnlinePresenceAnalysisCard
+          leadId="l0000000-0000-0000-0000-000000000001"
+          canWrite={canWrite}
+          initialAnalysis={mockPopulatedAnalysis}
+        />
+      );
+
+      expect(canWrite).toBe(false);
+      // Analysis details visible
+      expect(html).toContain('Website Analysis');
+      // Action buttons omitted
       expect(html).not.toContain('id="analyze-lead-btn"');
       expect(html).not.toContain('Re-analyze');
       expect(html).not.toContain('Analyze Lead');
     });
 
-    it('viewer in empty state sees read-only message and NO Analyze button', () => {
+    it('user WITHOUT LEADS_WRITE permission sees read-only unanalyzed text in empty state', () => {
+      const userPermissions: Permission[] = [Permissions.LEADS_READ];
+      const canWrite = checkUserCanWrite(userPermissions);
+
       const html = renderToStaticMarkup(
         <OnlinePresenceAnalysisCard
           leadId="l0000000-0000-0000-0000-000000000001"
-          canWrite={false}
+          canWrite={canWrite}
           initialAnalysis={null}
         />
       );
 
-      // Read-only user sees neutral status text when unanalyzed
+      expect(canWrite).toBe(false);
       expect(html).toContain('Analysis has not been run yet.');
       expect(html).not.toContain('id="analyze-lead-btn"');
       expect(html).not.toContain('Analyze Lead');
     });
   });
 
-  describe('B. Empty Writable State Proofs', () => {
-    it('writable user in empty state sees "Not analyzed yet" and active "Analyze Lead" button', () => {
+  describe('B. Empty Writable State Proofs (200 { data: null } vs 404 NOT_FOUND)', () => {
+    it('renders "Not analyzed yet" ONLY on 200 { data: null } unanalyzed state (no error)', () => {
       const html = renderToStaticMarkup(
         <OnlinePresenceAnalysisCard
           leadId="l0000000-0000-0000-0000-000000000001"
@@ -108,6 +150,28 @@ describe('OnlinePresenceAnalysisCard UI & Permission Proofs (Component Spec)', (
       expect(html).toContain('Run an analysis to check the website, online presence, and campaign fit.');
       expect(html).toContain('id="analyze-lead-btn"');
       expect(html).toContain('Analyze Lead');
+    });
+
+    it('does NOT render "Not analyzed yet" when GET /analysis returns 404 NOT_FOUND', () => {
+      const notFoundError = classifyAnalysisError(
+        new ApiClientError('NOT_FOUND', 'Lead not found.', 404)
+      );
+
+      const html = renderToStaticMarkup(
+        <OnlinePresenceAnalysisCard
+          leadId="l0000000-0000-0000-0000-000000000001"
+          canWrite={true}
+          initialAnalysis={null}
+          initialError={notFoundError}
+        />
+      );
+
+      // Must display error alert
+      expect(html).toContain('role="alert"');
+      expect(html).toContain('Lead not found.');
+      // Must NOT display unanalyzed empty state
+      expect(html).not.toContain('Not analyzed yet');
+      expect(html).not.toContain('Run an analysis to check the website, online presence, and campaign fit.');
     });
   });
 

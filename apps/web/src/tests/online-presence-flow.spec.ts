@@ -307,4 +307,40 @@ describe('M2 Step 5: Frontend Online Presence Analysis API Flow Integration', ()
     expect(caughtError?.statusCode).toBe(429);
     expect(caughtError?.code).toBe(ErrorCodes.RATE_LIMITED);
   });
+
+  it('6. strictly distinguishes 200 { data: null } (unanalyzed) from 404 NOT_FOUND (missing lead)', async () => {
+    // 1. Existing lead with no analysis -> resolves to null (200 OK)
+    const existingLead = await prisma.lead.create({
+      data: {
+        organizationId: orgId,
+        name: 'Distinction Check Lead',
+        normalizedName: 'distinction check lead',
+        category: 'Services',
+        city: 'Dhaka',
+        primarySource: 'MANUAL',
+        website: 'https://distinction-test.com'
+      }
+    });
+
+    const unanalyzedResult = await apiClient.leads.getAnalysis(existingLead.id, {
+      headers: { Cookie: adminCookie }
+    });
+    expect(unanalyzedResult).toBeNull();
+
+    // 2. Non-existent lead -> throws 404 ApiClientError (must NOT return null)
+    const nonExistentId = '11111111-2222-3333-4444-555555555555';
+    let caught404Error: ApiClientError | null = null;
+    try {
+      await apiClient.leads.getAnalysis(nonExistentId, {
+        headers: { Cookie: adminCookie }
+      });
+    } catch (err) {
+      caught404Error = err as ApiClientError;
+    }
+
+    expect(caught404Error).not.toBeNull();
+    expect(caught404Error?.statusCode).toBe(404);
+    expect(caught404Error?.code).toBe(ErrorCodes.NOT_FOUND);
+    expect(caught404Error?.message).toContain('not found');
+  });
 });
