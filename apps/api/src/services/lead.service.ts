@@ -31,6 +31,7 @@ import {
   NotFoundError,
   ConflictError
 } from '../lib/errors.js';
+import { invalidateLeadOnlinePresenceAnalysis } from './online-presence.service.js';
 
 export interface LeadRequestContext {
   organizationId: string;
@@ -352,6 +353,11 @@ export class LeadService {
         }
       });
 
+      // Invalidate existing analysis if website was modified
+      if (input.website !== undefined) {
+        await invalidateLeadOnlinePresenceAnalysis(tx, organizationId, id, 'LEAD_PATCH');
+      }
+
       // Audit Log
       await tx.auditLog.create({
         data: {
@@ -503,6 +509,9 @@ export class LeadService {
               data: { primaryEmail: norm.normalizedValue }
             });
           }
+
+          // Invalidate existing analysis upon promoting a contact to primary
+          await invalidateLeadOnlinePresenceAnalysis(tx, organizationId, leadId, 'CONTACT_PROMOTED');
 
           // Transactional Audit Log for promotion
           await tx.auditLog.create({
@@ -678,6 +687,9 @@ export class LeadService {
           }
         }
       });
+
+      // Invalidate existing analysis upon adding a direct contact
+      await invalidateLeadOnlinePresenceAnalysis(tx, organizationId, leadId, 'CONTACT_ADDED');
 
       // Suppression check
       const suppressed = await tx.suppressionList.findFirst({

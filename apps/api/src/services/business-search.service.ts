@@ -43,6 +43,7 @@ import {
   BadRequestError,
   NotFoundError
 } from '../lib/errors.js';
+import { invalidateLeadOnlinePresenceAnalysis } from './online-presence.service.js';
 import { z } from 'zod';
 
 export interface BusinessSearchRequestContext {
@@ -282,6 +283,7 @@ export class BusinessSearchService {
         // 4C. Clean Definite Match -> Merge into existing Lead
         if (dupResult.matchLevel === DuplicateMatchLevel.DEFINITE && dupResult.leadId) {
           const mergeResult = await mergeIntoExistingLead(tx, dupResult.leadId, incomingLeadData);
+          await invalidateLeadOnlinePresenceAnalysis(tx, organizationId, dupResult.leadId, 'PROVIDER_MERGE');
 
           try {
             await tx.auditLog.create({
@@ -422,6 +424,7 @@ export class BusinessSearchService {
 
         if (existingSource) {
           const mergeResult = await mergeIntoExistingLead(prisma, existingSource.leadId, incomingLeadData);
+          await invalidateLeadOnlinePresenceAnalysis(prisma, organizationId, existingSource.leadId, 'PROVIDER_MERGE');
 
           try {
             await prisma.auditLog.create({

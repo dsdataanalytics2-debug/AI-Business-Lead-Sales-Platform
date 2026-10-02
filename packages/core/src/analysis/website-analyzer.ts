@@ -23,6 +23,7 @@ import {
   type ResolvedTarget
 } from './ssrf-guard.js';
 
+export const ANALYZER_VERSION = 'v1';
 export const USER_AGENT = 'LeadMateBot/1.0';
 export const MAX_BODY_BYTES = 100 * 1024; // 100 KB (102,400 bytes)
 export const TOTAL_TIMEOUT_MS = 5000; // 5000ms wall-clock budget

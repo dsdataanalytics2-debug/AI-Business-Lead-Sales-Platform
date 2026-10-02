@@ -10,6 +10,7 @@ import {
 } from '../enums.js';
 
 export const SCORE_VERSION = 'v1';
+export const ANALYZER_VERSION = 'v1';
 
 /* =========================================================
  * Campaign Score & Reason Schemas
