@@ -57,14 +57,67 @@ export enum OnlinePresenceType {
 
 export enum CrmStage {
   NEW = 'NEW',
-  ANALYZED = 'ANALYZED',
   CONTACTED = 'CONTACTED',
-  REPLIED = 'REPLIED',
-  INTERESTED = 'INTERESTED',
-  DEMO_SENT = 'DEMO_SENT',
-  MEETING = 'MEETING',
-  PROPOSAL = 'PROPOSAL',
-  WON = 'WON'
+  QUALIFIED = 'QUALIFIED',
+  PROPOSAL_SENT = 'PROPOSAL_SENT',
+  NEGOTIATION = 'NEGOTIATION',
+  WON = 'WON',
+  LOST = 'LOST'
+}
+
+export enum CrmActivityType {
+  LEAD_ASSIGNED = 'LEAD_ASSIGNED',
+  LEAD_UNASSIGNED = 'LEAD_UNASSIGNED',
+  LEAD_REASSIGNED = 'LEAD_REASSIGNED',
+  STAGE_CHANGED = 'STAGE_CHANGED',
+  NOTE_ADDED = 'NOTE_ADDED'
+}
+
+export const CRM_STAGE_ORDER: Record<CrmStage, number> = {
+  [CrmStage.NEW]: 10,
+  [CrmStage.CONTACTED]: 20,
+  [CrmStage.QUALIFIED]: 30,
+  [CrmStage.PROPOSAL_SENT]: 40,
+  [CrmStage.NEGOTIATION]: 50,
+  [CrmStage.WON]: 60,
+  [CrmStage.LOST]: 70
+} as const;
+
+export const ORDERED_CRM_STAGES: readonly CrmStage[] = [
+  CrmStage.NEW,
+  CrmStage.CONTACTED,
+  CrmStage.QUALIFIED,
+  CrmStage.PROPOSAL_SENT,
+  CrmStage.NEGOTIATION,
+  CrmStage.WON,
+  CrmStage.LOST
+] as const;
+
+export const CRM_STAGE_LABELS: Record<CrmStage, string> = {
+  [CrmStage.NEW]: 'New',
+  [CrmStage.CONTACTED]: 'Contacted',
+  [CrmStage.QUALIFIED]: 'Qualified',
+  [CrmStage.PROPOSAL_SENT]: 'Proposal Sent',
+  [CrmStage.NEGOTIATION]: 'Negotiation',
+  [CrmStage.WON]: 'Won',
+  [CrmStage.LOST]: 'Lost'
+} as const;
+
+export const TERMINAL_CRM_STAGES: readonly CrmStage[] = [
+  CrmStage.WON,
+  CrmStage.LOST
+] as const;
+
+export function getCrmStageOrder(stage: CrmStage): number {
+  return CRM_STAGE_ORDER[stage];
+}
+
+export function getCrmStageLabel(stage: CrmStage): string {
+  return CRM_STAGE_LABELS[stage] ?? stage;
+}
+
+export function isTerminalCrmStage(stage: CrmStage): boolean {
+  return stage === CrmStage.WON || stage === CrmStage.LOST;
 }
 
 export enum CrmOutcome {
