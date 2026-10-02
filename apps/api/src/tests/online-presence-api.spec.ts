@@ -380,6 +380,9 @@ describe('M2 Step 4: Online Presence Analysis API Matrix', () => {
         }
       });
       expect(auditLog).not.toBeNull();
+      expect(auditLog?.action).toBe('lead.online_presence_analyzed');
+      expect(auditLog?.entityType).toBe('Lead');
+      expect(auditLog?.entityId).toBe(lead.id);
       expect(auditLog?.organizationId).toBe(ORG_A_ID);
       expect(auditLog?.userId).toBe(adminAUserId);
       expect(auditLog?.after).toEqual({
@@ -1720,6 +1723,247 @@ describe('M2 Step 4: Online Presence Analysis API Matrix', () => {
       const scores = res.body.data.campaignScores;
       const allReasons = scores.flatMap((c: any) => c.reasons);
       expect(allReasons).toContain(QualificationReasonCode.HAS_MOBILE_PHONE);
+    });
+  });
+
+  // =========================================================
+  // 11. Canonical Error Envelope & Audit Action Contract
+  // =========================================================
+  describe('Canonical Error Envelope & Audit Action Contract', () => {
+    it('persists exact audit action lead.online_presence_analyzed with entityType Lead and scalar metadata only', async () => {
+      const lead = await prisma.lead.create({
+        data: {
+          organizationId: ORG_A_ID,
+          name: 'Audit Contract Biz',
+          normalizedName: 'audit contract biz',
+          category: 'Retail',
+          city: 'Dhaka',
+          primarySource: 'MANUAL',
+          website: 'https://auditcontract.com'
+        }
+      });
+
+      vi.spyOn(websiteAnalyzer, 'analyze').mockResolvedValue({
+        websiteUrl: 'https://auditcontract.com',
+        websiteStatus: AnalysisWebsiteStatus.REACHABLE,
+        httpStatusCode: 200,
+        isHttps: true,
+        isRedirected: false,
+        finalUrl: 'https://auditcontract.com',
+        responseTimeMs: 150,
+        pageTitle: 'Audit Contract Title',
+        metaDescription: 'Audit Contract Description'
+      });
+
+      const res = await request(app)
+        .post(`/api/v1/leads/${lead.id}/analyze`)
+        .set('Cookie', adminACookie)
+        .send();
+
+      expect(res.status).toBe(200);
+
+      const audit = await prisma.auditLog.findFirst({
+        where: {
+          entityId: lead.id,
+          action: 'lead.online_presence_analyzed'
+        }
+      });
+
+      expect(audit).not.toBeNull();
+      expect(audit?.action).toBe('lead.online_presence_analyzed');
+      expect(audit?.entityType).toBe('Lead');
+      expect(audit?.entityId).toBe(lead.id);
+      expect(audit?.userId).toBe(adminAUserId);
+      expect(audit?.organizationId).toBe(ORG_A_ID);
+      expect(audit?.after).toEqual({
+        websiteStatus: AnalysisWebsiteStatus.REACHABLE,
+        analyzerVersion: ANALYZER_VERSION,
+        scoreVersion: SCORE_VERSION,
+        analyzedAt: expect.any(String)
+      });
+      expect((audit?.after as any).campaignScores).toBeUndefined();
+      expect((audit?.after as any).rawHtml).toBeUndefined();
+      expect((audit?.after as any).contacts).toBeUndefined();
+    });
+
+    it('returns canonical error envelope with requestId on 422 VALIDATION_ERROR', async () => {
+      const res = await request(app)
+        .get('/api/v1/leads/invalid-uuid-123/analysis')
+        .set('Cookie', adminACookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+      expect(typeof res.body.error.message).toBe('string');
+      expect(Array.isArray(res.body.error.details)).toBe(true);
+      expect(typeof res.body.error.requestId).toBe('string');
+      expect(res.body.error.requestId.length).toBeGreaterThan(0);
+      expect(res.body.error.details?.stack).toBeUndefined();
+    });
+
+    it('returns canonical error envelope with requestId on 404 NOT_FOUND', async () => {
+      const nonExistentId = '99999999-9999-9999-9999-999999999999';
+      const res = await request(app)
+        .get(`/api/v1/leads/${nonExistentId}/analysis`)
+        .set('Cookie', adminACookie);
+
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe(ErrorCodes.NOT_FOUND);
+      expect(typeof res.body.error.message).toBe('string');
+      expect(typeof res.body.error.requestId).toBe('string');
+      expect(res.body.error.requestId.length).toBeGreaterThan(0);
+      expect(res.body.error.details?.stack).toBeUndefined();
+    });
+
+    it('returns canonical error envelope with requestId on 401 UNAUTHENTICATED and 403 FORBIDDEN', async () => {
+      const dummyId = '88888888-8888-8888-8888-888888888888';
+
+      // 401
+      const res401 = await request(app).get(`/api/v1/leads/${dummyId}/analysis`);
+      expect(res401.status).toBe(401);
+      expect(res401.body.error).toBeDefined();
+      expect(res401.body.error.code).toBe(ErrorCodes.UNAUTHENTICATED);
+      expect(typeof res401.body.error.message).toBe('string');
+      expect(typeof res401.body.error.requestId).toBe('string');
+
+      // 403
+      const res403 = await request(app)
+        .post(`/api/v1/leads/${dummyId}/analyze`)
+        .set('Cookie', viewerACookie)
+        .send();
+      expect(res403.status).toBe(403);
+      expect(res403.body.error).toBeDefined();
+      expect(res403.body.error.code).toBe(ErrorCodes.FORBIDDEN);
+      expect(typeof res403.body.error.message).toBe('string');
+      expect(typeof res403.body.error.requestId).toBe('string');
+    });
+
+    it('returns canonical error envelope with requestId and retryAfterSeconds on 429 RATE_LIMITED', async () => {
+      resetAnalyzeRateLimiter();
+
+      const lead = await prisma.lead.create({
+        data: {
+          organizationId: ORG_A_ID,
+          name: 'Rate Limit Envelope Lead',
+          normalizedName: 'rate limit envelope lead',
+          category: 'Retail',
+          city: 'Dhaka',
+          primarySource: 'MANUAL',
+          website: null
+        }
+      });
+
+      vi.spyOn(websiteAnalyzer, 'analyze').mockResolvedValue({
+        websiteUrl: null,
+        websiteStatus: AnalysisWebsiteStatus.NOT_APPLICABLE,
+        httpStatusCode: null,
+        isHttps: false,
+        isRedirected: false,
+        finalUrl: null,
+        responseTimeMs: null,
+        pageTitle: null,
+        metaDescription: null
+      });
+
+      // Send 30 requests
+      for (let i = 0; i < 30; i++) {
+        await request(app)
+          .post(`/api/v1/leads/${lead.id}/analyze`)
+          .set('Cookie', adminACookie)
+          .send();
+      }
+
+      // 31st request triggers 429
+      const res429 = await request(app)
+        .post(`/api/v1/leads/${lead.id}/analyze`)
+        .set('Cookie', adminACookie)
+        .send();
+
+      expect(res429.status).toBe(429);
+      expect(res429.body.error).toBeDefined();
+      expect(res429.body.error.code).toBe(ErrorCodes.RATE_LIMITED);
+      expect(typeof res429.body.error.message).toBe('string');
+      expect(typeof res429.body.error.requestId).toBe('string');
+      expect(res429.body.error.details?.retryAfterSeconds).toBeDefined();
+      expect(typeof res429.body.error.details.retryAfterSeconds).toBe('number');
+      expect(res429.headers['retry-after']).toBeDefined();
+    });
+
+    it('returns canonical error envelope with requestId on 409 CONFLICT (stale analysis race)', async () => {
+      const lead = await prisma.lead.create({
+        data: {
+          organizationId: ORG_A_ID,
+          name: '409 Envelope Race Lead',
+          normalizedName: '409 envelope race lead',
+          category: 'Retail',
+          city: 'Dhaka',
+          primarySource: 'MANUAL',
+          website: 'https://409race.com'
+        }
+      });
+
+      let notifyAnalyzerCalled!: () => void;
+      const analyzerCalledPromise = new Promise<void>((resolve) => {
+        notifyAnalyzerCalled = resolve;
+      });
+
+      let resolveAnalyzer!: (val: any) => void;
+      const delayedPromise = new Promise((resolve) => {
+        resolveAnalyzer = resolve;
+      });
+
+      vi.spyOn(websiteAnalyzer, 'analyze').mockImplementation(async () => {
+        notifyAnalyzerCalled();
+        return delayedPromise as any;
+      });
+
+      // 1. Dispatch analyze request
+      const req = request(app)
+        .post(`/api/v1/leads/${lead.id}/analyze`)
+        .set('Cookie', adminACookie)
+        .send();
+      const resPromise = req.then((r) => r);
+
+      // 2. Wait until analyzer is executing
+      await analyzerCalledPromise;
+
+      // 3. Concurrently mutate lead in DB (bumps updatedAt)
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: { name: '409 Mutated Lead Name' }
+      });
+
+      // 4. Resolve analyzer
+      resolveAnalyzer({
+        websiteUrl: 'https://409race.com',
+        websiteStatus: AnalysisWebsiteStatus.REACHABLE,
+        httpStatusCode: 200,
+        isHttps: true,
+        isRedirected: false,
+        finalUrl: 'https://409race.com',
+        responseTimeMs: 200,
+        pageTitle: '409 Title',
+        metaDescription: '409 Desc'
+      });
+
+      // 5. Await response
+      const res = await resPromise;
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBeDefined();
+      expect(res.body.error.code).toBe(ErrorCodes.CONFLICT);
+      expect(typeof res.body.error.message).toBe('string');
+      expect(res.body.error.message).toBe('Lead or scoring inputs were modified during analysis. Please retry.');
+      expect(typeof res.body.error.requestId).toBe('string');
+      expect(res.body.error.requestId.length).toBeGreaterThan(0);
+      expect(res.body.error.details?.stack).toBeUndefined();
+
+      // Ensure stale analysis was NOT persisted
+      const analysis = await prisma.leadOnlinePresenceAnalysis.findUnique({
+        where: { leadId_organizationId: { leadId: lead.id, organizationId: ORG_A_ID } }
+      });
+      expect(analysis).toBeNull();
     });
   });
 });
