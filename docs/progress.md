@@ -2,9 +2,9 @@
 
 ## Current Milestone: M4 — StoreMate Demo Website Integration
 - **Status:** IN PROGRESS
-- **Current Step:** Step 1 — StoreMate Integration Architecture + Shared Contracts (COMPLETED)
-- **Approved Base Checkpoint:** `60d007604c3600dd9d8a97cc9c92a5cc266d1e40` (`docs(m3): close crm and follow-up milestone`)
-- **Next Milestone Step:** M4 Step 2 — Persistence Layer & Database Migration (NOT STARTED)
+- **Current Step:** Step 2 — Demo Website Persistence Layer + Database Migration (COMPLETED)
+- **Approved Base Checkpoint:** `f8846e4e80a6c65cc3ede929e3bac0febe10e140` (`feat(m4): add demo website internal contracts`)
+- **Next Milestone Step:** M4 Step 3 — Demo Website Provider Client & Mock Implementation (NOT STARTED)
 
 ---
 
@@ -12,6 +12,7 @@
 
 ### Step-by-Step Execution Summary
 - **Step 1 (Integration Architecture & Shared Contracts):** Defined canonical demo lifecycle enum (`DemoWebsiteStatus`: `REQUESTED`, `CREATING`, `READY`, `FAILED`, `EXPIRED`, `REMOVED`), providers (`DemoWebsiteProvider`: `STOREMATE`, `MOCK`), error codes (`DemoWebsiteErrorCode`), status labels, lifecycle transition validator (`isValidDemoWebsiteTransition`), strict request/summary/response schemas, normalized outbound payload contract (`storemateOutboundPayloadSchema`), demo safety invariants (`isDemo: true`, `noindex: true`, `nofollow: true`), contact safety (`PHONE != WHATSAPP`), tenant isolation model, proposed database model (`DemoWebsite`), and RBAC permission mappings (`DEMOS_GENERATE`, `DEMOS_MANAGE`). Documented that external StoreMate raw transport details remain TBD pending human-owned `docs/storemate-api-contract.md`.
+- **Step 2 (Demo Website Persistence & Migration):** Evolved PostgreSQL database schema with `DemoWebsite` model, `DemoWebsiteStatus` and `DemoWebsiteProvider` enums, composite multi-tenant foreign keys `(organization_id, lead_id)` (onDelete: Cascade), `(organization_id, requested_by_user_id)` (onDelete: Restrict), `(organization_id)` (onDelete: Cascade), `@@unique([lead_id, organization_id])` enforcing one demo per lead, additive migration `20261003123000_add_m4_demo_website_persistence`, and full constraint integration tests.
 
 ---
 
