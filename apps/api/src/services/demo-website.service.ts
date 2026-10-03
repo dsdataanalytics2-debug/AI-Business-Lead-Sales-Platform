@@ -14,7 +14,7 @@ import prisma, {
   ContactType,
   ContactStatus,
   WhatsAppStatus,
-  type Prisma
+  Prisma
 } from '@leadmate/db';
 import {
   DemoWebsiteStatus,
@@ -229,7 +229,8 @@ export class DemoWebsiteService {
     ctx: DemoWebsiteRequestContext,
     leadId: string,
     request?: CreateDemoWebsiteRequest,
-    providerOverride?: DemoWebsiteProviderClient
+    providerOverride?: DemoWebsiteProviderClient,
+    isRegeneration = false
   ): Promise<DemoWebsiteSummary> {
     // 1. Validate Requester
     const user = await prisma.user.findFirst({
@@ -281,8 +282,8 @@ export class DemoWebsiteService {
       }
     });
 
-    // Idempotency check: if READY and active, return existing
-    if (existing) {
+    // Idempotency check: if READY and active, return existing (unless explicit regeneration is requested)
+    if (existing && !isRegeneration) {
       const isExpired = existing.expiresAt ? existing.expiresAt.getTime() <= Date.now() : false;
       if (existing.status === DemoWebsiteStatus.READY && !isExpired) {
         return mapToDemoWebsiteSummary(existing);
@@ -427,6 +428,39 @@ export class DemoWebsiteService {
       }
     });
 
+    // Record audit log for successful creation or regeneration
+    if (isSuccess) {
+      const action = existing ? 'lead.demo_regenerated' : 'lead.demo_created';
+      await prisma.auditLog.create({
+        data: {
+          organizationId: ctx.organizationId,
+          userId: ctx.userId,
+          action,
+          entityType: 'Lead',
+          entityId: lead.id,
+          before: existing
+            ? {
+                status: existing.status,
+                provider: existing.provider,
+                providerSiteId: existing.providerSiteId,
+                demoUrl: existing.demoUrl,
+                readyAt: existing.readyAt?.toISOString() ?? null,
+                expiresAt: existing.expiresAt?.toISOString() ?? null
+              }
+            : Prisma.DbNull,
+          after: {
+            demoWebsiteId: demoRecord.id,
+            status: demoRecord.status,
+            provider: demoRecord.provider,
+            providerSiteId: demoRecord.providerSiteId,
+            demoUrl: demoRecord.demoUrl,
+            readyAt: demoRecord.readyAt?.toISOString() ?? null,
+            expiresAt: demoRecord.expiresAt?.toISOString() ?? null
+          }
+        }
+      });
+    }
+
     return mapToDemoWebsiteSummary(demoRecord);
   }
 
@@ -458,8 +492,8 @@ export class DemoWebsiteService {
       throw new ValidationError(`Cannot regenerate demo website from current status: ${existing.status}`);
     }
 
-    // Delegate to requestDemoWebsite with same leadId
-    return this.requestDemoWebsite(ctx, leadId, request, providerOverride);
+    // Delegate to requestDemoWebsite with same leadId and isRegeneration = true
+    return this.requestDemoWebsite(ctx, leadId, request, providerOverride, true);
   }
 
   /**
@@ -519,6 +553,26 @@ export class DemoWebsiteService {
             name: true,
             email: true
           }
+        }
+      }
+    });
+
+    // Record audit log for expiration
+    await prisma.auditLog.create({
+      data: {
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        action: 'lead.demo_expired',
+        entityType: 'Lead',
+        entityId: leadId,
+        before: {
+          status: existing.status,
+          providerSiteId: existing.providerSiteId,
+          demoUrl: existing.demoUrl
+        },
+        after: {
+          demoWebsiteId: updated.id,
+          status: updated.status
         }
       }
     });
@@ -585,6 +639,26 @@ export class DemoWebsiteService {
             name: true,
             email: true
           }
+        }
+      }
+    });
+
+    // Record audit log for removal
+    await prisma.auditLog.create({
+      data: {
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        action: 'lead.demo_removed',
+        entityType: 'Lead',
+        entityId: leadId,
+        before: {
+          status: existing.status,
+          providerSiteId: existing.providerSiteId,
+          demoUrl: existing.demoUrl
+        },
+        after: {
+          demoWebsiteId: updated.id,
+          status: updated.status
         }
       }
     });

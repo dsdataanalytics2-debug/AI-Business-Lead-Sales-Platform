@@ -18,6 +18,7 @@ import { analyzeRateLimiter } from '../middleware/rate-limiter.js';
 import { leadController } from '../controllers/lead.controller.js';
 import { onlinePresenceController } from '../controllers/online-presence.controller.js';
 import { followUpController } from '../controllers/follow-up.controller.js';
+import { demoWebsiteController } from '../controllers/demo-website.controller.js';
 
 export const leadRouter = Router();
 
@@ -60,6 +61,46 @@ leadRouter.get(
   requireAuth,
   requirePermission(Permissions.LEADS_READ),
   leadController.getLead
+);
+
+// POST /api/v1/leads/:id/demo -> Request / generate demo website
+leadRouter.post(
+  '/:id/demo',
+  requireAuth,
+  requirePermission(Permissions.DEMOS_GENERATE),
+  demoWebsiteController.requestDemo
+);
+
+// GET /api/v1/leads/:id/demo -> Get current demo website summary
+leadRouter.get(
+  '/:id/demo',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  demoWebsiteController.getDemo
+);
+
+// POST /api/v1/leads/:id/demo/regenerate -> Regenerate demo website
+leadRouter.post(
+  '/:id/demo/regenerate',
+  requireAuth,
+  requirePermission(Permissions.DEMOS_GENERATE),
+  demoWebsiteController.regenerateDemo
+);
+
+// POST /api/v1/leads/:id/demo/expire -> Expire demo website
+leadRouter.post(
+  '/:id/demo/expire',
+  requireAuth,
+  requirePermission(Permissions.DEMOS_MANAGE),
+  demoWebsiteController.expireDemo
+);
+
+// POST /api/v1/leads/:id/demo/remove -> Remove / unpublish demo website
+leadRouter.post(
+  '/:id/demo/remove',
+  requireAuth,
+  requirePermission(Permissions.DEMOS_MANAGE),
+  demoWebsiteController.removeDemo
 );
 
 // PATCH /api/v1/leads/:id/assignment -> Assign/reassign/unassign lead

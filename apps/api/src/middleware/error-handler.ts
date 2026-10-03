@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { ErrorCodes } from '@leadmate/shared';
+import { ErrorCodes, DemoWebsiteErrorCode } from '@leadmate/shared';
+import { StoreMateUnavailableError } from '@leadmate/storemate';
 import { AppError } from '../lib/errors.js';
 import { logger } from './logger.js';
 
@@ -32,7 +33,22 @@ export function errorHandler(
     return;
   }
 
-  // 2. Handle Custom App Errors
+  // 2. Handle StoreMate Unavailable / Blocked Provider Error
+  if (
+    err instanceof StoreMateUnavailableError ||
+    (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === DemoWebsiteErrorCode.STOREMATE_UNAVAILABLE)
+  ) {
+    res.status(503).json({
+      error: {
+        code: DemoWebsiteErrorCode.STOREMATE_UNAVAILABLE,
+        message: (err as Error).message || 'StoreMate demo provider is currently unavailable',
+        requestId
+      }
+    });
+    return;
+  }
+
+  // 3. Handle Custom App Errors
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: {
