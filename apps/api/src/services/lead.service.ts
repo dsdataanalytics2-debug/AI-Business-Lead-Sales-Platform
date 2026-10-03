@@ -22,7 +22,12 @@ import {
   type LeadContact,
   type PaginatedResult,
   type LeadAssignmentRequest,
-  type LeadAssignmentResponse
+  type LeadAssignmentResponse,
+  type CrmStageUpdateRequest,
+  type CrmStageUpdateResponse,
+  type CrmNoteRequest,
+  type CrmNote,
+  type CrmActivity
 } from '@leadmate/shared';
 import {
   normalizeBusinessName,
@@ -883,6 +888,283 @@ export class LeadService {
           : null
       };
     });
+  }
+
+  /**
+   * Updates a lead's CRM pipeline stage.
+   * Enforces tenant-safe lookup, deterministic no-ops, atomic activity logging, and audit tracking.
+   */
+  async updateCrmStage(
+    id: string,
+    input: CrmStageUpdateRequest,
+    context: LeadRequestContext
+  ): Promise<CrmStageUpdateResponse> {
+    const { organizationId, userId } = context;
+    const { stage } = input;
+
+    return prisma.$transaction(async (tx) => {
+      const existingLead = await tx.lead.findFirst({
+        where: {
+          id,
+          organizationId
+        }
+      });
+
+      if (!existingLead) {
+        throw new NotFoundError(`Lead with ID "${id}" not found`);
+      }
+
+      // No-op: If already in requested stage, return without creating duplicate activity or audit entries
+      if (existingLead.crmStage === stage) {
+        return {
+          leadId: existingLead.id,
+          crmStage: existingLead.crmStage as any
+        };
+      }
+
+      const previousStage = existingLead.crmStage;
+
+      // 1. Update lead CRM stage
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: {
+          crmStage: stage
+        }
+      });
+
+      // 2. Record CRM Activity
+      await tx.crmActivity.create({
+        data: {
+          organizationId,
+          leadId: id,
+          actorUserId: userId,
+          type: CrmActivityType.STAGE_CHANGED,
+          metadata: {
+            previousStage,
+            newStage: stage
+          }
+        }
+      });
+
+      // 3. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId,
+          action: 'lead.crm_stage_changed',
+          entityType: 'Lead',
+          entityId: id,
+          before: {
+            crmStage: previousStage
+          },
+          after: {
+            crmStage: stage
+          }
+        }
+      });
+
+      return {
+        leadId: updatedLead.id,
+        crmStage: updatedLead.crmStage as any
+      };
+    });
+  }
+
+  /**
+   * Adds a CRM note to a lead.
+   * Enforces tenant-safe lookup, creates atomic note, NOTE_ADDED activity, and audit log.
+   */
+  async addCrmNote(
+    id: string,
+    input: CrmNoteRequest,
+    context: LeadRequestContext
+  ): Promise<CrmNote> {
+    const { organizationId, userId } = context;
+    const { content } = input;
+
+    return prisma.$transaction(async (tx) => {
+      const existingLead = await tx.lead.findFirst({
+        where: {
+          id,
+          organizationId
+        }
+      });
+
+      if (!existingLead) {
+        throw new NotFoundError(`Lead with ID "${id}" not found`);
+      }
+
+      // 1. Create CRM Note
+      const note = await tx.crmNote.create({
+        data: {
+          organizationId,
+          leadId: id,
+          userId,
+          content
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      // 2. Record CRM Activity
+      await tx.crmActivity.create({
+        data: {
+          organizationId,
+          leadId: id,
+          actorUserId: userId,
+          type: CrmActivityType.NOTE_ADDED,
+          metadata: {
+            noteId: note.id
+          }
+        }
+      });
+
+      // 3. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId,
+          action: 'lead.crm_note_added',
+          entityType: 'Lead',
+          entityId: id,
+          before: Prisma.DbNull,
+          after: {
+            noteId: note.id
+          }
+        }
+      });
+
+      return {
+        id: note.id,
+        leadId: note.leadId,
+        userId: note.userId,
+        author: {
+          id: note.author.id,
+          name: note.author.name,
+          email: note.author.email
+        },
+        content: note.content,
+        createdAt: note.createdAt,
+        updatedAt: note.updatedAt
+      };
+    });
+  }
+
+  /**
+   * Retrieves all CRM notes for a lead, ordered newest first.
+   */
+  async listCrmNotes(
+    id: string,
+    context: LeadRequestContext
+  ): Promise<CrmNote[]> {
+    const { organizationId } = context;
+
+    const existingLead = await prisma.lead.findFirst({
+      where: {
+        id,
+        organizationId
+      }
+    });
+
+    if (!existingLead) {
+      throw new NotFoundError(`Lead with ID "${id}" not found`);
+    }
+
+    const notes = await prisma.crmNote.findMany({
+      where: {
+        leadId: id,
+        organizationId
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return notes.map((n) => ({
+      id: n.id,
+      leadId: n.leadId,
+      userId: n.userId,
+      author: {
+        id: n.author.id,
+        name: n.author.name,
+        email: n.author.email
+      },
+      content: n.content,
+      createdAt: n.createdAt,
+      updatedAt: n.updatedAt
+    }));
+  }
+
+  /**
+   * Retrieves the CRM activity timeline for a lead, ordered newest first.
+   */
+  async listCrmActivities(
+    id: string,
+    context: LeadRequestContext
+  ): Promise<CrmActivity[]> {
+    const { organizationId } = context;
+
+    const existingLead = await prisma.lead.findFirst({
+      where: {
+        id,
+        organizationId
+      }
+    });
+
+    if (!existingLead) {
+      throw new NotFoundError(`Lead with ID "${id}" not found`);
+    }
+
+    const activities = await prisma.crmActivity.findMany({
+      where: {
+        leadId: id,
+        organizationId
+      },
+      include: {
+        actor: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    return activities.map((a) => ({
+      id: a.id,
+      leadId: a.leadId,
+      type: a.type as any,
+      actorUserId: a.actorUserId,
+      actor: a.actor
+        ? {
+            id: a.actor.id,
+            name: a.actor.name,
+            email: a.actor.email
+          }
+        : null,
+      metadata: (a.metadata as Record<string, unknown>) || {},
+      createdAt: a.createdAt
+    }));
   }
 }
 

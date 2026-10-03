@@ -61,6 +61,38 @@ leadRouter.patch(
   leadController.updateAssignment
 );
 
+// PATCH /api/v1/leads/:id/crm-stage -> Update lead CRM pipeline stage
+leadRouter.patch(
+  '/:id/crm-stage',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  leadController.updateCrmStage
+);
+
+// GET /api/v1/leads/:id/notes -> List CRM notes for lead
+leadRouter.get(
+  '/:id/notes',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  leadController.listNotes
+);
+
+// POST /api/v1/leads/:id/notes -> Add CRM note to lead
+leadRouter.post(
+  '/:id/notes',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  leadController.addNote
+);
+
+// GET /api/v1/leads/:id/activities -> Get CRM activity timeline for lead
+leadRouter.get(
+  '/:id/activities',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  leadController.listActivities
+);
+
 // PATCH /api/v1/leads/:id -> Update lead scalar attributes
 leadRouter.patch(
   '/:id',

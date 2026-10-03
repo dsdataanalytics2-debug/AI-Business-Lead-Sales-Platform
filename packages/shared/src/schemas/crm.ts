@@ -57,6 +57,19 @@ export const crmStageUpdateRequestSchema = z
 export type CrmStageUpdateRequest = z.infer<typeof crmStageUpdateRequestSchema>;
 
 /* =========================================================
+ * CRM Stage Update Response Schema
+ * ========================================================= */
+
+export const crmStageUpdateResponseSchema = z
+  .object({
+    leadId: z.string().uuid(),
+    crmStage: z.nativeEnum(CrmStage)
+  })
+  .strict();
+
+export type CrmStageUpdateResponse = z.infer<typeof crmStageUpdateResponseSchema>;
+
+/* =========================================================
  * CRM Note Request & Response Schemas
  * ========================================================= */
 

@@ -13,7 +13,9 @@ import {
   leadListQuerySchema,
   leadUpdateRequestSchema,
   manualContactRequestSchema,
-  leadAssignmentRequestSchema
+  leadAssignmentRequestSchema,
+  crmStageUpdateRequestSchema,
+  crmNoteRequestSchema
 } from '@leadmate/shared';
 import { leadService } from '../services/lead.service.js';
 
@@ -124,6 +126,92 @@ export class LeadController {
 
       res.status(201).json({
         data: contact
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * PATCH /api/v1/leads/:id/crm-stage
+   */
+  async updateCrmStage(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const input = crmStageUpdateRequestSchema.parse(req.body);
+
+      const result = await leadService.updateCrmStage(id, input, {
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/v1/leads/:id/notes
+   */
+  async addNote(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const input = crmNoteRequestSchema.parse(req.body);
+
+      const note = await leadService.addCrmNote(id, input, {
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(201).json({
+        data: note
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/leads/:id/notes
+   */
+  async listNotes(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const notes = await leadService.listCrmNotes(id, {
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: notes
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /api/v1/leads/:id/activities
+   */
+  async listActivities(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const activities = await leadService.listCrmActivities(id, {
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: activities
       });
     } catch (err) {
       next(err);

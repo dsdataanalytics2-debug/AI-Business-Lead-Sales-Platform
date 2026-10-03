@@ -13,6 +13,7 @@ import {
   leadAssignmentRequestSchema,
   leadAssignmentResponseSchema,
   crmStageUpdateRequestSchema,
+  crmStageUpdateResponseSchema,
   crmNoteRequestSchema,
   crmNoteSchema,
   crmActivitySchema,
@@ -201,6 +202,16 @@ describe('M3 Step 1: Shared CRM Contracts & Pipeline Stages Verification', () =>
         score: 95
       };
       expect(() => crmStageUpdateRequestSchema.parse(injected)).toThrow();
+    });
+
+    it('13b. Validates crmStageUpdateResponseSchema serialization', () => {
+      const payload = {
+        leadId: '123e4567-e89b-12d3-a456-426614174000',
+        crmStage: CrmStage.WON
+      };
+      const parsed = crmStageUpdateResponseSchema.parse(payload);
+      expect(parsed.leadId).toBe(payload.leadId);
+      expect(parsed.crmStage).toBe(CrmStage.WON);
     });
   });
 
