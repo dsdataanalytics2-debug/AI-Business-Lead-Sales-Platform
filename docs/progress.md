@@ -1,101 +1,158 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M2 — Online Presence Analysis & Deterministic Qualification
+## Current Milestone: M3 — CRM, Lead Assignment & Follow-Up Management
 - **Status:** COMPLETE
-- **Completion Date:** 2026-10-02
-- **Next Milestone:** M3 — CRM + Lead Assignment + Follow-up Management (NOT STARTED)
+- **Completion Date:** 2026-10-03
+- **Approved Base Checkpoint (Step 7):** `5f8854e19ed7d3a8c58d97c092184e56dc2834a8` (`test(m3): harden crm security and e2e coverage`)
+- **Next Milestone:** M4 — StoreMate Demo Website Integration (NOT STARTED)
 
 ---
 
-## Milestone M2 Summary of Accomplishments
+## Milestone M3 Summary of Accomplishments
 
-### Step-by-Step Execution Summary (Steps 1–7)
-- **Step 1 (Shared Contracts & Deterministic Qualification Engine):** Established analysis status enums, campaign schemas, qualification reason codes, and pure deterministic qualification scoring engine in `@leadmate/core` evaluating factual signals across 3 distinct campaigns without LLM or network dependency.
-  - *Approved Checkpoint:* `50e6ec16315dc0e0caf57acbc3fbcc11f8f65bfb` (`feat(m2): add deterministic qualification contracts and scoring`)
-- **Step 2 (Safe SSRF Guard & Website Analyzer):** Implemented zero-trust SSRF protection with global unicast IP classifier, DNS resolution validation, socket IP pinning against DNS rebinding, manual redirect revalidation (max 3 hops), 100 KB body streaming cap with early `</head>` abort, 5-second total probe budget, and attribute-order-agnostic `<title>` / `<meta name="description">` extraction.
-  - *Approved Checkpoint:* `09c36aa76a4b6fd2989c9e146cb860943d49e1a2` (`feat(m2): add ssrf-safe website analyzer`)
-- **Step 3 (Online Presence Analysis Persistence):** Evolved PostgreSQL schema with `LeadOnlinePresenceAnalysis` model containing composite unique key `(lead_id, organization_id)`, multi-tenant composite foreign keys, and synchronous Lead summary fields (`websiteStatus`, `onlinePresenceType`).
-  - *Approved Checkpoint:* `373e565bb1068295feb37166ed5663253cd93271` (`feat(m2): add online presence analysis persistence`)
-- **Step 4 (Online Presence Analysis Service & API):** Implemented `POST /api/v1/leads/:id/analyze` and `GET /api/v1/leads/:id/analysis`, optimistic concurrency protection (409 on stale input mutation), same-process in-flight deduplication, transactional invalidation hooks, authoritative audit logging (`lead.online_presence_analyzed`), and per-user in-memory rate limiting (30 req / 60s).
-  - *Approved Implementation:* `fae5c8c440b45f57019d2bdabdff77fe4a6de754` (`feat(m2): add online presence analysis API`)
-  - *Contract Verification:* `f18b265193955f9ec6c0a55175b09cbff5f0fb47` (`test(m2): verify analysis audit and error contracts`)
-- **Step 5 (Lead Detail Analysis UI):** Built reactive Lead Detail online presence card (`OnlinePresenceAnalysisCard`) with canonical error handling, unanalyzed state CTA, populated score breakdown per campaign, responsive layouts, sanitized external links (`target="_blank" rel="noopener noreferrer"`), and strict `LEADS_WRITE` RBAC button mirroring.
-  - *Approved Implementation:* `9f14eb5b83d5a61e58f05ed7a790d98609c2ebd9` (`feat(m2): add lead analysis detail UI`)
-  - *Contract Alignment:* `eea52790311854a32e9389eafd1336d665ae087e` (`fix(m2): align analysis UI permission and not-found handling`)
-- **Step 6 (End-to-End & Security Validation Suite):** Created comprehensive validation suite (`apps/api/src/tests/m2-e2e-security-validation.spec.ts`) proving the entire M2 journey, direct IP SSRF rejection, mixed DNS defense, redirect SSRF blocking, DNS pinning, rate limiting, tenant isolation, RBAC, input anti-tampering, stale concurrency races (409), suppression rules, audit data minimization, error envelope compliance, and zero global score contamination.
-  - *Approved Checkpoint:* `e3bb20b418c9ae9d62e6ea9bbb700a73b28be466` (`test(m2): validate online presence security and e2e flows`)
-- **Step 7 (CI Validation, Documentation & Milestone Closure):** Validated GitHub Actions CI coverage, documented final M2 architecture, security controls, technical debt, and finalized milestone closure.
+### Step-by-Step Execution Summary (Steps 1–8)
+- **Step 1 (Shared CRM Contracts):** Defined canonical CRM stage enums (`CrmStage`), activity types (`CrmActivityType`), stage transition labels, request/response validation schemas, and assignee summaries in `@leadmate/shared`.
+  - *Approved Checkpoint:* `14207335c8c7565c3b968f201918ae91c9b55cad` (`feat(m3): add shared crm contracts`)
+- **Step 2 (CRM Persistence Layer):** Evolved PostgreSQL schema with `CrmNote` and `CrmActivity` models, composite foreign keys `(organization_id, lead_id)`, `(organization_id, user_id)`, `(organization_id, actor_user_id)`, and updated `Lead` with `crmStage`, `assignedUserId`, and `assignedAt`.
+  - *Approved Checkpoint:* `bd696dc6c05897887006569cbb1ce55f330502fd` (`feat(m3): add crm persistence layer`)
+- **Step 3 (Lead Assignment API & Service):** Built `PATCH /api/v1/leads/:id/assignment` with dedicated `LEADS_ASSIGN` permission guard, active same-tenant assignee validation, unassign support, atomic activity logging (`LEAD_ASSIGNED`, `LEAD_REASSIGNED`, `LEAD_UNASSIGNED`), deterministic no-op semantics, and audit log tracking (`lead.assignment_changed`).
+  - *Approved Checkpoint:* `ad2024c17cbcf6b4626a32abb6af138fe3c9cb26` (`feat(m3): add lead assignment api and service`)
+- **Step 4 (CRM Pipeline Stage, Notes & Activity Timeline APIs):** Built `PATCH /api/v1/leads/:id/crm-stage`, `GET /api/v1/leads/:id/notes`, `POST /api/v1/leads/:id/notes`, and `GET /api/v1/leads/:id/activities` with strict RBAC (`LEADS_WRITE` for mutations, `LEADS_READ` for queries), atomic multi-write transactions, stage no-op deduping, and authoritative audit logging (`lead.crm_stage_changed`, `lead.crm_note_added`).
+  - *Approved Checkpoint:* `d9479c8499e0cdf73840c01df03d983e3e98a4ec` (`feat(m3): add crm pipeline stage, notes, and activity timeline apis`)
+- **Step 6A (Lead Detail CRM Contract Bridge & Assignee Directory):** Added `GET /api/v1/leads/assignees` returning sanitized active users `{ id, name, email }` guarded by `LEADS_ASSIGN`, and bridged `GET /api/v1/leads/:id` to include populated `assignedUser` summary and `crmStage`.
+  - *Approved Checkpoint:* `b0b7b734fb2cd2c9e999339454d7863fce0c13c3` (`feat(m3): add crm frontend backend contracts`)
+- **Step 6 (Lead Detail CRM Frontend UI):** Implemented interactive, responsive CRM card (`CrmCard`) on `/leads/[id]` displaying CRM stage badge & selector, assignee controls, notes composer & timeline, and activity audit feed with permission-aware rendering and localized failure isolation.
+  - *Approved Checkpoint:* `664a066530324c783ac4de4b5667d2416ed6529b` (`feat(m3): add lead detail crm ui`)
+- **Step 5 (Follow-Up Tasks & Reminders Backend):** Created `FollowUpTask` database model, migration, shared contracts, and complete REST lifecycle (`POST/GET /follow-ups`, `PATCH /follow-ups/:followUpId`, `POST /follow-ups/:followUpId/complete`, `POST /follow-ups/:followUpId/cancel`) with deterministic ordering (`PENDING` by `dueAt ASC`, terminal by `updatedAt DESC`), default assignee inheritance from parent lead, and audit logging (`lead.follow_up_created`, `lead.follow_up_updated`, `lead.follow_up_completed`, `lead.follow_up_cancelled`).
+  - *Approved Checkpoint:* `8e7a2c7f64c39e32b3f52c24f2a3f1a693c8226f` (`feat(m3): add follow-up task backend`)
+  - *Note on Execution Order:* Step 6 (CRM UI) was completed before Step 5 (Follow-Up Tasks Backend) to decouple frontend CRM delivery from follow-up task backend persistence.
+- **Step 7 (End-to-End CRM Workflows & Security Hardening):** Built comprehensive security test suite (`m3-security.spec.ts`), multi-role E2E journey suite (`m3-e2e.spec.ts`), and frontend security test suite (`crm-security.spec.tsx`) validating 12/12 endpoints unauthenticated 401 handling, permission matrix, tenant isolation, IDOR resistance, strict body anti-tampering, XSS entity escaping, audit integrity, and cross-terminal transition rules.
+  - *Approved Checkpoint:* `5f8854e19ed7d3a8c58d97c092184e56dc2834a8` (`test(m3): harden crm security and e2e coverage`)
+- **Step 8 (Milestone Closure & Canonical Documentation):** Consolidated M3 architectural guarantees, verified final test baseline (867 tests across 47 files), documented technical debt, and finalized M3 milestone closure.
 
 ---
 
-## Architectural & Security Foundation Delivered in M2
+## Architectural & Security Foundation Delivered in M3
 
 | Layer / Subsystem | Architecture & Invariants | Status |
 |---|---|---|
-| **SSRF Guard & IP Classifier** | Zero-trust global unicast classifier; blocks private, loopback, multicast, link-local, cloud metadata, ULA, CGNAT | Operational |
-| **Website Analyzer** | 5s wall-clock total budget; 100 KB streaming cap; socket IP pinning; manual redirect re-validation (max 3 hops) | Operational |
-| **Metadata Extraction** | Attribute-order & quote agnostic extraction of `<title>` and `<meta name="description">`; HTML entity decoding | Operational |
-| **Deterministic Scoring** | Rule-based, side-effect-free scoring (0–100) per campaign; no LLM; no global score; contact/suppression aware | Operational |
-| **Multi-Campaign Models** | `WEBSITE_ACQUISITION`, `WEBSITE_REDESIGN`, `ONLINE_PRESENCE_IMPROVEMENT` | Operational |
-| **Version Consistency** | Exact versions maintained: `analyzerVersion = 'v1'`, `scoreVersion = 'v1'` | Operational |
-| **Persistence & Sync** | Exactly 1 analysis row per `(leadId, organizationId)`; synchronizes `Lead.websiteStatus` & `Lead.onlinePresenceType` | Operational |
-| **Invalidation Lifecycle** | Lead input edit (PATCH), manual contact creation, and provider merge transactionally invalidate analysis and reset state | Operational |
-| **Concurrency Protection** | Optimistic concurrency checking input fingerprint & `updatedAt` on persistence (409 CONFLICT on stale race) | Operational |
-| **In-Flight Deduplication** | In-process deduplication shares single active probe across concurrent requests for same `organizationId:leadId` | Operational |
-| **Rate Limiting** | 30 requests per 60 seconds per user on `POST /analyze` (returns 429 with `Retry-After` header) | Operational |
-| **Granular RBAC** | `POST /analyze` requires `LEADS_WRITE`; `GET /analysis` requires `LEADS_READ`; VIEWER cannot trigger analysis | Operational |
-| **Multi-Tenancy** | Strict tenant isolation; cross-tenant GET or POST returns generic 404 `NOT_FOUND` | Operational |
-| **Audit & Error Contract** | Action `lead.online_presence_analyzed` with scalar metadata only; standard error envelope `{ error: { code, message, requestId } }` | Operational |
-| **Frontend UI** | Next.js Lead Detail card with unanalyzed CTA, campaign score breakdown, safe link sanitization, and permission-aware action button | Operational |
-| **Zero Live Network** | 100% of automated tests execute with zero public internet requests via dependency-injected mock transports | Operational |
+| **M3 API Surface** | 12 REST endpoints covering lead detail, assignees, assignment, CRM stages, notes, activities, and follow-up tasks | Operational |
+| **Granular RBAC** | Production permissions: `LEADS_READ` (viewing CRM data), `LEADS_WRITE` (stage/notes/tasks mutations), `LEADS_ASSIGN` (lead assignment & assignee directory) | Operational |
+| **Multi-Tenancy & IDOR Defense** | Cross-tenant requests to any lead, note, activity, task, or assignee return generic 404 `NOT_FOUND` with 0 mutations | Operational |
+| **Database Foreign Keys** | PostgreSQL composite foreign keys `(organization_id, lead_id)`, `(organization_id, assigned_user_id)`, `(organization_id, created_by_user_id)` enforce tenant integrity at DB engine level | Operational |
+| **Atomic Transactions** | All multi-write mutations (lead updates + activities + audit logs) execute atomically in `prisma.$transaction` | Operational |
+| **Strict Request Validation** | Zod schemas with `.strict()` reject extra or injected fields (`organizationId`, `role`, `authorId`, `status`) with 422 `VALIDATION_ERROR` | Operational |
+| **Safe Output Projection** | Assignee directory and activity actor summaries strictly sanitized to `{ id, name, email }`; credentials, sessions, and org internals stripped | Operational |
+| **CRM Pipeline Stages** | 7 canonical stages (`NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`); same-stage is 200 no-op; terminal reopen permitted in V1 | Operational |
+| **CRM Activity Feed** | Authoritative timeline recording `LEAD_ASSIGNED`, `LEAD_REASSIGNED`, `LEAD_UNASSIGNED`, `STAGE_CHANGED`, `NOTE_ADDED`; follow-ups do NOT emit CRM activities | Operational |
+| **Follow-Up Task Lifecycle** | `PENDING` $\rightarrow$ `COMPLETED` / `CANCELLED`; repeat calls are 200 no-ops; cross-terminal flips (`CANCELLED` $\rightarrow$ complete or `COMPLETED` $\rightarrow$ cancel) return 422 | Operational |
+| **Derived Overdue Status** | Overdue is strictly derived in application logic (`status === PENDING && dueAt < now`); no persisted `OVERDUE` state, no background scheduler | Operational |
+| **Follow-Up UI Boundary** | Follow-up task backend is fully operational; follow-up frontend UI is intentionally deferred and NOT part of M3 UI | Documented Limitation |
+| **Authoritative Audit Logging** | Dedicated actions: `lead.assignment_changed`, `lead.crm_stage_changed`, `lead.crm_note_added`, `lead.follow_up_created`, `lead.follow_up_updated`, `lead.follow_up_completed`, `lead.follow_up_cancelled` | Operational |
+| **XSS Prevention** | React DOM text node escaping without `dangerouslySetInnerHTML`; script payloads stored safely as literal plain text | Operational |
+| **Frontend Failure Isolation** | Secondary CRM data failures (notes/activities/assignees) isolated via localized error banners without crashing parent lead view | Operational |
 
 ---
 
-## API Endpoints & Contracts
+## Final M3 API Surface (12 Endpoints)
 
-### Endpoints
-- `POST /api/v1/leads/:id/analyze` — Trigger or re-run online presence analysis.
-  - **Permission Required:** `LEADS_WRITE`
-  - **Status Codes:** `200 OK`, `401 UNAUTHENTICATED`, `403 FORBIDDEN`, `404 NOT_FOUND`, `409 CONFLICT` (stale race), `422 VALIDATION_ERROR` (body tampering), `429 RATE_LIMITED`
-- `GET /api/v1/leads/:id/analysis` — Retrieve latest analysis state.
-  - **Permission Required:** `LEADS_READ`
-  - **Status Codes:** `200 OK` (returns `{ data: null }` if unanalyzed, or populated analysis object), `401 UNAUTHENTICATED`, `404 NOT_FOUND`
+1. `GET /api/v1/leads/:id` — Retrieve authoritative lead detail with CRM summary (`crmStage`, `assignedUserId`, `assignedAt`, `assignedUser`).
+   - **Permission:** `LEADS_READ`
+2. `GET /api/v1/leads/assignees` — Retrieve list of active assignable users `{ id, name, email }` in caller's organization.
+   - **Permission:** `LEADS_ASSIGN`
+3. `PATCH /api/v1/leads/:id/assignment` — Assign, reassign, or unassign (`assignedUserId: null`) a lead.
+   - **Permission:** `LEADS_ASSIGN`
+4. `PATCH /api/v1/leads/:id/crm-stage` — Transition lead's CRM pipeline stage.
+   - **Permission:** `LEADS_WRITE`
+5. `GET /api/v1/leads/:id/notes` — Retrieve chronological CRM notes for a lead.
+   - **Permission:** `LEADS_READ`
+6. `POST /api/v1/leads/:id/notes` — Add a new CRM note (max 5,000 characters).
+   - **Permission:** `LEADS_WRITE`
+7. `GET /api/v1/leads/:id/activities` — Retrieve chronological CRM activity timeline.
+   - **Permission:** `LEADS_READ`
+8. `GET /api/v1/leads/:id/follow-ups` — List all follow-up tasks for a lead (ordered deterministically: `PENDING` by `dueAt ASC`, completed/cancelled by `updatedAt DESC`).
+   - **Permission:** `LEADS_READ`
+9. `POST /api/v1/leads/:id/follow-ups` — Create a follow-up task (defaults assignee from parent lead if omitted).
+   - **Permission:** `LEADS_WRITE`
+10. `PATCH /api/v1/leads/:id/follow-ups/:followUpId` — Update mutable fields (`dueAt`, `assignedUserId`, `note`) of a pending follow-up task.
+    - **Permission:** `LEADS_WRITE`
+11. `POST /api/v1/leads/:id/follow-ups/:followUpId/complete` — Mark a follow-up task as `COMPLETED` (server-generated `completedAt`).
+    - **Permission:** `LEADS_WRITE`
+12. `POST /api/v1/leads/:id/follow-ups/:followUpId/cancel` — Mark a follow-up task as `CANCELLED` (`completedAt: null`).
+    - **Permission:** `LEADS_WRITE`
 
-### Analysis Statuses
-- `NOT_APPLICABLE` — Lead has no website URL provided (`website = null`).
-- `REACHABLE` — HTTP 200/2xx reachable HTML webpage.
-- `UNREACHABLE` — HTTP 404/5xx, connection failure, DNS resolution failure, or exceeded redirect hops.
-- `TIMEOUT` — Total 5-second deadline exceeded during DNS/connect/TLS/redirect/streaming.
-- `ACCESS_RESTRICTED` — HTTP 401/403/429 authorization/bot challenge encountered.
-- `BLOCKED_SSRF` — Target URL or resolved IP blocked by positive global unicast policy.
-- `INVALID_URL` — Malformed URL syntax, unsupported scheme, or embedded user credentials.
-- `NON_HTML` — Valid response with non-HTML content type (e.g. `application/pdf`).
+---
 
-### Campaign Types & Scoring Invariants
-- `WEBSITE_ACQUISITION` — Targets businesses without websites or with unreachable/broken websites.
-- `WEBSITE_REDESIGN` — Targets businesses with reachable websites needing modernization (non-HTTPS, missing metadata, slow response).
-- `ONLINE_PRESENCE_IMPROVEMENT` — Targets businesses reliant solely on social media (Facebook/Instagram) or marketplace channels.
-- **Invariants:** Every campaign score is deterministic (0–100). No global/winner score is computed or stored.
+## Canonical Data Models & Lifecycle Rules
+
+### CRM Stages
+- **Canonical Enum:** `NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`
+- **Transition Policy:** Any stage transition is permitted in V1 (including reopening from `WON`/`LOST`).
+- **No-Op Semantics:** Updating to the lead's current stage returns `200 OK` with 0 new activities and 0 new audit records.
+
+### Follow-Up Task Statuses & Terminal Matrix
+- **Canonical Enum:** `PENDING`, `COMPLETED`, `CANCELLED`
+- **Transition Rules:**
+  - `PENDING` $\rightarrow$ `COMPLETED`: Allowed (`200 OK`, sets `completedAt`).
+  - `PENDING` $\rightarrow$ `CANCELLED`: Allowed (`200 OK`, clears `completedAt`).
+  - `COMPLETED` $\rightarrow$ `complete`: Idempotent no-op (`200 OK`, 0 new audits).
+  - `CANCELLED` $\rightarrow$ `cancel`: Idempotent no-op (`200 OK`, 0 new audits).
+  - `CANCELLED` $\rightarrow$ `complete`: Rejected with `422 VALIDATION_ERROR`.
+  - `COMPLETED` $\rightarrow$ `cancel`: Rejected with `422 VALIDATION_ERROR`.
+  - `PATCH` on `COMPLETED` or `CANCELLED` task: Rejected with `422 VALIDATION_ERROR`.
+- **Overdue Rule:** `status === PENDING && dueAt < now` (dynamically evaluated; no persisted `OVERDUE` state).
+
+### Audit Actions & CRM Activity Matrix
+| Domain Event | Audit Action | CRM Activity Type | Metadata Invariants |
+|---|---|---|---|
+| Initial Assignment | `lead.assignment_changed` | `LEAD_ASSIGNED` | `{ assignedUserId, operation: "ASSIGNED" }` |
+| Reassignment | `lead.assignment_changed` | `LEAD_REASSIGNED` | `{ assignedUserId, previousAssignedUserId, operation: "REASSIGNED" }` |
+| Unassignment | `lead.assignment_changed` | `LEAD_UNASSIGNED` | `{ previousAssignedUserId, operation: "UNASSIGNED" }` |
+| CRM Stage Transition | `lead.crm_stage_changed` | `STAGE_CHANGED` | `{ previousStage, newStage }` |
+| CRM Note Added | `lead.crm_note_added` | `NOTE_ADDED` | `{ noteId }` (full content omitted from audit metadata) |
+| Follow-Up Created | `lead.follow_up_created` | *None* | `{ leadId, dueAt, assignedUserId, status: "PENDING" }` |
+| Follow-Up Updated | `lead.follow_up_updated` | *None* | `{ leadId, dueAt, assignedUserId, note }` |
+| Follow-Up Completed | `lead.follow_up_completed` | *None* | `{ leadId, status: "COMPLETED", completedAt }` |
+| Follow-Up Cancelled | `lead.follow_up_cancelled` | *None* | `{ leadId, status: "CANCELLED" }` |
 
 ---
 
 ## Test & Verification Baseline
 
-- **Automated Tests:** 607/607 tests passing across 32 test files (`node node_modules/vitest/vitest.mjs run`).
-- **Root Typecheck:** 0 errors across 9 workspaces (`npm run typecheck`).
-- **Web Production Build:** Clean static and dynamic route generation (`npm run build -w apps/web`).
-- **Security Audit:** Zero live network requests in tests; zero credentials/secrets leaked; zero `dangerouslySetInnerHTML`.
-- **Test DB Safety:** All database test suites protected by PostgreSQL `ensureTestDatabase` guard asserting database name ends with `_test`.
+- **Automated Tests:** **867 / 867 tests passing** across **47 test files** (`node node_modules/vitest/vitest.mjs run`).
+  - *M3 Security Hardening Suite:* 30 tests (`apps/api/src/tests/m3-security.spec.ts`)
+  - *M3 End-to-End Multi-Role Suite:* 4 tests (`apps/api/src/tests/m3-e2e.spec.ts`)
+  - *M3 Frontend Security & Escaping Suite:* 5 tests (`apps/web/src/tests/crm-security.spec.tsx`)
+  - *M3 Core Regression Suites:* 219 tests across 12 test files
+- **Root Typecheck:** **0 errors** across all 9 workspaces (`npm run typecheck`).
+- **Web Production Build:** **SUCCESS** with optimized static and dynamic routes (`npm run build -w apps/web`).
+- **Prisma Schema Validation:** **VALID** (`prisma validate --schema="packages/db/prisma/schema.prisma"`).
+- **Test DB Safety:** All test suites guarded by PostgreSQL `ensureTestDatabase` assertion.
 
 ---
 
 ## Known Non-Blocking Notes & Technical Debt
 
-1. **In-Memory Rate Limiting:** The analyze rate limiter (30 req / 60s) is in-memory per API process. Multi-instance distributed rate limiting is deferred to future infrastructure phases.
-2. **In-Process Deduplication:** In-flight analysis deduplication is in-process only. Multiple API instances can still execute concurrent probes for the same lead.
-3. **Cross-Process Concurrency:** Analysis writes rely on PostgreSQL unique constraints and optimistic input fingerprint comparisons; no distributed locks (e.g. Redis Redlock) are used.
-4. **IANA IP Range Policy:** Special-purpose IP range definitions in `ssrf-guard.ts` should be periodically reviewed against updated IANA special registry allocations.
-5. **Lightweight HTML Probing:** Website analysis performs lightweight, bounded HTTP streaming without headless browser rendering or client-side JavaScript execution.
+1. **CRM Rate Limiting (M3 Tech Debt):** M3 CRM routes currently rely on authenticated session throughput. Distributed Redis-backed rate limiting is scheduled for post-M3 infrastructure hardening.
+2. **Concurrent Write Locking (M3 Tech Debt):** Lead assignment, stage updates, and follow-up mutations currently follow last-write-wins semantics within atomic PostgreSQL transactions. Optimistic locking (`version` column) is deferred.
+3. **Cursor-Based Pagination (M3 Tech Debt):** CRM notes, activity timeline entries, and follow-up tasks are returned unpaginated with deterministic ordering. Cursor-based pagination is deferred to high-volume optimization phases.
+4. **Follow-Up Frontend UI (M3 Scope Boundary):** Follow-up task backend is fully implemented and tested, but follow-up UI controls on the frontend are intentionally deferred beyond M3.
+5. **In-Memory Rate Limiting (M2 Tech Debt):** Analyze rate limiter (30 req / 60s) is in-memory per API process.
+6. **In-Process Analysis Deduplication (M2 Tech Debt):** In-flight website analysis deduplication is in-process only.
+7. **IANA IP Range Policy (M2 Tech Debt):** Special-purpose IP range definitions in `ssrf-guard.ts` should be periodically reviewed against updated IANA registry allocations.
+
+---
+
+## Milestone M2 Summary of Accomplishments (Archived Reference)
+
+### Step-by-Step Execution Summary (Steps 1–7)
+- **Step 1 (Shared Contracts & Deterministic Qualification Engine):** Established analysis status enums, campaign schemas, qualification reason codes, and pure deterministic qualification scoring engine in `@leadmate/core` evaluating factual signals across 3 distinct campaigns (`50e6ec1`).
+- **Step 2 (Safe SSRF Guard & Website Analyzer):** Implemented zero-trust SSRF protection with global unicast IP classifier, DNS resolution validation, socket IP pinning against DNS rebinding, manual redirect revalidation (max 3 hops), 100 KB body streaming cap with early `</head>` abort, 5-second total probe budget, and attribute-order-agnostic `<title>` / `<meta name="description">` extraction (`09c36aa`).
+- **Step 3 (Online Presence Analysis Persistence):** Evolved PostgreSQL schema with `LeadOnlinePresenceAnalysis` model containing composite unique key `(lead_id, organization_id)`, multi-tenant composite foreign keys, and synchronous Lead summary fields (`websiteStatus`, `onlinePresenceType`) (`373e565`).
+- **Step 4 (Online Presence Analysis Service & API):** Implemented `POST /api/v1/leads/:id/analyze` and `GET /api/v1/leads/:id/analysis`, optimistic concurrency protection (409 on stale input mutation), same-process in-flight deduplication, transactional invalidation hooks, authoritative audit logging (`lead.online_presence_analyzed`), and per-user in-memory rate limiting (30 req / 60s) (`fae5c8c`, `f18b265`).
+- **Step 5 (Lead Detail Analysis UI):** Built reactive Lead Detail online presence card (`OnlinePresenceAnalysisCard`) with canonical error handling, unanalyzed state CTA, populated score breakdown per campaign, responsive layouts, sanitized external links (`target="_blank" rel="noopener noreferrer"`), and strict `LEADS_WRITE` RBAC button mirroring (`9f14eb5`, `eea5279`).
+- **Step 6 (End-to-End & Security Validation Suite):** Created comprehensive validation suite (`apps/api/src/tests/m2-e2e-security-validation.spec.ts`) proving the entire M2 journey, direct IP SSRF rejection, mixed DNS defense, redirect SSRF blocking, DNS pinning, rate limiting, tenant isolation, RBAC, input anti-tampering, stale concurrency races (409), suppression rules, audit data minimization, error envelope compliance, and zero global score contamination (`e3bb20b`).
+- **Step 7 (CI Validation, Documentation & Milestone Closure):** Validated GitHub Actions CI coverage, documented final M2 architecture, security controls, technical debt, and finalized milestone closure (`860c441`).
 
 ---
 
@@ -117,4 +174,4 @@
 ---
 
 ## Next Steps (Awaiting Kickoff)
-- **Milestone M3 — CRM + Lead Assignment + Follow-up Management:** NOT STARTED. Awaiting explicit approval and kickoff instructions.
+- **Milestone M4 — StoreMate Demo Website Integration:** NOT STARTED. Awaiting explicit approval and kickoff instructions.
