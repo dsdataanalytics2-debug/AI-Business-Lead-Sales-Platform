@@ -47,6 +47,7 @@ import {
 } from '@/lib/leads/lead-detail-state';
 import { OnlinePresenceAnalysisCard } from '@/components/leads/online-presence-analysis-card';
 import { CrmCard } from '@/components/leads/crm-card';
+import { DemoWebsiteCard } from '@/components/leads/demo-website-card';
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -58,6 +59,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const canReadLeads = hasPermission(Permissions.LEADS_READ);
   const canWriteLeads = hasPermission(Permissions.LEADS_WRITE);
   const canAssignLeads = hasPermission(Permissions.LEADS_ASSIGN);
+  const canGenerateDemo = hasPermission(Permissions.DEMOS_GENERATE);
+  const canManageDemo = hasPermission(Permissions.DEMOS_MANAGE);
 
   // Pure reducer page state
   const [pageState, dispatch] = useReducer(leadDetailReducer, initialLeadDetailState);
@@ -770,6 +773,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               canAssign={canAssignLeads}
               onStageChanged={() => fetchLeadDetail(true)}
               onAssignmentChanged={() => fetchLeadDetail(true)}
+            />
+
+            {/* Demo Website Card (M4) */}
+            <DemoWebsiteCard
+              leadId={lead.id}
+              canRead={canReadLeads}
+              canGenerate={canGenerateDemo}
+              canManage={canManageDemo}
             />
 
             {/* Direct Contacts Section */}

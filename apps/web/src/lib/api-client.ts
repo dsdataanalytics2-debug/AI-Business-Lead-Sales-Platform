@@ -18,7 +18,9 @@ import {
   type LeadAssignmentResponse,
   type CrmStageUpdateResponse,
   type CrmNote,
-  type CrmActivity
+  type CrmActivity,
+  type CreateDemoWebsiteRequest,
+  type DemoWebsiteSummary
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -272,6 +274,51 @@ export const apiClient = {
       request<CrmActivity[]>(`/leads/${encodeURIComponent(id)}/activities`, {
         ...options,
         method: 'GET'
+      }),
+    getDemo: async (id: string, options: RequestInit = {}): Promise<DemoWebsiteSummary | null> => {
+      try {
+        return await request<DemoWebsiteSummary>(`/leads/${encodeURIComponent(id)}/demo`, {
+          ...options,
+          method: 'GET'
+        });
+      } catch (err) {
+        if (err instanceof ApiClientError && err.statusCode === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
+    createDemo: (
+      id: string,
+      input?: Partial<CreateDemoWebsiteRequest>,
+      options: RequestInit = {}
+    ): Promise<DemoWebsiteSummary> =>
+      request<DemoWebsiteSummary>(`/leads/${encodeURIComponent(id)}/demo`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input || {})
+      }),
+    regenerateDemo: (
+      id: string,
+      input?: Partial<CreateDemoWebsiteRequest>,
+      options: RequestInit = {}
+    ): Promise<DemoWebsiteSummary> =>
+      request<DemoWebsiteSummary>(`/leads/${encodeURIComponent(id)}/demo/regenerate`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input || {})
+      }),
+    expireDemo: (id: string, options: RequestInit = {}): Promise<DemoWebsiteSummary> =>
+      request<DemoWebsiteSummary>(`/leads/${encodeURIComponent(id)}/demo/expire`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify({})
+      }),
+    removeDemo: (id: string, options: RequestInit = {}): Promise<DemoWebsiteSummary> =>
+      request<DemoWebsiteSummary>(`/leads/${encodeURIComponent(id)}/demo/remove`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify({})
       })
   }
 };
