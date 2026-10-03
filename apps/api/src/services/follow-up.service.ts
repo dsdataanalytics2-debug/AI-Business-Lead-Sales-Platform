@@ -404,9 +404,13 @@ export class FollowUpService {
         throw new NotFoundError(`Follow-up task with ID "${followUpId}" not found`);
       }
 
-      // 3. Deterministic No-op if already COMPLETED
+      // 3. Deterministic No-op if already COMPLETED; reject if CANCELLED
       if (existingTask.status === FollowUpStatus.COMPLETED) {
         return mapToFollowUpTask(existingTask);
+      }
+
+      if (existingTask.status === FollowUpStatus.CANCELLED) {
+        throw new ValidationError('Cannot complete a cancelled follow-up task');
       }
 
       // 4. Update status to COMPLETED
@@ -497,9 +501,13 @@ export class FollowUpService {
         throw new NotFoundError(`Follow-up task with ID "${followUpId}" not found`);
       }
 
-      // 3. Deterministic No-op if already CANCELLED
+      // 3. Deterministic No-op if already CANCELLED; reject if COMPLETED
       if (existingTask.status === FollowUpStatus.CANCELLED) {
         return mapToFollowUpTask(existingTask);
+      }
+
+      if (existingTask.status === FollowUpStatus.COMPLETED) {
+        throw new ValidationError('Cannot cancel a completed follow-up task');
       }
 
       // 4. Update status to CANCELLED
