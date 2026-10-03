@@ -150,6 +150,41 @@ enum DemoWebsiteProvider {
   MOCK
 }
 
+enum SalesAssistantDraftType {
+  WHATSAPP
+  EMAIL
+  CALL_SCRIPT
+  PROPOSAL
+  FOLLOW_UP
+}
+
+enum SalesAssistantLanguage {
+  BANGLA
+  ENGLISH
+  MIXED
+}
+
+enum SalesAssistantTone {
+  PROFESSIONAL
+  FRIENDLY
+  CONCISE
+  PERSUASIVE
+}
+
+enum SalesAssistantDraftStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
+enum SalesAssistantWarning {
+  MISSING_PRODUCT_CONTEXT
+  MISSING_PRICE_CONTEXT
+  UNVERIFIED_WHATSAPP
+  UNSUPPORTED_CLAIM_REMOVED
+  LIMITED_LEAD_CONTEXT
+}
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -171,6 +206,7 @@ model Organization {
   crmActivities          CrmActivity[]
   followUpTasks          FollowUpTask[]
   demoWebsites           DemoWebsite[]
+  salesAssistantDrafts   SalesAssistantDraft[]
 
   @@map("organizations")
 }
@@ -193,9 +229,12 @@ model User {
   assignedLeads      Lead[]         @relation("LeadAssignee")
   crmNotes           CrmNote[]
   crmActivities      CrmActivity[]
-  assignedFollowUps     FollowUpTask[] @relation("FollowUpAssignee")
-  createdFollowUps      FollowUpTask[] @relation("FollowUpCreator")
-  requestedDemoWebsites DemoWebsite[]  @relation("DemoWebsiteRequestedBy")
+  assignedFollowUps          FollowUpTask[]        @relation("FollowUpAssignee")
+  createdFollowUps           FollowUpTask[]        @relation("FollowUpCreator")
+  requestedDemoWebsites      DemoWebsite[]         @relation("DemoWebsiteRequestedBy")
+  createdSalesDrafts         SalesAssistantDraft[] @relation("SalesAssistantDraftCreatedBy")
+  approvedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftApprovedBy")
+  rejectedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftRejectedBy")
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -361,6 +400,7 @@ model Lead {
   crmActivities          CrmActivity[]
   followUpTasks          FollowUpTask[]
   demoWebsite            DemoWebsite?
+  salesAssistantDrafts   SalesAssistantDraft[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -549,4 +589,40 @@ model DemoWebsite {
   @@index([organizationId, provider, status])
   @@index([expiresAt, status])
   @@map("demo_websites")
+}
+
+model SalesAssistantDraft {
+  id                String                    @id @default(uuid())
+  organizationId    String                    @map("organization_id")
+  leadId            String                    @map("lead_id")
+  createdByUserId   String                    @map("created_by_user_id")
+  type              SalesAssistantDraftType
+  language          SalesAssistantLanguage
+  tone              SalesAssistantTone
+  status            SalesAssistantDraftStatus @default(DRAFT)
+  objective         String?
+  customInstruction String?                   @map("custom_instruction")
+  content           String?
+  emailSubject      String?                   @map("email_subject")
+  emailBody         String?                   @map("email_body")
+  warnings          SalesAssistantWarning[]   @default([])
+  approvedAt        DateTime?                 @map("approved_at")
+  approvedByUserId  String?                   @map("approved_by_user_id")
+  rejectedAt        DateTime?                 @map("rejected_at")
+  rejectedByUserId  String?                   @map("rejected_by_user_id")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead           Lead         @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  createdByUser  User         @relation("SalesAssistantDraftCreatedBy", fields: [createdByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  approvedByUser User?        @relation("SalesAssistantDraftApprovedBy", fields: [approvedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  rejectedByUser User?        @relation("SalesAssistantDraftRejectedBy", fields: [rejectedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, leadId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, createdByUserId, createdAt])
+  @@index([organizationId, type, createdAt])
+  @@map("sales_assistant_drafts")
 }

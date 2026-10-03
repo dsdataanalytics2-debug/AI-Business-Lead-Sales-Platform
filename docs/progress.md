@@ -2,18 +2,38 @@
 
 ## Current Milestone: M5 — AI Sales Assistant
 - **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `a84fc5c78118a8c3bee6f77aa976f6e5967313fc` (`docs(m4): close demo website milestone`)
-- **Step 1 (AI Sales Assistant Contracts + Guardrails):** IMPLEMENTED / AWAITING REVIEW (uncommitted)
-- **Step 2:** NOT STARTED
+- **Approved Base Checkpoint:** `0b8c0e5eaca31c3b4d52c5ebecd190de05771b84` (`fix(db): pin follow-up task index name`)
+- **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
+- **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`feat(m5): add sales assistant draft persistence`)
+- **Step 3 (AI Sales Assistant Provider Abstraction & Domain Service):** NOT STARTED
+- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** NOT STARTED
+- **Step 5 (Lead Detail Sales Assistant UI):** NOT STARTED
+- **Step 6 (E2E Integration, Security Hardening & Milestone Closure):** NOT STARTED
 
-### M5 Step 1 — Contracts + Guardrails (contract-only)
-- **Files:** `packages/shared/src/enums.ts` (enums), `packages/shared/src/schemas/sales-assistant.ts` (schemas + guardrail constants), `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts` (export).
-- **Enums:** `SalesAssistantDraftType` (`WHATSAPP`, `EMAIL`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`), `SalesAssistantLanguage` (`BANGLA`, `ENGLISH`, `MIXED` = practical Bangla + English), `SalesAssistantTone` (`PROFESSIONAL`, `FRIENDLY`, `CONCISE`, `PERSUASIVE` — never deceptive, manipulative, or false urgency/scarcity), `SalesAssistantDraftStatus` (`DRAFT`, `APPROVED`, `REJECTED` — no `SENT`; sending belongs to M6), `SalesAssistantWarning` (5 codes).
-- **Request:** `generateSalesAssistantDraftRequestSchema` is `.strict()` with `type`, `language`, `tone`, optional `objective` (max 300) and `customInstruction` (max 1000, untrusted, lower priority than system guardrails). Identity, provider, model, prompt, status, approval, and send fields are rejected.
-- **Output:** `generatedSalesAssistantDraftSchema` is a provider-neutral discriminated union with strict objects. Fresh output must have `status = DRAFT`. Email uses structured `subject` + `body`; other types use text `content`. Strict sub-schemas reject unknown *fields* that could carry provider metadata (e.g. `rawProviderResponse`, `systemPrompt`, `reasoning`, `chainOfThought`, `apiKey`). This is an object-shape invariant — the schema does not semantically scan `content` or `body` prose for secrets or internal data; that requires later provider/service implementation.
-- **Length limits:** WhatsApp 2000, email subject 200, email body 6000, call script 8000, proposal 12000, follow-up 2000, warnings max 10.
-- **Safety invariants DEFINED (policy contracts; runtime semantic enforcement deferred to later AI provider/service steps):** AI drafts only; mandatory human approval; no implicit approval or auto-send; verified facts only; no fabricated discounts, prices, stock, certifications, reviews, ratings, awards, hours, counts, partnerships, case studies, revenue, or guarantees; no fake urgency, social proof, or discounts; `PHONE != WHATSAPP` product invariant (contact-channel enforcement in later service layer); data minimization; prohibited output exposure categories listed (object-field enforcement via `.strict()`; prose content filtering deferred); lead data and user text labeled as untrusted input sources (prompt-injection runtime resistance deferred to provider/service); chain-of-thought in output rejected at field level (prose-level deferred).
-- **Scope boundary:** no persistence, Prisma, API, UI, AI provider, or dependency changes. Provider work is deferred to a later step. Step 1 defines provider-agnostic safety invariants. Runtime semantic enforcement is implemented in later AI provider/service steps.
+### M5 Step 1 — Contracts + Guardrails (Completed)
+- **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
+- **Enums:** `SalesAssistantDraftType` (`WHATSAPP`, `EMAIL`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`), `SalesAssistantLanguage` (`BANGLA`, `ENGLISH`, `MIXED`), `SalesAssistantTone` (`PROFESSIONAL`, `FRIENDLY`, `CONCISE`, `PERSUASIVE`), `SalesAssistantDraftStatus` (`DRAFT`, `APPROVED`, `REJECTED` — no `SENT`; sending belongs to M6), `SalesAssistantWarning` (5 codes).
+- **Request:** `generateSalesAssistantDraftRequestSchema` is `.strict()`.
+- **Output:** `generatedSalesAssistantDraftSchema` is a provider-neutral discriminated union with strict objects.
+- **Safety Invariants:** AI drafts only; mandatory human approval; verified facts only; no fake urgency; contact safety (`PHONE != WHATSAPP`); data minimization.
+
+### M5 Step 2 — Sales Assistant Draft Persistence + Migration (Completed)
+- **Schema & Model:** `SalesAssistantDraft` in `packages/db/prisma/schema.prisma` with mapped table `sales_assistant_drafts`.
+- **Enums in Prisma:** `SalesAssistantDraftType`, `SalesAssistantLanguage`, `SalesAssistantTone`, `SalesAssistantDraftStatus` (strictly `DRAFT`, `APPROVED`, `REJECTED` — no `SENT` status), `SalesAssistantWarning`.
+- **Tenant Isolation & Composite FKs:**
+  - `(organization_id)` $\rightarrow$ `organizations(id)` ON DELETE CASCADE
+  - `(lead_id, organization_id)` $\rightarrow$ `leads(id, organization_id)` ON DELETE CASCADE
+  - `(created_by_user_id, organization_id)` $\rightarrow$ `users(id, organization_id)` ON DELETE RESTRICT
+  - `(approved_by_user_id, organization_id)` $\rightarrow$ `users(id, organization_id)` ON DELETE RESTRICT
+  - `(rejected_by_user_id, organization_id)` $\rightarrow$ `users(id, organization_id)` ON DELETE RESTRICT
+- **Multi-Draft Support:** Leads can have multiple sales drafts (no unique constraint on `leadId`).
+- **Human Approval & Rejection Attribution:** Dedicated attribution timestamps and nullable composite FK user relations: `approvedAt`, `approvedByUserId`, `rejectedAt`, `rejectedByUserId`.
+- **Content Storage:** Flexible nullable content fields (`content`, `emailSubject`, `emailBody`) supporting email and non-email formats without brittle engine check constraints.
+- **Warnings Storage:** Native PostgreSQL enum array `"SalesAssistantWarning"[]` with `@default([])`.
+- **Data Minimization & Deferred Provider Metadata:** Zero raw provider request/response payloads, system prompts, chain-of-thought, reasoning, API tokens, model names, token counts, or costs stored in DB. Provider metadata is deferred to Step 3.
+- **Indexes:** `[organizationId, leadId, createdAt]`, `[organizationId, status, createdAt]`, `[organizationId, createdByUserId, createdAt]`, `[organizationId, type, createdAt]`, composite unique `[id, organizationId]`.
+- **Migration:** `packages/db/prisma/migrations/20261003103439_add_m5_sales_assistant_drafts/migration.sql` containing strictly M5 objects (5 `CREATE TYPE`, 1 `CREATE TABLE`, 5 indexes, 5 FKs; 0 unrelated statements). Applied cleanly to dev and test databases.
+- **Test Suite:** `packages/db/src/tests/sales-assistant-draft-persistence.spec.ts` (35 tests covering enum parity, defaults, CRUD, multi-drafts, warnings array default, cross-tenant FK rejections, cascade and restrict behaviors).
 
 ---
 
