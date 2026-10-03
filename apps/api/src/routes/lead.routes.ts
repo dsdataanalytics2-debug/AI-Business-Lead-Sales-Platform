@@ -53,6 +53,14 @@ leadRouter.get(
   leadController.getLead
 );
 
+// PATCH /api/v1/leads/:id/assignment -> Assign/reassign/unassign lead
+leadRouter.patch(
+  '/:id/assignment',
+  requireAuth,
+  requirePermission(Permissions.LEADS_ASSIGN),
+  leadController.updateAssignment
+);
+
 // PATCH /api/v1/leads/:id -> Update lead scalar attributes
 leadRouter.patch(
   '/:id',

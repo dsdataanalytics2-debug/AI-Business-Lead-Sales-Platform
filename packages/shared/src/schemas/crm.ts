@@ -28,6 +28,21 @@ export const leadAssignmentRequestSchema = z
 export type LeadAssignmentRequest = z.infer<typeof leadAssignmentRequestSchema>;
 
 /* =========================================================
+ * Lead Assignment Response Schema
+ * ========================================================= */
+
+export const leadAssignmentResponseSchema = z
+  .object({
+    leadId: z.string().uuid(),
+    assignedUserId: z.string().uuid().nullable(),
+    assignedAt: z.union([z.date(), z.string()]).nullable(),
+    assignedUser: assigneeSummarySchema.nullable()
+  })
+  .strict();
+
+export type LeadAssignmentResponse = z.infer<typeof leadAssignmentResponseSchema>;
+
+/* =========================================================
  * CRM Stage Update Request Schema
  * ========================================================= */
 

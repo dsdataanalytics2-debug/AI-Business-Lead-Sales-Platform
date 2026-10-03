@@ -12,11 +12,33 @@ import { Request, Response, NextFunction } from 'express';
 import {
   leadListQuerySchema,
   leadUpdateRequestSchema,
-  manualContactRequestSchema
+  manualContactRequestSchema,
+  leadAssignmentRequestSchema
 } from '@leadmate/shared';
 import { leadService } from '../services/lead.service.js';
 
 export class LeadController {
+  /**
+   * PATCH /api/v1/leads/:id/assignment
+   */
+  async updateAssignment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const input = leadAssignmentRequestSchema.parse(req.body);
+
+      const result = await leadService.updateAssignment(id, input, {
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
   /**
    * GET /api/v1/leads
    */

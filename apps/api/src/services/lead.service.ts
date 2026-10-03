@@ -10,7 +10,8 @@ import prisma, {
   Prisma,
   ContactType,
   PhoneType,
-  WhatsAppStatus
+  WhatsAppStatus,
+  CrmActivityType
 } from '@leadmate/db';
 import {
   type LeadListQuery,
@@ -19,7 +20,9 @@ import {
   type LeadUpdateRequest,
   type ManualContactRequest,
   type LeadContact,
-  type PaginatedResult
+  type PaginatedResult,
+  type LeadAssignmentRequest,
+  type LeadAssignmentResponse
 } from '@leadmate/shared';
 import {
   normalizeBusinessName,
@@ -29,7 +32,8 @@ import {
 import {
   BadRequestError,
   NotFoundError,
-  ConflictError
+  ConflictError,
+  ValidationError
 } from '../lib/errors.js';
 import { invalidateLeadOnlinePresenceAnalysis } from './online-presence.service.js';
 
@@ -714,6 +718,169 @@ export class LeadService {
         evidence: [],
         createdAt: createdContact.createdAt,
         updatedAt: createdContact.updatedAt
+      };
+    });
+  }
+
+  /**
+   * Assigns, reassigns, or unassigns a lead to a team member within the same tenant.
+   * Enforces tenant-safe lookups, active user validation, deterministic no-ops,
+   * atomic CRM activity logging, and audit tracking.
+   */
+  async updateAssignment(
+    id: string,
+    input: LeadAssignmentRequest,
+    context: LeadRequestContext
+  ): Promise<LeadAssignmentResponse> {
+    const { organizationId, userId } = context;
+    const { assignedUserId } = input;
+
+    return prisma.$transaction(async (tx) => {
+      // 1. Verify lead exists and belongs to the authenticated tenant
+      const existingLead = await tx.lead.findFirst({
+        where: {
+          id,
+          organizationId
+        },
+        include: {
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      if (!existingLead) {
+        throw new NotFoundError(`Lead with ID "${id}" not found`);
+      }
+
+      // 2. If assigning to a user, verify assignee exists in the same tenant and is active
+      if (assignedUserId !== null) {
+        const targetUser = await tx.user.findFirst({
+          where: {
+            id: assignedUserId,
+            organizationId
+          },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            isActive: true
+          }
+        });
+
+        if (!targetUser) {
+          throw new NotFoundError(`Assignee user with ID "${assignedUserId}" not found`);
+        }
+
+        if (!targetUser.isActive) {
+          throw new ValidationError('Selected assignee is inactive');
+        }
+      }
+
+      const previousAssignedUserId = existingLead.assignedUserId;
+
+      // 3. Check for No-op (same user -> same user, or null -> null)
+      if (previousAssignedUserId === assignedUserId) {
+        return {
+          leadId: existingLead.id,
+          assignedUserId: existingLead.assignedUserId,
+          assignedAt: existingLead.assignedAt,
+          assignedUser: existingLead.assignedUser
+            ? {
+                id: existingLead.assignedUser.id,
+                name: existingLead.assignedUser.name,
+                email: existingLead.assignedUser.email
+              }
+            : null
+        };
+      }
+
+      // 4. Determine operation, activity type, metadata, and assignedAt
+      let operation: 'ASSIGN' | 'REASSIGN' | 'UNASSIGN';
+      let activityType: CrmActivityType;
+      let activityMetadata: Prisma.InputJsonValue;
+      let assignedAt: Date | null;
+
+      if (previousAssignedUserId === null && assignedUserId !== null) {
+        operation = 'ASSIGN';
+        activityType = CrmActivityType.LEAD_ASSIGNED;
+        activityMetadata = { assignedUserId };
+        assignedAt = new Date();
+      } else if (previousAssignedUserId !== null && assignedUserId !== null) {
+        operation = 'REASSIGN';
+        activityType = CrmActivityType.LEAD_REASSIGNED;
+        activityMetadata = { previousAssignedUserId, assignedUserId };
+        assignedAt = new Date();
+      } else {
+        // previousAssignedUserId !== null && assignedUserId === null
+        operation = 'UNASSIGN';
+        activityType = CrmActivityType.LEAD_UNASSIGNED;
+        activityMetadata = { previousAssignedUserId };
+        assignedAt = null;
+      }
+
+      // 5. Update lead assignment
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: {
+          assignedUserId,
+          assignedAt
+        },
+        include: {
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      // 6. Record CRM activity
+      await tx.crmActivity.create({
+        data: {
+          organizationId,
+          leadId: id,
+          actorUserId: userId,
+          type: activityType,
+          metadata: activityMetadata
+        }
+      });
+
+      // 7. Record Audit Log
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          userId,
+          action: 'lead.assignment_changed',
+          entityType: 'Lead',
+          entityId: id,
+          before: {
+            assignedUserId: previousAssignedUserId
+          },
+          after: {
+            assignedUserId,
+            operation
+          }
+        }
+      });
+
+      return {
+        leadId: updatedLead.id,
+        assignedUserId: updatedLead.assignedUserId,
+        assignedAt: updatedLead.assignedAt,
+        assignedUser: updatedLead.assignedUser
+          ? {
+              id: updatedLead.assignedUser.id,
+              name: updatedLead.assignedUser.name,
+              email: updatedLead.assignedUser.email
+            }
+          : null
       };
     });
   }

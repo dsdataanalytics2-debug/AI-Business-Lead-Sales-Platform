@@ -11,6 +11,7 @@ import {
   isTerminalCrmStage,
   assigneeSummarySchema,
   leadAssignmentRequestSchema,
+  leadAssignmentResponseSchema,
   crmStageUpdateRequestSchema,
   crmNoteRequestSchema,
   crmNoteSchema,
@@ -141,6 +142,32 @@ describe('M3 Step 1: Shared CRM Contracts & Pipeline Stages Verification', () =>
         assignedUserName: 'John Doe'
       };
       expect(() => leadAssignmentRequestSchema.parse(injected)).toThrow();
+    });
+
+    it('9b. Validates leadAssignmentResponseSchema serialization with and without assignee', () => {
+      const assigned = {
+        leadId: '123e4567-e89b-12d3-a456-426614174000',
+        assignedUserId: '223e4567-e89b-12d3-a456-426614174000',
+        assignedAt: new Date().toISOString(),
+        assignedUser: {
+          id: '223e4567-e89b-12d3-a456-426614174000',
+          name: 'Jane Doe',
+          email: 'jane.doe@crm-corp.com'
+        }
+      };
+      const parsedAssigned = leadAssignmentResponseSchema.parse(assigned);
+      expect(parsedAssigned.leadId).toBe(assigned.leadId);
+      expect(parsedAssigned.assignedUser?.name).toBe('Jane Doe');
+
+      const unassigned = {
+        leadId: '123e4567-e89b-12d3-a456-426614174000',
+        assignedUserId: null,
+        assignedAt: null,
+        assignedUser: null
+      };
+      const parsedUnassigned = leadAssignmentResponseSchema.parse(unassigned);
+      expect(parsedUnassigned.assignedUserId).toBeNull();
+      expect(parsedUnassigned.assignedUser).toBeNull();
     });
   });
 
