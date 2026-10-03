@@ -8,3 +8,4 @@ export * from './schemas/business-search.js';
 export * from './schemas/lead.js';
 export * from './schemas/analysis.js';
 export * from './schemas/crm.js';
+export * from './schemas/follow-up.js';

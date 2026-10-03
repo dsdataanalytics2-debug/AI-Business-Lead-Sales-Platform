@@ -17,6 +17,7 @@ import { requirePermission } from '../middleware/rbac.js';
 import { analyzeRateLimiter } from '../middleware/rate-limiter.js';
 import { leadController } from '../controllers/lead.controller.js';
 import { onlinePresenceController } from '../controllers/online-presence.controller.js';
+import { followUpController } from '../controllers/follow-up.controller.js';
 
 export const leadRouter = Router();
 
@@ -115,4 +116,44 @@ leadRouter.post(
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
   leadController.addContact
+);
+
+// POST /api/v1/leads/:id/follow-ups -> Create follow-up task
+leadRouter.post(
+  '/:id/follow-ups',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  followUpController.createFollowUp
+);
+
+// GET /api/v1/leads/:id/follow-ups -> List follow-up tasks for lead
+leadRouter.get(
+  '/:id/follow-ups',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  followUpController.listFollowUps
+);
+
+// PATCH /api/v1/leads/:id/follow-ups/:followUpId -> Update follow-up task
+leadRouter.patch(
+  '/:id/follow-ups/:followUpId',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  followUpController.updateFollowUp
+);
+
+// POST /api/v1/leads/:id/follow-ups/:followUpId/complete -> Mark follow-up as completed
+leadRouter.post(
+  '/:id/follow-ups/:followUpId/complete',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  followUpController.completeFollowUp
+);
+
+// POST /api/v1/leads/:id/follow-ups/:followUpId/cancel -> Mark follow-up as cancelled
+leadRouter.post(
+  '/:id/follow-ups/:followUpId/cancel',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  followUpController.cancelFollowUp
 );

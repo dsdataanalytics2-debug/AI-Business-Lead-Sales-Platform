@@ -128,6 +128,29 @@ export enum CrmOutcome {
   INVALID_LEAD = 'INVALID_LEAD'
 }
 
+/* =========================================================
+ * M3: CRM Follow-Up Task Enums
+ * ========================================================= */
+
+export enum FollowUpStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED'
+}
+
+export const FOLLOW_UP_STATUS_LABELS: Record<FollowUpStatus, string> = {
+  [FollowUpStatus.PENDING]: 'Pending',
+  [FollowUpStatus.COMPLETED]: 'Completed',
+  [FollowUpStatus.CANCELLED]: 'Cancelled'
+};
+
+export const ORDERED_FOLLOW_UP_STATUSES: readonly FollowUpStatus[] = [
+  FollowUpStatus.PENDING,
+  FollowUpStatus.COMPLETED,
+  FollowUpStatus.CANCELLED
+] as const;
+
+
 export enum JobStatus {
   QUEUED = 'QUEUED',
   RUNNING = 'RUNNING',
