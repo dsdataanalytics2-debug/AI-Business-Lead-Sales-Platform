@@ -1,10 +1,29 @@
 import { DemoWebsiteStatus, DemoWebsiteProvider, DEMO_WEBSITE_STATUS_LABELS } from '@leadmate/shared';
 import { ApiClientError } from '@/lib/api-client';
+import { getSafeExternalUrl } from '@/lib/safe-url';
 
 /**
  * Product Invariant Disclaimer for all generated demo websites
  */
 export const DEMO_DISCLAIMER_TEXT = 'DEMO — NOT OFFICIAL';
+
+/**
+ * Validates external demo website URL enforcing strict HTTPS protocol requirement.
+ * Rejects plain HTTP and unsafe schemes (javascript, data, file, etc.).
+ */
+export function getSafeDemoWebsiteUrl(url?: string | null): { href: string; label: string } | null {
+  const safe = getSafeExternalUrl(url);
+  if (!safe) return null;
+  try {
+    const parsed = new URL(safe.href);
+    if (parsed.protocol !== 'https:') {
+      return null;
+    }
+    return safe;
+  } catch {
+    return null;
+  }
+}
 
 export function formatDemoStatusLabel(status: DemoWebsiteStatus): string {
   return DEMO_WEBSITE_STATUS_LABELS[status] ?? status;

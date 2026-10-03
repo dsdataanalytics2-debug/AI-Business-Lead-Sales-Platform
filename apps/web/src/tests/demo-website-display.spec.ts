@@ -6,7 +6,8 @@ import {
   formatDemoStatusLabel,
   getDemoStatusBadgeClasses,
   formatDemoProviderLabel,
-  classifyDemoWebsiteError
+  classifyDemoWebsiteError,
+  getSafeDemoWebsiteUrl
 } from '../lib/leads/demo-website-display.js';
 
 describe('DemoWebsiteDisplay Helpers (M4 Step 5)', () => {
@@ -83,6 +84,35 @@ describe('DemoWebsiteDisplay Helpers (M4 Step 5)', () => {
       const classified = classifyDemoWebsiteError(new Error('Failed to fetch'));
       expect(classified.isNetwork).toBe(true);
       expect(classified.message).toContain('Network error');
+    });
+  });
+
+  describe('5. HTTPS-Only Demo Website URL Safety Invariant', () => {
+    it('allows valid HTTPS URLs', () => {
+      const safe = getSafeDemoWebsiteUrl('https://demo.local/sites/mock_site_123');
+      expect(safe).not.toBeNull();
+      expect(safe?.href).toBe('https://demo.local/sites/mock_site_123');
+      expect(safe?.label).toBe('demo.local/sites/mock_site_123');
+    });
+
+    it('blocks plain HTTP URLs for demo website links', () => {
+      expect(getSafeDemoWebsiteUrl('http://insecure-demo.local/sites/mock_site_123')).toBeNull();
+    });
+
+    it('blocks dangerous and non-web protocols', () => {
+      expect(getSafeDemoWebsiteUrl('javascript:alert(1)')).toBeNull();
+      expect(getSafeDemoWebsiteUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+      expect(getSafeDemoWebsiteUrl('file:///etc/passwd')).toBeNull();
+      expect(getSafeDemoWebsiteUrl('vbscript:msgbox(1)')).toBeNull();
+      expect(getSafeDemoWebsiteUrl('blob:https://demo.local/abc')).toBeNull();
+    });
+
+    it('blocks malformed and empty URLs', () => {
+      expect(getSafeDemoWebsiteUrl('')).toBeNull();
+      expect(getSafeDemoWebsiteUrl(null)).toBeNull();
+      expect(getSafeDemoWebsiteUrl(undefined)).toBeNull();
+      expect(getSafeDemoWebsiteUrl('not a url %%%')).toBeNull();
+      expect(getSafeDemoWebsiteUrl('https://user:pass@demo.local')).toBeNull();
     });
   });
 });

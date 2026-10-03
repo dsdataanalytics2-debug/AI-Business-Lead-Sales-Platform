@@ -59,7 +59,7 @@ export class MockDemoWebsiteProvider implements DemoWebsiteProviderClient {
    */
   public static generateSiteId(leadId: string): string {
     const sanitized = leadId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    return `mock_site_${sanitized.slice(0, 16)}`;
+    return `mock_site_${sanitized}`;
   }
 
   /**

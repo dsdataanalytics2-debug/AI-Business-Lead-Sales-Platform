@@ -228,7 +228,7 @@ export class DemoWebsiteService {
   public async requestDemoWebsite(
     ctx: DemoWebsiteRequestContext,
     leadId: string,
-    request?: CreateDemoWebsiteRequest,
+    request?: Partial<CreateDemoWebsiteRequest>,
     providerOverride?: DemoWebsiteProviderClient,
     isRegeneration = false
   ): Promise<DemoWebsiteSummary> {
@@ -470,7 +470,7 @@ export class DemoWebsiteService {
   public async regenerateDemoWebsite(
     ctx: DemoWebsiteRequestContext,
     leadId: string,
-    request?: CreateDemoWebsiteRequest,
+    request?: Partial<CreateDemoWebsiteRequest>,
     providerOverride?: DemoWebsiteProviderClient
   ): Promise<DemoWebsiteSummary> {
     const existing = await prisma.demoWebsite.findUnique({

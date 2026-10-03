@@ -45,13 +45,13 @@ describe('M4 Step 3: Mock Demo Website Provider & Factory', () => {
       const siteId1 = MockDemoWebsiteProvider.generateSiteId('a0000000-0000-0000-0000-000000000001');
       const siteId2 = MockDemoWebsiteProvider.generateSiteId('a0000000-0000-0000-0000-000000000001');
       expect(siteId1).toBe(siteId2);
-      expect(siteId1).toBe('mock_site_a000000000000000');
+      expect(siteId1).toBe('mock_site_a0000000000000000000000000000001');
 
       const provider = new MockDemoWebsiteProvider();
       const url1 = provider.generateDemoUrl('a0000000-0000-0000-0000-000000000001');
       const url2 = provider.generateDemoUrl('a0000000-0000-0000-0000-000000000001');
       expect(url1).toBe(url2);
-      expect(url1).toBe('https://demo.local/sites/mock_site_a000000000000000');
+      expect(url1).toBe('https://demo.local/sites/mock_site_a0000000000000000000000000000001');
     });
 
     it('2. Successfully creates demo with READY status, url, and readyAt timestamp', async () => {
@@ -59,8 +59,8 @@ describe('M4 Step 3: Mock Demo Website Provider & Factory', () => {
       const result = await provider.createDemo(validPayload);
 
       expect(result.status).toBe(DemoWebsiteStatus.READY);
-      expect(result.providerSiteId).toBe('mock_site_a000000000000000');
-      expect(result.demoUrl).toBe('https://demo.local/sites/mock_site_a000000000000000');
+      expect(result.providerSiteId).toBe('mock_site_a0000000000000000000000000000001');
+      expect(result.demoUrl).toBe('https://demo.local/sites/mock_site_a0000000000000000000000000000001');
       expect(result.readyAt).toBeInstanceOf(Date);
       expect(result.lastErrorCode).toBeNull();
       expect(result.lastErrorMessageSafe).toBeNull();
@@ -99,12 +99,12 @@ describe('M4 Step 3: Mock Demo Website Provider & Factory', () => {
 
     it('5. Supports getDemoStatus, expireDemo, and removeDemo cleanly without network calls', async () => {
       const provider = new MockDemoWebsiteProvider();
-      const siteId = 'mock_site_a000000000000000';
+      const siteId = 'mock_site_a0000000000000000000000000000001';
 
       const statusResult = await provider.getDemoStatus(siteId);
       expect(statusResult.providerSiteId).toBe(siteId);
       expect(statusResult.status).toBe(DemoWebsiteStatus.READY);
-      expect(statusResult.demoUrl).toBe('https://demo.local/sites/mock_site_a000000000000000');
+      expect(statusResult.demoUrl).toBe('https://demo.local/sites/mock_site_a0000000000000000000000000000001');
 
       await expect(provider.expireDemo(siteId)).resolves.toBeUndefined();
       await expect(provider.removeDemo(siteId)).resolves.toBeUndefined();

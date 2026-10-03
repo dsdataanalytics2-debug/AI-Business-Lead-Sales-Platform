@@ -29,6 +29,7 @@ import {
   getDemoStatusBadgeClasses,
   formatDemoProviderLabel,
   classifyDemoWebsiteError,
+  getSafeDemoWebsiteUrl,
   type ClassifiedDemoError
 } from '@/lib/leads/demo-website-display';
 
@@ -229,7 +230,7 @@ export function DemoWebsiteCard({
     }
   };
 
-  const safeDemoUrl = demo?.demoUrl ? getSafeExternalUrl(demo.demoUrl) : null;
+  const safeDemoUrl = demo?.demoUrl ? getSafeDemoWebsiteUrl(demo.demoUrl) : null;
   const isReady = demo?.status === DemoWebsiteStatus.READY;
   const isCreating = demo?.status === DemoWebsiteStatus.CREATING || demo?.status === DemoWebsiteStatus.REQUESTED;
   const isExpired = demo?.status === DemoWebsiteStatus.EXPIRED;
