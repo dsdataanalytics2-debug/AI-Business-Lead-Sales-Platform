@@ -1,14 +1,21 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M3 — CRM, Lead Assignment & Follow-Up Management
-- **Status:** COMPLETE
-- **Completion Date:** 2026-10-03
-- **Approved Base Checkpoint (Step 7):** `5f8854e19ed7d3a8c58d97c092184e56dc2834a8` (`test(m3): harden crm security and e2e coverage`)
-- **Next Milestone:** M4 — StoreMate Demo Website Integration (NOT STARTED)
+## Current Milestone: M4 — StoreMate Demo Website Integration
+- **Status:** IN PROGRESS
+- **Current Step:** Step 1 — StoreMate Integration Architecture + Shared Contracts (COMPLETED)
+- **Approved Base Checkpoint:** `60d007604c3600dd9d8a97cc9c92a5cc266d1e40` (`docs(m3): close crm and follow-up milestone`)
+- **Next Milestone Step:** M4 Step 2 — Persistence Layer & Database Migration (NOT STARTED)
 
 ---
 
-## Milestone M3 Summary of Accomplishments
+## Milestone M4 Summary of Progress
+
+### Step-by-Step Execution Summary
+- **Step 1 (Integration Architecture & Shared Contracts):** Defined canonical demo lifecycle enum (`DemoWebsiteStatus`: `REQUESTED`, `CREATING`, `READY`, `FAILED`, `EXPIRED`, `REMOVED`), providers (`DemoWebsiteProvider`: `STOREMATE`, `MOCK`), error codes (`DemoWebsiteErrorCode`), status labels, lifecycle transition validator (`isValidDemoWebsiteTransition`), strict request/summary/response schemas, normalized outbound payload contract (`storemateOutboundPayloadSchema`), demo safety invariants (`isDemo: true`, `noindex: true`, `nofollow: true`), contact safety (`PHONE != WHATSAPP`), tenant isolation model, proposed database model (`DemoWebsite`), and RBAC permission mappings (`DEMOS_GENERATE`, `DEMOS_MANAGE`). Documented that external StoreMate raw transport details remain TBD pending human-owned `docs/storemate-api-contract.md`.
+
+---
+
+## Milestone M3 Summary of Accomplishments (Completed)
 
 ### Step-by-Step Execution Summary (Steps 1–8)
 - **Step 1 (Shared CRM Contracts):** Defined canonical CRM stage enums (`CrmStage`), activity types (`CrmActivityType`), stage transition labels, request/response validation schemas, and assignee summaries in `@leadmate/shared`.

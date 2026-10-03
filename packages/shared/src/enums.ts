@@ -170,6 +170,91 @@ export enum DemoStatus {
   DELETED = 'DELETED'
 }
 
+/* =========================================================
+ * M4: StoreMate Demo Website Enums & Lifecycle
+ * ========================================================= */
+
+export enum DemoWebsiteStatus {
+  REQUESTED = 'REQUESTED',
+  CREATING = 'CREATING',
+  READY = 'READY',
+  FAILED = 'FAILED',
+  EXPIRED = 'EXPIRED',
+  REMOVED = 'REMOVED'
+}
+
+export const DEMO_WEBSITE_STATUS_LABELS: Record<DemoWebsiteStatus, string> = {
+  [DemoWebsiteStatus.REQUESTED]: 'Requested',
+  [DemoWebsiteStatus.CREATING]: 'Creating',
+  [DemoWebsiteStatus.READY]: 'Ready',
+  [DemoWebsiteStatus.FAILED]: 'Failed',
+  [DemoWebsiteStatus.EXPIRED]: 'Expired',
+  [DemoWebsiteStatus.REMOVED]: 'Removed'
+} as const;
+
+export const ORDERED_DEMO_WEBSITE_STATUSES: readonly DemoWebsiteStatus[] = [
+  DemoWebsiteStatus.REQUESTED,
+  DemoWebsiteStatus.CREATING,
+  DemoWebsiteStatus.READY,
+  DemoWebsiteStatus.FAILED,
+  DemoWebsiteStatus.EXPIRED,
+  DemoWebsiteStatus.REMOVED
+] as const;
+
+export function getDemoWebsiteStatusLabel(status: DemoWebsiteStatus): string {
+  return DEMO_WEBSITE_STATUS_LABELS[status] ?? status;
+}
+
+export const ALLOWED_DEMO_WEBSITE_TRANSITIONS: Record<DemoWebsiteStatus, readonly DemoWebsiteStatus[]> = {
+  [DemoWebsiteStatus.REQUESTED]: [
+    DemoWebsiteStatus.CREATING,
+    DemoWebsiteStatus.FAILED,
+    DemoWebsiteStatus.REMOVED
+  ],
+  [DemoWebsiteStatus.CREATING]: [
+    DemoWebsiteStatus.READY,
+    DemoWebsiteStatus.FAILED,
+    DemoWebsiteStatus.REMOVED
+  ],
+  [DemoWebsiteStatus.READY]: [
+    DemoWebsiteStatus.REQUESTED,
+    DemoWebsiteStatus.CREATING,
+    DemoWebsiteStatus.EXPIRED,
+    DemoWebsiteStatus.REMOVED
+  ],
+  [DemoWebsiteStatus.FAILED]: [
+    DemoWebsiteStatus.REQUESTED,
+    DemoWebsiteStatus.CREATING,
+    DemoWebsiteStatus.REMOVED
+  ],
+  [DemoWebsiteStatus.EXPIRED]: [
+    DemoWebsiteStatus.REQUESTED,
+    DemoWebsiteStatus.CREATING,
+    DemoWebsiteStatus.REMOVED
+  ],
+  [DemoWebsiteStatus.REMOVED]: []
+} as const;
+
+export function isValidDemoWebsiteTransition(from: DemoWebsiteStatus, to: DemoWebsiteStatus): boolean {
+  const allowed = ALLOWED_DEMO_WEBSITE_TRANSITIONS[from];
+  return allowed ? allowed.includes(to) : false;
+}
+
+export enum DemoWebsiteProvider {
+  STOREMATE = 'STOREMATE',
+  MOCK = 'MOCK'
+}
+
+export enum DemoWebsiteErrorCode {
+  STOREMATE_TIMEOUT = 'STOREMATE_TIMEOUT',
+  STOREMATE_UNAVAILABLE = 'STOREMATE_UNAVAILABLE',
+  STOREMATE_INVALID_RESPONSE = 'STOREMATE_INVALID_RESPONSE',
+  STOREMATE_AUTH_FAILED = 'STOREMATE_AUTH_FAILED',
+  STOREMATE_RATE_LIMITED = 'STOREMATE_RATE_LIMITED',
+  PAYLOAD_VALIDATION_FAILED = 'PAYLOAD_VALIDATION_FAILED',
+  INTERNAL_ERROR = 'INTERNAL_ERROR'
+}
+
 export enum DataSourceStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
