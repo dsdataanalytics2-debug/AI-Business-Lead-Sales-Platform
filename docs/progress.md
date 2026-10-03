@@ -1,5 +1,23 @@
 # LeadMate Progress Tracking
 
+## Current Milestone: M5 — AI Sales Assistant
+- **Status:** IN PROGRESS
+- **Approved Base Checkpoint:** `a84fc5c78118a8c3bee6f77aa976f6e5967313fc` (`docs(m4): close demo website milestone`)
+- **Step 1 (AI Sales Assistant Contracts + Guardrails):** IMPLEMENTED / AWAITING REVIEW (uncommitted)
+- **Step 2:** NOT STARTED
+
+### M5 Step 1 — Contracts + Guardrails (contract-only)
+- **Files:** `packages/shared/src/enums.ts` (enums), `packages/shared/src/schemas/sales-assistant.ts` (schemas + guardrail constants), `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts` (export).
+- **Enums:** `SalesAssistantDraftType` (`WHATSAPP`, `EMAIL`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`), `SalesAssistantLanguage` (`BANGLA`, `ENGLISH`, `MIXED` = practical Bangla + English), `SalesAssistantTone` (`PROFESSIONAL`, `FRIENDLY`, `CONCISE`, `PERSUASIVE` — never deceptive, manipulative, or false urgency/scarcity), `SalesAssistantDraftStatus` (`DRAFT`, `APPROVED`, `REJECTED` — no `SENT`; sending belongs to M6), `SalesAssistantWarning` (5 codes).
+- **Request:** `generateSalesAssistantDraftRequestSchema` is `.strict()` with `type`, `language`, `tone`, optional `objective` (max 300) and `customInstruction` (max 1000, untrusted, lower priority than system guardrails). Identity, provider, model, prompt, status, approval, and send fields are rejected.
+- **Output:** `generatedSalesAssistantDraftSchema` is a provider-neutral discriminated union with strict objects. Fresh output must have `status = DRAFT`. Email uses structured `subject` + `body`; other types use text `content`. Strict sub-schemas reject unknown *fields* that could carry provider metadata (e.g. `rawProviderResponse`, `systemPrompt`, `reasoning`, `chainOfThought`, `apiKey`). This is an object-shape invariant — the schema does not semantically scan `content` or `body` prose for secrets or internal data; that requires later provider/service implementation.
+- **Length limits:** WhatsApp 2000, email subject 200, email body 6000, call script 8000, proposal 12000, follow-up 2000, warnings max 10.
+- **Safety invariants DEFINED (policy contracts; runtime semantic enforcement deferred to later AI provider/service steps):** AI drafts only; mandatory human approval; no implicit approval or auto-send; verified facts only; no fabricated discounts, prices, stock, certifications, reviews, ratings, awards, hours, counts, partnerships, case studies, revenue, or guarantees; no fake urgency, social proof, or discounts; `PHONE != WHATSAPP` product invariant (contact-channel enforcement in later service layer); data minimization; prohibited output exposure categories listed (object-field enforcement via `.strict()`; prose content filtering deferred); lead data and user text labeled as untrusted input sources (prompt-injection runtime resistance deferred to provider/service); chain-of-thought in output rejected at field level (prose-level deferred).
+- **Scope boundary:** no persistence, Prisma, API, UI, AI provider, or dependency changes. Provider work is deferred to a later step. Step 1 defines provider-agnostic safety invariants. Runtime semantic enforcement is implemented in later AI provider/service steps.
+
+---
+
+
 ## Current Milestone: M4 — StoreMate Demo Website Integration
 - **Status:** COMPLETE / CLOSED (Steps 1–6 all COMPLETE)
 - **LeadMate internal demo platform:** COMPLETE (mock provider; API, RBAC, audit, UI, E2E/security)

@@ -358,3 +358,61 @@ export enum QualificationReasonCode {
   HAS_PRIMARY_EMAIL = 'HAS_PRIMARY_EMAIL',
   HAS_WHATSAPP = 'HAS_WHATSAPP'
 }
+
+/* =========================================================
+ * M5: AI Sales Assistant Enums
+ * ========================================================= */
+
+/**
+ * Supported V1 AI Sales Assistant draft types.
+ * Content is text only: no sending, calling, scheduling, or PDF generation.
+ */
+export enum SalesAssistantDraftType {
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL',
+  CALL_SCRIPT = 'CALL_SCRIPT',
+  PROPOSAL = 'PROPOSAL',
+  FOLLOW_UP = 'FOLLOW_UP'
+}
+
+/**
+ * Output language for generated sales content.
+ * MIXED means practical Bangla + English business communication.
+ */
+export enum SalesAssistantLanguage {
+  BANGLA = 'BANGLA',
+  ENGLISH = 'ENGLISH',
+  MIXED = 'MIXED'
+}
+
+/**
+ * Tone of generated sales content.
+ * PERSUASIVE must never mean deceptive, manipulative, false urgency, or false scarcity.
+ */
+export enum SalesAssistantTone {
+  PROFESSIONAL = 'PROFESSIONAL',
+  FRIENDLY = 'FRIENDLY',
+  CONCISE = 'CONCISE',
+  PERSUASIVE = 'PERSUASIVE'
+}
+
+/**
+ * Draft lifecycle. Deliberately has NO "SENT" status:
+ * external sending belongs to a later milestone (M6) and requires human approval.
+ */
+export enum SalesAssistantDraftStatus {
+  DRAFT = 'DRAFT',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED'
+}
+
+/**
+ * Non-fatal warnings attached to a generated draft.
+ */
+export enum SalesAssistantWarning {
+  MISSING_PRODUCT_CONTEXT = 'MISSING_PRODUCT_CONTEXT',
+  MISSING_PRICE_CONTEXT = 'MISSING_PRICE_CONTEXT',
+  UNVERIFIED_WHATSAPP = 'UNVERIFIED_WHATSAPP',
+  UNSUPPORTED_CLAIM_REMOVED = 'UNSUPPORTED_CLAIM_REMOVED',
+  LIMITED_LEAD_CONTEXT = 'LIMITED_LEAD_CONTEXT'
+}
