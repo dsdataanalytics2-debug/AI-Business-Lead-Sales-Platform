@@ -9,9 +9,11 @@ import {
   OnlinePresenceType,
   SuppressionReason,
   DuplicateMatchLevel,
-  DuplicateAction
+  DuplicateAction,
+  CrmStage
 } from '../enums.js';
 import { cursorPaginationSchema } from './pagination.js';
+import { assigneeSummarySchema } from './crm.js';
 
 // Helper for parsing boolean query parameters correctly ("true" -> true, "false" -> false)
 const booleanQueryParamSchema = z
@@ -110,7 +112,11 @@ export const leadDetailSchema = leadSummarySchema.extend({
   longitude: z.number().nullable().optional(),
   normalizedWebsite: z.string().nullable().optional(),
   contacts: z.array(leadContactSchema).default([]),
-  sources: z.array(leadSourceSummarySchema).default([])
+  sources: z.array(leadSourceSummarySchema).default([]),
+  crmStage: z.nativeEnum(CrmStage).optional(),
+  assignedUserId: z.string().uuid().nullable().optional(),
+  assignedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  assignedUser: assigneeSummarySchema.nullable().optional()
 });
 
 export type LeadDetail = z.infer<typeof leadDetailSchema>;

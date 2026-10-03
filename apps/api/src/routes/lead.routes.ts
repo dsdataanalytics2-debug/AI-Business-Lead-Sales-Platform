@@ -45,6 +45,14 @@ leadRouter.post(
   onlinePresenceController.analyzeLead
 );
 
+// GET /api/v1/leads/assignees -> List active users for lead assignment
+leadRouter.get(
+  '/assignees',
+  requireAuth,
+  requirePermission(Permissions.LEADS_ASSIGN),
+  leadController.listAssignees
+);
+
 // GET /api/v1/leads/:id -> Full lead detail
 leadRouter.get(
   '/:id',

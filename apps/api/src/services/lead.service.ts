@@ -23,6 +23,7 @@ import {
   type PaginatedResult,
   type LeadAssignmentRequest,
   type LeadAssignmentResponse,
+  type AssigneeSummary,
   type CrmStageUpdateRequest,
   type CrmStageUpdateResponse,
   type CrmNoteRequest,
@@ -203,6 +204,13 @@ export class LeadService {
         },
         sources: {
           orderBy: { fetchedAt: 'desc' }
+        },
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
         }
       }
     });
@@ -276,6 +284,16 @@ export class LeadService {
       primarySource: lead.primarySource,
       contacts,
       sources,
+      crmStage: lead.crmStage as any,
+      assignedUserId: lead.assignedUserId,
+      assignedAt: lead.assignedAt,
+      assignedUser: lead.assignedUser
+        ? {
+            id: lead.assignedUser.id,
+            name: lead.assignedUser.name,
+            email: lead.assignedUser.email
+          }
+        : null,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt
     };
@@ -358,6 +376,13 @@ export class LeadService {
           },
           sources: {
             orderBy: { fetchedAt: 'desc' }
+          },
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
           }
         }
       });
@@ -427,6 +452,16 @@ export class LeadService {
         primarySource: updated.primarySource,
         contacts: updated.contacts as any,
         sources,
+        crmStage: updated.crmStage as any,
+        assignedUserId: updated.assignedUserId,
+        assignedAt: updated.assignedAt,
+        assignedUser: updated.assignedUser
+          ? {
+              id: updated.assignedUser.id,
+              name: updated.assignedUser.name,
+              email: updated.assignedUser.email
+            }
+          : null,
         createdAt: updated.createdAt,
         updatedAt: updated.updatedAt
       };
@@ -1164,6 +1199,33 @@ export class LeadService {
         : null,
       metadata: (a.metadata as Record<string, unknown>) || {},
       createdAt: a.createdAt
+    }));
+  }
+
+  /**
+   * Lists active users belonging to the authenticated organization for lead assignment.
+   * Deterministic ordering by name ASC, email ASC.
+   */
+  async listAssignees(context: LeadRequestContext): Promise<AssigneeSummary[]> {
+    const { organizationId } = context;
+
+    const users = await prisma.user.findMany({
+      where: {
+        organizationId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true
+      },
+      orderBy: [{ name: 'asc' }, { email: 'asc' }]
+    });
+
+    return users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email
     }));
   }
 }

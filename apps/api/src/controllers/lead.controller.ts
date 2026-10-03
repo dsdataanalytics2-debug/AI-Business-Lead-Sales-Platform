@@ -41,6 +41,26 @@ export class LeadController {
       next(err);
     }
   }
+
+  /**
+   * GET /api/v1/leads/assignees
+   */
+  async listAssignees(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assignees = await leadService.listAssignees({
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: assignees
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   /**
    * GET /api/v1/leads
    */

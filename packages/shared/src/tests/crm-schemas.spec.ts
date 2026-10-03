@@ -10,6 +10,7 @@ import {
   getCrmStageLabel,
   isTerminalCrmStage,
   assigneeSummarySchema,
+  assigneeDirectoryResponseSchema,
   leadAssignmentRequestSchema,
   leadAssignmentResponseSchema,
   crmStageUpdateRequestSchema,
@@ -169,6 +170,25 @@ describe('M3 Step 1: Shared CRM Contracts & Pipeline Stages Verification', () =>
       const parsedUnassigned = leadAssignmentResponseSchema.parse(unassigned);
       expect(parsedUnassigned.assignedUserId).toBeNull();
       expect(parsedUnassigned.assignedUser).toBeNull();
+    });
+
+    it('9c. Validates assigneeDirectoryResponseSchema serialization', () => {
+      const directory = [
+        {
+          id: '123e4567-e89b-12d3-a456-426614174001',
+          name: 'Alice Admin',
+          email: 'alice@example.com'
+        },
+        {
+          id: '123e4567-e89b-12d3-a456-426614174002',
+          name: 'Bob Manager',
+          email: 'bob@example.com'
+        }
+      ];
+      const parsed = assigneeDirectoryResponseSchema.parse(directory);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0].name).toBe('Alice Admin');
+      expect(parsed[1].name).toBe('Bob Manager');
     });
   });
 

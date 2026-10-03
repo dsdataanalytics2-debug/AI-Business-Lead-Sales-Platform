@@ -16,6 +16,14 @@ export const assigneeSummarySchema = z
 export type AssigneeSummary = z.infer<typeof assigneeSummarySchema>;
 
 /* =========================================================
+ * Assignee Directory Response Schema
+ * ========================================================= */
+
+export const assigneeDirectoryResponseSchema = z.array(assigneeSummarySchema);
+
+export type AssigneeDirectoryResponse = z.infer<typeof assigneeDirectoryResponseSchema>;
+
+/* =========================================================
  * Lead Assignment Request Schema
  * ========================================================= */
 

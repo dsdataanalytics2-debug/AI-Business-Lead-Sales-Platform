@@ -16,7 +16,8 @@ import {
   OnlinePresenceType,
   SuppressionReason,
   DuplicateMatchLevel,
-  DuplicateAction
+  DuplicateAction,
+  CrmStage
 } from '../index.js';
 
 describe('M1 Step 1: Shared Domain Schemas & Contracts Verification', () => {
@@ -260,5 +261,64 @@ describe('M1 Step 1: Shared Domain Schemas & Contracts Verification', () => {
     const parsed = leadDetailSchema.parse(rawObject);
     // Verify TypeScript & runtime shape of sources does not include rawData
     expect((parsed.sources[0] as any).rawData).toBeUndefined();
+  });
+
+  it('19. leadDetailSchema provides optional CRM values when unassigned', () => {
+    const rawObject = {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Mirpur Dental Care',
+      normalizedName: 'mirpur dental care',
+      category: 'Dental Clinic',
+      city: 'Dhaka',
+      country: 'BD',
+      websiteStatus: WebsiteStatus.NONE_DETECTED,
+      onlinePresenceType: OnlinePresenceType.NONE_DETECTED,
+      primarySource: 'MOCK_SEARCH',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      contacts: [],
+      sources: []
+    };
+
+    const parsed = leadDetailSchema.parse(rawObject);
+    expect(parsed.crmStage).toBeUndefined();
+    expect(parsed.assignedUserId).toBeUndefined();
+    expect(parsed.assignedAt).toBeUndefined();
+    expect(parsed.assignedUser).toBeUndefined();
+  });
+
+  it('20. leadDetailSchema validates explicit populated CRM fields and safe assignee projection', () => {
+    const rawObject = {
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      name: 'Mirpur Dental Care',
+      normalizedName: 'mirpur dental care',
+      category: 'Dental Clinic',
+      city: 'Dhaka',
+      country: 'BD',
+      websiteStatus: WebsiteStatus.NONE_DETECTED,
+      onlinePresenceType: OnlinePresenceType.NONE_DETECTED,
+      primarySource: 'MOCK_SEARCH',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      contacts: [],
+      sources: [],
+      crmStage: CrmStage.WON,
+      assignedUserId: '223e4567-e89b-12d3-a456-426614174000',
+      assignedAt: new Date().toISOString(),
+      assignedUser: {
+        id: '223e4567-e89b-12d3-a456-426614174000',
+        name: 'Jane Doe',
+        email: 'jane@example.com'
+      }
+    };
+
+    const parsed = leadDetailSchema.parse(rawObject);
+    expect(parsed.crmStage).toBe(CrmStage.WON);
+    expect(parsed.assignedUserId).toBe('223e4567-e89b-12d3-a456-426614174000');
+    expect(parsed.assignedUser).toEqual({
+      id: '223e4567-e89b-12d3-a456-426614174000',
+      name: 'Jane Doe',
+      email: 'jane@example.com'
+    });
   });
 });
