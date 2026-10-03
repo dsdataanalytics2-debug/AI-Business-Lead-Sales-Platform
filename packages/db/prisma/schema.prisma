@@ -518,7 +518,7 @@ model FollowUpTask {
 
   @@unique([id, organizationId])
   @@index([organizationId, leadId, dueAt])
-  @@index([organizationId, assignedUserId, status, dueAt])
+  @@index([organizationId, assignedUserId, status, dueAt], map: "follow_up_tasks_organization_id_assigned_user_id_status_due__id")
   @@index([organizationId, status, dueAt])
   @@map("follow_up_tasks")
 }
