@@ -12,7 +12,13 @@ import {
   type LeadContact,
   type LeadListQuery,
   type LeadUpdateRequest,
-  type LeadAnalysisResponse
+  type LeadAnalysisResponse,
+  CrmStage,
+  type AssigneeSummary,
+  type LeadAssignmentResponse,
+  type CrmStageUpdateResponse,
+  type CrmNote,
+  type CrmActivity
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -221,6 +227,51 @@ export const apiClient = {
       request<LeadAnalysisResponse>(`/leads/${encodeURIComponent(id)}/analyze`, {
         ...options,
         method: 'POST'
+      }),
+    getAssignees: (options: RequestInit = {}): Promise<AssigneeSummary[]> =>
+      request<AssigneeSummary[]>('/leads/assignees', {
+        ...options,
+        method: 'GET'
+      }),
+    updateCrmStage: (
+      id: string,
+      stage: CrmStage,
+      options: RequestInit = {}
+    ): Promise<CrmStageUpdateResponse> =>
+      request<CrmStageUpdateResponse>(`/leads/${encodeURIComponent(id)}/crm-stage`, {
+        ...options,
+        method: 'PATCH',
+        body: JSON.stringify({ stage })
+      }),
+    updateAssignment: (
+      id: string,
+      assignedUserId: string | null,
+      options: RequestInit = {}
+    ): Promise<LeadAssignmentResponse> =>
+      request<LeadAssignmentResponse>(`/leads/${encodeURIComponent(id)}/assignment`, {
+        ...options,
+        method: 'PATCH',
+        body: JSON.stringify({ assignedUserId })
+      }),
+    getNotes: (id: string, options: RequestInit = {}): Promise<CrmNote[]> =>
+      request<CrmNote[]>(`/leads/${encodeURIComponent(id)}/notes`, {
+        ...options,
+        method: 'GET'
+      }),
+    addNote: (
+      id: string,
+      input: { content: string },
+      options: RequestInit = {}
+    ): Promise<CrmNote> =>
+      request<CrmNote>(`/leads/${encodeURIComponent(id)}/notes`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input)
+      }),
+    getActivities: (id: string, options: RequestInit = {}): Promise<CrmActivity[]> =>
+      request<CrmActivity[]>(`/leads/${encodeURIComponent(id)}/activities`, {
+        ...options,
+        method: 'GET'
       })
   }
 };

@@ -46,6 +46,7 @@ import {
   classifyLeadDetailError
 } from '@/lib/leads/lead-detail-state';
 import { OnlinePresenceAnalysisCard } from '@/components/leads/online-presence-analysis-card';
+import { CrmCard } from '@/components/leads/crm-card';
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -56,6 +57,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
 
   const canReadLeads = hasPermission(Permissions.LEADS_READ);
   const canWriteLeads = hasPermission(Permissions.LEADS_WRITE);
+  const canAssignLeads = hasPermission(Permissions.LEADS_ASSIGN);
 
   // Pure reducer page state
   const [pageState, dispatch] = useReducer(leadDetailReducer, initialLeadDetailState);
@@ -755,6 +757,19 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               leadId={lead.id}
               canWrite={canWriteLeads}
               onAnalysisUpdated={() => fetchLeadDetail(true)}
+            />
+
+            {/* CRM & Sales Pipeline Card */}
+            <CrmCard
+              leadId={lead.id}
+              initialStage={lead.crmStage}
+              initialAssignedUserId={lead.assignedUserId}
+              initialAssignedUser={lead.assignedUser}
+              initialAssignedAt={lead.assignedAt}
+              canWrite={canWriteLeads}
+              canAssign={canAssignLeads}
+              onStageChanged={() => fetchLeadDetail(true)}
+              onAssignmentChanged={() => fetchLeadDetail(true)}
             />
 
             {/* Direct Contacts Section */}
