@@ -8,7 +8,9 @@
     "build": "node ../../node_modules/typescript/bin/tsc",
     "typecheck": "node ../../node_modules/typescript/bin/tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@leadmate/shared": "*"
+  },
   "devDependencies": {
     "typescript": "^5.8.2"
   }
