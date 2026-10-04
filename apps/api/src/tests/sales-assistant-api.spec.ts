@@ -794,19 +794,6 @@ describe('M5 Step 4: AI Sales Assistant API, RBAC & Service Integration', () => 
       expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
     });
 
-    it('returns 422 VALIDATION_ERROR on malformed lead UUID parameter', async () => {
-      const res = await request(app)
-        .post('/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts')
-        .set('Cookie', repA1Cookie)
-        .send({
-          type: SalesAssistantDraftType.WHATSAPP,
-          language: SalesAssistantLanguage.ENGLISH,
-          tone: SalesAssistantTone.PROFESSIONAL
-        });
-
-      expect(res.status).toBe(422);
-      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
-    });
 
     it('accepts objective up to exact limit of 300 chars, rejects 301 chars with 422', async () => {
       // 300 chars: accepted (201)
@@ -863,10 +850,81 @@ describe('M5 Step 4: AI Sales Assistant API, RBAC & Service Integration', () => 
       expect(invalidRes.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
     });
 
-    it('returns 422 VALIDATION_ERROR on malformed draft UUID parameter', async () => {
+    it('returns 422 VALIDATION_ERROR on generate with malformed lead UUID parameter', async () => {
+      const res = await request(app)
+        .post('/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts')
+        .set('Cookie', repA1Cookie)
+        .send({
+          type: SalesAssistantDraftType.WHATSAPP,
+          language: SalesAssistantLanguage.ENGLISH,
+          tone: SalesAssistantTone.PROFESSIONAL
+        });
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on list drafts with malformed lead UUID parameter', async () => {
+      const res = await request(app)
+        .get('/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts')
+        .set('Cookie', repA1Cookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on read draft with malformed lead UUID parameter', async () => {
+      const dummyDraftId = '00000000-0000-0000-0000-000000000001';
+      const res = await request(app)
+        .get(`/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts/${dummyDraftId}`)
+        .set('Cookie', repA1Cookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on read draft with malformed draft UUID parameter', async () => {
       const res = await request(app)
         .get(`/api/v1/leads/${testLeadA1Id}/sales-assistant/drafts/invalid-draft-uuid`)
         .set('Cookie', repA1Cookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on approve draft with malformed lead UUID parameter', async () => {
+      const dummyDraftId = '00000000-0000-0000-0000-000000000001';
+      const res = await request(app)
+        .post(`/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts/${dummyDraftId}/approve`)
+        .set('Cookie', salesManagerACookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on approve draft with malformed draft UUID parameter', async () => {
+      const res = await request(app)
+        .post(`/api/v1/leads/${testLeadA1Id}/sales-assistant/drafts/invalid-draft-uuid/approve`)
+        .set('Cookie', salesManagerACookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on reject draft with malformed lead UUID parameter', async () => {
+      const dummyDraftId = '00000000-0000-0000-0000-000000000001';
+      const res = await request(app)
+        .post(`/api/v1/leads/not-a-valid-uuid/sales-assistant/drafts/${dummyDraftId}/reject`)
+        .set('Cookie', salesManagerACookie);
+
+      expect(res.status).toBe(422);
+      expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
+    });
+
+    it('returns 422 VALIDATION_ERROR on reject draft with malformed draft UUID parameter', async () => {
+      const res = await request(app)
+        .post(`/api/v1/leads/${testLeadA1Id}/sales-assistant/drafts/invalid-draft-uuid/reject`)
+        .set('Cookie', salesManagerACookie);
 
       expect(res.status).toBe(422);
       expect(res.body.error.code).toBe(ErrorCodes.VALIDATION_ERROR);
