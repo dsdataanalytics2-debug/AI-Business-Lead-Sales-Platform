@@ -14,11 +14,12 @@ import { Router } from 'express';
 import { Permissions } from '@leadmate/shared';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
-import { analyzeRateLimiter } from '../middleware/rate-limiter.js';
+import { analyzeRateLimiter, salesAssistantRateLimiter } from '../middleware/rate-limiter.js';
 import { leadController } from '../controllers/lead.controller.js';
 import { onlinePresenceController } from '../controllers/online-presence.controller.js';
 import { followUpController } from '../controllers/follow-up.controller.js';
 import { demoWebsiteController } from '../controllers/demo-website.controller.js';
+import { salesAssistantController } from '../controllers/sales-assistant.controller.js';
 
 export const leadRouter = Router();
 
@@ -197,4 +198,45 @@ leadRouter.post(
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
   followUpController.cancelFollowUp
+);
+
+// POST /api/v1/leads/:id/sales-assistant/drafts -> Generate sales assistant draft
+leadRouter.post(
+  '/:id/sales-assistant/drafts',
+  requireAuth,
+  salesAssistantRateLimiter,
+  requirePermission(Permissions.SALES_ASSISTANT_GENERATE),
+  salesAssistantController.generateDraft
+);
+
+// GET /api/v1/leads/:id/sales-assistant/drafts -> List sales assistant drafts for lead
+leadRouter.get(
+  '/:id/sales-assistant/drafts',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAssistantController.listDrafts
+);
+
+// GET /api/v1/leads/:id/sales-assistant/drafts/:draftId -> Get sales assistant draft detail
+leadRouter.get(
+  '/:id/sales-assistant/drafts/:draftId',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAssistantController.getDraft
+);
+
+// POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/approve -> Approve sales assistant draft
+leadRouter.post(
+  '/:id/sales-assistant/drafts/:draftId/approve',
+  requireAuth,
+  requirePermission(Permissions.SALES_ASSISTANT_REVIEW),
+  salesAssistantController.approveDraft
+);
+
+// POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/reject -> Reject sales assistant draft
+leadRouter.post(
+  '/:id/sales-assistant/drafts/:draftId/reject',
+  requireAuth,
+  requirePermission(Permissions.SALES_ASSISTANT_REVIEW),
+  salesAssistantController.rejectDraft
 );

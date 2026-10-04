@@ -14,7 +14,9 @@ export const Permissions = {
   COSTS_READ: 'costs:read',
   USERS_MANAGE: 'users:manage',
   INTEGRATIONS_MANAGE: 'integrations:manage',
-  REPORTS_READ: 'reports:read'
+  REPORTS_READ: 'reports:read',
+  SALES_ASSISTANT_GENERATE: 'sales_assistant:generate',
+  SALES_ASSISTANT_REVIEW: 'sales_assistant:review'
 } as const;
 
 export type Permission = (typeof Permissions)[keyof typeof Permissions];
@@ -32,6 +34,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     Permissions.CAMPAIGNS_MANAGE,
     Permissions.DEMOS_GENERATE,
     Permissions.DEMOS_MANAGE,
+    Permissions.SALES_ASSISTANT_GENERATE,
+    Permissions.SALES_ASSISTANT_REVIEW,
     Permissions.SUPPRESSION_MANAGE,
     Permissions.REPORTS_READ,
     Permissions.COSTS_READ
@@ -39,7 +43,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   [Role.SALES_EXECUTIVE]: [
     Permissions.LEADS_READ,
     Permissions.LEADS_WRITE,
-    Permissions.DEMOS_GENERATE
+    Permissions.DEMOS_GENERATE,
+    Permissions.SALES_ASSISTANT_GENERATE
   ],
   [Role.VIEWER]: [
     Permissions.LEADS_READ,

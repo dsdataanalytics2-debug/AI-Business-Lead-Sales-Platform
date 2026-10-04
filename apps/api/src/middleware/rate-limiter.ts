@@ -90,3 +90,47 @@ export function analyzeRateLimiter(req: Request, res: Response, next: NextFuncti
 export function resetAnalyzeRateLimiter(): void {
   analyzeAttempts.clear();
 }
+
+const salesAssistantAttempts = new Map<string, RateLimitRecord>();
+
+const SALES_ASSISTANT_WINDOW_MS = 60 * 1000; // 60 seconds (1 minute)
+const SALES_ASSISTANT_MAX_ATTEMPTS = 30; // 30 requests per minute
+
+export function salesAssistantRateLimiter(req: Request, res: Response, next: NextFunction): void {
+  const userId = req.user?.id;
+  if (!userId) {
+    return next();
+  }
+
+  const now = Date.now();
+  const record = salesAssistantAttempts.get(userId);
+
+  if (!record || now > record.resetTime) {
+    salesAssistantAttempts.set(userId, { count: 1, resetTime: now + SALES_ASSISTANT_WINDOW_MS });
+    return next();
+  }
+
+  if (record.count >= SALES_ASSISTANT_MAX_ATTEMPTS) {
+    const retryAfterSeconds = Math.ceil((record.resetTime - now) / 1000);
+    res.setHeader('Retry-After', retryAfterSeconds.toString());
+    res.status(429).json({
+      error: {
+        code: ErrorCodes.RATE_LIMITED,
+        message: 'Rate limit exceeded for sales assistant draft generation. Please try again later.',
+        details: { retryAfterSeconds },
+        requestId: req.id || 'unknown'
+      }
+    });
+    return;
+  }
+
+  record.count += 1;
+  next();
+}
+
+/**
+ * Helper to clear sales assistant rate limiter state for tests.
+ */
+export function resetSalesAssistantRateLimiter(): void {
+  salesAssistantAttempts.clear();
+}

@@ -289,3 +289,50 @@ export const generatedSalesAssistantDraftSchema = z.discriminatedUnion('type', [
 ]);
 
 export type GeneratedSalesAssistantDraft = z.infer<typeof generatedSalesAssistantDraftSchema>;
+
+/* ---------------------------------------------------------
+ * Step 4 Response DTO schemas (safe representation of persisted draft)
+ * --------------------------------------------------------- */
+
+export const salesAssistantUserSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    email: z.string()
+  })
+  .strict();
+
+export type SalesAssistantUserSummary = z.infer<typeof salesAssistantUserSummarySchema>;
+
+export const salesAssistantDraftSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    leadId: z.string().uuid(),
+    organizationId: z.string().uuid(),
+    type: z.nativeEnum(SalesAssistantDraftType),
+    language: z.nativeEnum(SalesAssistantLanguage),
+    tone: z.nativeEnum(SalesAssistantTone),
+    status: z.nativeEnum(SalesAssistantDraftStatus),
+    objective: z.string().nullable().optional(),
+    content: z.string().nullable().optional(),
+    emailSubject: z.string().nullable().optional(),
+    emailBody: z.string().nullable().optional(),
+    warnings: z.array(z.nativeEnum(SalesAssistantWarning)),
+    createdByUserId: z.string().uuid(),
+    createdByUser: salesAssistantUserSummarySchema.optional(),
+    approvedAt: z.union([z.date(), z.string()]).nullable().optional(),
+    approvedByUserId: z.string().uuid().nullable().optional(),
+    approvedByUser: salesAssistantUserSummarySchema.nullable().optional(),
+    rejectedAt: z.union([z.date(), z.string()]).nullable().optional(),
+    rejectedByUserId: z.string().uuid().nullable().optional(),
+    rejectedByUser: salesAssistantUserSummarySchema.nullable().optional(),
+    createdAt: z.union([z.date(), z.string()]),
+    updatedAt: z.union([z.date(), z.string()])
+  })
+  .strict();
+
+export type SalesAssistantDraftSummary = z.infer<typeof salesAssistantDraftSummarySchema>;
+
+export const salesAssistantDraftListResponseSchema = z.array(salesAssistantDraftSummarySchema);
+
+export type SalesAssistantDraftListResponse = z.infer<typeof salesAssistantDraftListResponseSchema>;

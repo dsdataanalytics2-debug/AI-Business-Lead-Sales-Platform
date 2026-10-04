@@ -11,6 +11,7 @@
     "test": "node ../../node_modules/vitest/vitest.mjs run"
   },
   "dependencies": {
+    "@leadmate/ai": "*",
     "@leadmate/core": "*",
     "@leadmate/datasources": "*",
     "@leadmate/db": "*",

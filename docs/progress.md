@@ -2,11 +2,11 @@
 
 ## Current Milestone: M5 — AI Sales Assistant
 - **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `59a06bff3a51f6a7d7790b3845874bfa1359c867` (`feat(m5): add sales assistant draft persistence`)
+- **Approved Base Checkpoint:** `39495080d5478992c539bced5f4e3bb399669daf` (`feat(m5): add ai sales provider abstraction`)
 - **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
 - **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
-- **Step 3 (AI Provider Abstraction + Mock Provider):** IMPLEMENTED / AWAITING REVIEW
-- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** NOT STARTED
+- **Step 3 (AI Provider Abstraction + Mock Provider):** COMPLETE (`39495080d5478992c539bced5f4e3bb399669daf`)
+- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** IMPLEMENTED / AWAITING REVIEW
 - **Step 5 (Lead Detail Sales Assistant UI):** NOT STARTED
 - **Step 6 (E2E Integration, Security Hardening & Milestone Closure):** NOT STARTED
 
@@ -35,17 +35,64 @@
 - **Migration:** `packages/db/prisma/migrations/20261003103439_add_m5_sales_assistant_drafts/migration.sql` containing strictly M5 objects (5 `CREATE TYPE`, 1 `CREATE TABLE`, 5 indexes, 5 FKs; 0 unrelated statements). Applied cleanly to dev and test databases.
 - **Test Suite:** `packages/db/src/tests/sales-assistant-draft-persistence.spec.ts` (35 tests covering enum parity, defaults, CRUD, multi-drafts, warnings array default, cross-tenant FK rejections, cascade and restrict behaviors).
 
-### M5 Step 3 — AI Provider Abstraction + Mock Provider (Implemented / Awaiting Review)
+### M5 Step 3 — AI Provider Abstraction + Mock Provider (Completed)
+- **Files:** `packages/ai/src/sales-assistant/*`, `packages/ai/src/tests/sales-assistant-provider.spec.ts`.
+- **Interface & Normalization:** `SalesAssistantProviderClient` interface; normalized inputs (`NormalizedSalesAssistantInput`, `NormalizedLeadContext`, `NormalizedBusinessContext`) preventing model or credentials leaks; provider output validated via `generatedSalesAssistantDraftSchema`.
+- **Mock Provider & Factory:** `MockSalesAssistantProvider` with testable failure injection and warning generation; `getSalesAssistantProvider` factory.
+- **Test Suite:** `packages/ai/src/tests/sales-assistant-provider.spec.ts` (29 tests passing).
+
+### M5 Step 4 — Sales Assistant API Endpoints, RBAC & Audit Logging (Implemented / Awaiting Review)
 - **Files Created:**
-  - `packages/ai/src/sales-assistant/errors.ts`
-  - `packages/ai/src/sales-assistant/provider.ts`
-  - `packages/ai/src/sales-assistant/mock-provider.ts`
-  - `packages/ai/src/sales-assistant/index.ts`
-  - `packages/ai/src/tests/sales-assistant-provider.spec.ts`
+  - `apps/api/src/services/sales-assistant.service.ts`
+  - `apps/api/src/controllers/sales-assistant.controller.ts`
+  - `apps/api/src/tests/sales-assistant-api.spec.ts`
+  - `apps/api/src/tests/sales-assistant-service.spec.ts`
 - **Files Modified:**
-  - `packages/ai/package.json` (added `@leadmate/shared` internal workspace dependency)
-  - `packages/ai/src/index.ts` (re-exported sales-assistant module)
+  - `packages/shared/src/permissions.ts` (added `SALES_ASSISTANT_GENERATE` and `SALES_ASSISTANT_REVIEW`)
+  - `packages/shared/src/schemas/sales-assistant.ts` (added `salesAssistantDraftSummarySchema` and list response DTO)
+  - `apps/api/package.json` & `package-lock.json` (added `@leadmate/ai` workspace dependency)
+  - `apps/api/src/middleware/rate-limiter.ts` (added `salesAssistantRateLimiter`: 30 req/60s per user)
+  - `apps/api/src/middleware/error-handler.ts` (added `SalesAssistantProviderError` handler with status mappings)
+  - `apps/api/src/routes/lead.routes.ts` (mounted drafts endpoints)
   - `docs/progress.md`
+  - `docs/decisions.md`
+- **Service Orchestration:**
+  - `SalesAssistantService` encapsulates tenant-safe lead lookup (`leadId + organizationId`), safe lead context projection, provider invocation, output contract validation, atomic database persistence, and review transitions (`approveDraft`, `rejectDraft`).
+  - Provider calls execute strictly OUTSIDE database transaction to prevent connection starvation during AI calls.
+  - Persistence and audit writing execute inside a short atomic Prisma `$transaction`.
+- **Contact Safety (`PHONE != WHATSAPP`):**
+  - Context projection populates `leadContext.whatsapp` only from explicit verified or publicly confirmed WhatsApp contacts.
+  - Raw phone numbers are NEVER promoted to WhatsApp. When WhatsApp contact evidence is missing, `whatsapp` is `undefined` and the provider emits `UNVERIFIED_WHATSAPP`.
+- **Storage & Invariants:**
+  - `EMAIL` drafts persist `emailSubject` and `emailBody` with `content: null`.
+  - Non-email drafts (`WHATSAPP`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`) persist `content` with `emailSubject: null` and `emailBody: null`.
+  - Generated draft status is always `DRAFT`.
+  - Provider failures or schema validation errors never persist draft rows.
+- **Review Lifecycle & Concurrency Guard:**
+  - `approveDraft`: transitions `DRAFT -> APPROVED`, sets `approvedAt` and `approvedByUserId`, leaves rejection fields null.
+  - `rejectDraft`: transitions `DRAFT -> REJECTED`, sets `rejectedAt` and `rejectedByUserId`, leaves approval fields null.
+  - Terminal review states: once `APPROVED` or `REJECTED`, drafts cannot be re-approved, re-rejected, or reverted to draft; returns 409 Conflict.
+  - Concurrency protection: review mutations perform conditional `updateMany({ where: { id, leadId, organizationId, status: 'DRAFT' } })`, preventing simultaneous reviewer race conditions.
+- **API Endpoints:**
+  - `POST /api/v1/leads/:id/sales-assistant/drafts` (201 Created) — rate-limited, requires `SALES_ASSISTANT_GENERATE`
+  - `GET /api/v1/leads/:id/sales-assistant/drafts` (200 OK) — requires `LEADS_READ`, paginated, sorted `createdAt DESC, id DESC`
+  - `GET /api/v1/leads/:id/sales-assistant/drafts/:draftId` (200 OK) — requires `LEADS_READ`, tenant & lead-scoped
+  - `POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/approve` (200 OK) — requires `SALES_ASSISTANT_REVIEW`
+  - `POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/reject` (200 OK) — requires `SALES_ASSISTANT_REVIEW`
+- **RBAC Matrix:**
+  - `SALES_ASSISTANT_GENERATE`: `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `SALES_EXECUTIVE`. `VIEWER` is denied (403).
+  - `SALES_ASSISTANT_REVIEW`: `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`. `SALES_EXECUTIVE` and `VIEWER` are denied (403).
+  - Draft reading: reuses `LEADS_READ`, allowing `VIEWER` to inspect draft history without generation or review privileges.
+- **Audit Logging & Data Minimization:**
+  - Emits `lead.sales_assistant_draft_generated`, `lead.sales_assistant_draft_approved`, `lead.sales_assistant_draft_rejected`.
+  - Audit metadata is strictly minimized: contains IDs, types, languages, tones, and warning counts/codes; zero full text content, custom instructions, prompts, or provider internal data stored in audit logs.
+- **Safe Error Mapping:**
+  - Maps `PROVIDER_TIMEOUT` (504), `PROVIDER_UNAVAILABLE` (503), `PROVIDER_RATE_LIMITED` (429), `INVALID_PROVIDER_RESPONSE` (502), and `GENERATION_FAILED` (500) without leaking stack traces or internal secrets.
+- **Test Suites:**
+  - `apps/api/src/tests/sales-assistant-service.spec.ts`: 11 domain service tests.
+  - `apps/api/src/tests/sales-assistant-api.spec.ts`: 25 API, RBAC, multi-tenant, and error handling tests.
+  - Total M5 Step 4 new tests: 36 tests.
+
 - **Provider Interface:** `SalesAssistantProviderClient` defining `providerName: string` and stateless `generateDraft(input: NormalizedSalesAssistantInput): Promise<GeneratedSalesAssistantDraft>`.
 - **Normalized Input Contract:** `NormalizedSalesAssistantInput` encapsulating `draftType`, `language`, `tone`, optional `objective`, optional `customInstruction`, safe `NormalizedLeadContext`, optional `NormalizedBusinessContext` (contains caller-supplied trusted/approved business facts), and optional `NormalizedWarningsContext`. Zero DB models, sessions, credentials, or audit objects passed.
 - **Contact Safety (`PHONE != WHATSAPP`):** The provider contract defines the expected normalized trust boundary, where `whatsapp` must be populated by the calling service only from explicit verified/public WhatsApp evidence; the provider strictly never infers WhatsApp from `phone`, and phone presence alone never satisfies WhatsApp generation or suppresses `UNVERIFIED_WHATSAPP` warning.

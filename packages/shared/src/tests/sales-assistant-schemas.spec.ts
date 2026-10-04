@@ -109,12 +109,16 @@ describe('M5 Step 1: generate request schema', () => {
     const max = SALES_ASSISTANT_LIMITS.OBJECTIVE_MAX;
     expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, objective: rep(max) }).success).toBe(true);
     expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, objective: rep(max + 1) }).success).toBe(false);
+    expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, objective: 'x'.repeat(300) }).success).toBe(true);
+    expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, objective: 'x'.repeat(301) }).success).toBe(false);
   });
 
   it('enforces exact customInstruction boundary', () => {
     const max = SALES_ASSISTANT_LIMITS.CUSTOM_INSTRUCTION_MAX;
     expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, customInstruction: rep(max) }).success).toBe(true);
     expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, customInstruction: rep(max + 1) }).success).toBe(false);
+    expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, customInstruction: 'y'.repeat(1000) }).success).toBe(true);
+    expect(generateSalesAssistantDraftRequestSchema.safeParse({ ...validRequest, customInstruction: 'y'.repeat(1001) }).success).toBe(false);
   });
 
   it('treats injection-style text as a bounded, inert plain string (schema does not grant it structural authority; runtime injection resistance deferred to provider/service)', () => {

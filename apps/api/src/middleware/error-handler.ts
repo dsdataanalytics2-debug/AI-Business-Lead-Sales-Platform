@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { ErrorCodes, DemoWebsiteErrorCode } from '@leadmate/shared';
 import { StoreMateUnavailableError } from '@leadmate/storemate';
+import { SalesAssistantProviderError, SalesAssistantProviderErrorCode } from '@leadmate/ai';
 import { AppError } from '../lib/errors.js';
 import { logger } from './logger.js';
 
@@ -48,7 +49,30 @@ export function errorHandler(
     return;
   }
 
-  // 3. Handle Custom App Errors
+  // 3. Handle Sales Assistant Provider Errors
+  if (
+    err instanceof SalesAssistantProviderError ||
+    (err && typeof err === 'object' && 'name' in err && (err as Error).name === 'SalesAssistantProviderError')
+  ) {
+    const providerErr = err as SalesAssistantProviderError;
+    let statusCode = 500;
+    if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_UNAVAILABLE) statusCode = 503;
+    else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_TIMEOUT) statusCode = 504;
+    else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_RATE_LIMITED) statusCode = 429;
+    else if (providerErr.code === SalesAssistantProviderErrorCode.INVALID_PROVIDER_RESPONSE) statusCode = 502;
+    else if (providerErr.code === SalesAssistantProviderErrorCode.GENERATION_FAILED) statusCode = 500;
+
+    res.status(statusCode).json({
+      error: {
+        code: providerErr.code,
+        message: providerErr.safeMessage,
+        requestId
+      }
+    });
+    return;
+  }
+
+  // 4. Handle Custom App Errors
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: {
