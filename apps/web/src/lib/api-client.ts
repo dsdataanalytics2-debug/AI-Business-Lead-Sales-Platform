@@ -20,7 +20,9 @@ import {
   type CrmNote,
   type CrmActivity,
   type CreateDemoWebsiteRequest,
-  type DemoWebsiteSummary
+  type DemoWebsiteSummary,
+  type GenerateSalesAssistantDraftRequest,
+  type SalesAssistantDraftSummary
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -319,6 +321,62 @@ export const apiClient = {
         ...options,
         method: 'POST',
         body: JSON.stringify({})
-      })
+      }),
+    generateSalesAssistantDraft: (
+      id: string,
+      input: GenerateSalesAssistantDraftRequest,
+      options: RequestInit = {}
+    ): Promise<SalesAssistantDraftSummary> =>
+      request<SalesAssistantDraftSummary>(`/leads/${encodeURIComponent(id)}/sales-assistant/drafts`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input)
+      }),
+    listSalesAssistantDrafts: (
+      id: string,
+      options: RequestInit = {}
+    ): Promise<SalesAssistantDraftSummary[]> =>
+      request<SalesAssistantDraftSummary[]>(`/leads/${encodeURIComponent(id)}/sales-assistant/drafts`, {
+        ...options,
+        method: 'GET'
+      }),
+    getSalesAssistantDraft: (
+      id: string,
+      draftId: string,
+      options: RequestInit = {}
+    ): Promise<SalesAssistantDraftSummary> =>
+      request<SalesAssistantDraftSummary>(
+        `/leads/${encodeURIComponent(id)}/sales-assistant/drafts/${encodeURIComponent(draftId)}`,
+        {
+          ...options,
+          method: 'GET'
+        }
+      ),
+    approveSalesAssistantDraft: (
+      id: string,
+      draftId: string,
+      options: RequestInit = {}
+    ): Promise<SalesAssistantDraftSummary> =>
+      request<SalesAssistantDraftSummary>(
+        `/leads/${encodeURIComponent(id)}/sales-assistant/drafts/${encodeURIComponent(draftId)}/approve`,
+        {
+          ...options,
+          method: 'POST',
+          body: JSON.stringify({})
+        }
+      ),
+    rejectSalesAssistantDraft: (
+      id: string,
+      draftId: string,
+      options: RequestInit = {}
+    ): Promise<SalesAssistantDraftSummary> =>
+      request<SalesAssistantDraftSummary>(
+        `/leads/${encodeURIComponent(id)}/sales-assistant/drafts/${encodeURIComponent(draftId)}/reject`,
+        {
+          ...options,
+          method: 'POST',
+          body: JSON.stringify({})
+        }
+      )
   }
 };

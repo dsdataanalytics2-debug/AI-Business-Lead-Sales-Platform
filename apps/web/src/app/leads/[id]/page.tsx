@@ -48,6 +48,7 @@ import {
 import { OnlinePresenceAnalysisCard } from '@/components/leads/online-presence-analysis-card';
 import { CrmCard } from '@/components/leads/crm-card';
 import { DemoWebsiteCard } from '@/components/leads/demo-website-card';
+import { SalesAssistantCard } from '@/components/leads/sales-assistant-card';
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -61,6 +62,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const canAssignLeads = hasPermission(Permissions.LEADS_ASSIGN);
   const canGenerateDemo = hasPermission(Permissions.DEMOS_GENERATE);
   const canManageDemo = hasPermission(Permissions.DEMOS_MANAGE);
+  const canGenerateSalesDraft = hasPermission(Permissions.SALES_ASSISTANT_GENERATE);
+  const canReviewSalesDraft = hasPermission(Permissions.SALES_ASSISTANT_REVIEW);
 
   // Pure reducer page state
   const [pageState, dispatch] = useReducer(leadDetailReducer, initialLeadDetailState);
@@ -781,6 +784,14 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               canRead={canReadLeads}
               canGenerate={canGenerateDemo}
               canManage={canManageDemo}
+            />
+
+            {/* AI Sales Assistant Card (M5) */}
+            <SalesAssistantCard
+              leadId={lead.id}
+              canRead={canReadLeads}
+              canGenerate={canGenerateSalesDraft}
+              canReview={canReviewSalesDraft}
             />
 
             {/* Direct Contacts Section */}

@@ -2,12 +2,12 @@
 
 ## Current Milestone: M5 — AI Sales Assistant
 - **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `39495080d5478992c539bced5f4e3bb399669daf` (`feat(m5): add ai sales provider abstraction`)
+- **Approved Base Checkpoint:** `ae37ddebf985173b555cb3213232fdfa70accdfc` (Step 4) / `cc0d9d1ae1a1dcd3523f789c16d5347133522e10` (Step 4.1)
 - **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
 - **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
 - **Step 3 (AI Provider Abstraction + Mock Provider):** COMPLETE (`39495080d5478992c539bced5f4e3bb399669daf`)
-- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** IMPLEMENTED / AWAITING REVIEW
-- **Step 5 (Lead Detail Sales Assistant UI):** NOT STARTED
+- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** COMPLETE (`ae37ddebf985173b555cb3213232fdfa70accdfc`, `cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
+- **Step 5 (Lead Detail Sales Assistant UI):** IMPLEMENTED / AWAITING REVIEW
 - **Step 6 (E2E Integration, Security Hardening & Milestone Closure):** NOT STARTED
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
@@ -105,6 +105,36 @@
 - **Zero Real AI / Zero External Network:** No OpenAI/Gemini/Anthropic SDKs, zero external network or HTTP requests.
 - **Zero DB / API / UI Scope:** Pure stateless domain abstraction. No database writes/orchestration (deferred to Step 4 domain service), no API routes/controllers, no frontend UI.
 - **Test Suite:** 29 tests in `packages/ai/src/tests/sales-assistant-provider.spec.ts` covering factory, all 5 draft types, all 3 languages, all 4 tones, schema validation, length bounds, email structure, warnings, anti-fabrication, controlled failures, secret leak prevention, and determinism.
+
+### M5 Step 5 — Lead Detail AI Sales Assistant UI (Implemented / Awaiting Review)
+- **Files Created:**
+  - `apps/web/src/components/leads/sales-assistant-card.tsx`
+  - `apps/web/src/lib/leads/sales-assistant-display.ts`
+  - `apps/web/src/tests/sales-assistant-display.spec.ts`
+  - `apps/web/src/tests/sales-assistant-card-ui.spec.tsx`
+- **Files Modified:**
+  - `apps/web/src/lib/api-client.ts` (added 5 frontend API methods on `apiClient.leads`)
+  - `apps/web/src/app/leads/[id]/page.tsx` (mounted `SalesAssistantCard` on Lead Detail)
+  - `docs/progress.md`
+- **Features Implemented:**
+  - **Generation Form:** Full draft generation controls supporting 5 draft types (`WHATSAPP`, `EMAIL`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`), 3 languages (`BANGLA`, `ENGLISH`, `MIXED`), and 4 tones (`PROFESSIONAL`, `FRIENDLY`, `CONCISE`, `PERSUASIVE`).
+  - **Character Counters & Limits:** Objective bounded to 300 characters (`0 / 300`); custom instruction bounded to 1000 characters (`0 / 1000`); prevents over-limit submissions.
+  - **Result & Content Preview:** Type, language, tone, status badges (`DRAFT`, `APPROVED`, `REJECTED`). Formatted subject & body for `EMAIL` drafts; formatted prose content for non-email drafts with `whitespace-pre-wrap` and `break-words`.
+  - **Safety & Warning UI:** All 5 warnings mapped to clear user guidance (`MISSING_PRODUCT_CONTEXT`, `MISSING_PRICE_CONTEXT`, `UNVERIFIED_WHATSAPP`, `UNSUPPORTED_CLAIM_REMOVED`, `LIMITED_LEAD_CONTEXT`). Prominent `UNVERIFIED_WHATSAPP` notice ("No verified WhatsApp contact is available for this lead. This draft is for review only.") and strict omission of any WhatsApp send button.
+  - **Mandatory Human Approval Notice:** Prominent notice displayed for `DRAFT` status ("Human approval required. Approval does not send the message automatically.").
+  - **Review Lifecycle (Approve / Reject):** Confirmation dialogs for Approve and Reject actions. Once approved or rejected, drafts become terminal, review controls are hidden, and reviewer attribution is displayed.
+  - **RBAC-Aware Controls:**
+    - Generation: Allowed for `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `SALES_EXECUTIVE`; hidden / read-only for `VIEWER`.
+    - Review: Allowed for `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`; hidden for `SALES_EXECUTIVE` and `VIEWER`.
+  - **Copy Functionality:** Browser clipboard copy ("Copy Email" vs "Copy Draft") with clean text formatting.
+  - **Draft History:** Chronological history list (newest first) with selection, active ring, status badges, and warning indicators.
+  - **Safe Error Handling:** Classifies 409 `CONFLICT` (prompts refresh of latest status and history), 429 `RATE_LIMITED`, 504 `AI_PROVIDER_TIMEOUT`, 503 `AI_PROVIDER_UNAVAILABLE`, 502 `AI_PROVIDER_BAD_GATEWAY`, 500 `AI_GENERATION_FAILED`, 403 `FORBIDDEN`, 404 `NOT_FOUND`, 422 `VALIDATION_ERROR`.
+  - **Product Invariants:** Zero send buttons (No Send WhatsApp, Send Email, Call Now, Schedule Send, Start Campaign); zero `SENT` state; zero real AI provider calls; Step 6 NOT STARTED.
+- **Test Suites & Verification Boundaries:**
+  - `apps/web/src/tests/sales-assistant-display.spec.ts`: 17 pure unit tests (label formatting, warning message mapping, status badge styles, clipboard formatting for email and prose, error classification for 409, 429, 504, 503, 403, 404).
+  - `apps/web/src/tests/sales-assistant-card-ui.spec.tsx`: 15 static render tests (using `renderToStaticMarkup` to verify DOM element IDs, character counters, form elements, DRAFT preview, EMAIL subject/body vs non-email content, warning banners, approval notices, RBAC button visibility, and strict prohibition of send buttons/SENT state).
+  - **Interaction & Browser Verification Status:** Existing repository test tooling operates in a Node environment (`environment: 'node'`) without client DOM testing utilities (`@testing-library/react`, `@testing-library/user-event`, `jsdom`, `happy-dom`, `Playwright`, `Cypress`). `renderToStaticMarkup` verifies static markup structure and attribute invariants only, not client event handling, async state transitions, or browser clipboard APIs. Automated manual browser verification was not run in this headless verification session. Comprehensive interactive client verification remains deferred to M5 Step 6 E2E integration.
+  - Total M5 Step 5 new tests: 32 tests (17 display + 15 static render).
 
 ---
 
