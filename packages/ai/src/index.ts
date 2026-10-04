@@ -7,3 +7,5 @@
  */
 
 export const AI_PACKAGE_NAME = '@leadmate/ai';
+
+export * from './sales-assistant/index.js';

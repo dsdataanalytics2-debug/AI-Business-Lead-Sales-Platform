@@ -2,10 +2,10 @@
 
 ## Current Milestone: M5 — AI Sales Assistant
 - **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `0b8c0e5eaca31c3b4d52c5ebecd190de05771b84` (`fix(db): pin follow-up task index name`)
+- **Approved Base Checkpoint:** `59a06bff3a51f6a7d7790b3845874bfa1359c867` (`feat(m5): add sales assistant draft persistence`)
 - **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
-- **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`feat(m5): add sales assistant draft persistence`)
-- **Step 3 (AI Sales Assistant Provider Abstraction & Domain Service):** NOT STARTED
+- **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
+- **Step 3 (AI Provider Abstraction + Mock Provider):** IMPLEMENTED / AWAITING REVIEW
 - **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** NOT STARTED
 - **Step 5 (Lead Detail Sales Assistant UI):** NOT STARTED
 - **Step 6 (E2E Integration, Security Hardening & Milestone Closure):** NOT STARTED
@@ -34,6 +34,30 @@
 - **Indexes:** `[organizationId, leadId, createdAt]`, `[organizationId, status, createdAt]`, `[organizationId, createdByUserId, createdAt]`, `[organizationId, type, createdAt]`, composite unique `[id, organizationId]`.
 - **Migration:** `packages/db/prisma/migrations/20261003103439_add_m5_sales_assistant_drafts/migration.sql` containing strictly M5 objects (5 `CREATE TYPE`, 1 `CREATE TABLE`, 5 indexes, 5 FKs; 0 unrelated statements). Applied cleanly to dev and test databases.
 - **Test Suite:** `packages/db/src/tests/sales-assistant-draft-persistence.spec.ts` (35 tests covering enum parity, defaults, CRUD, multi-drafts, warnings array default, cross-tenant FK rejections, cascade and restrict behaviors).
+
+### M5 Step 3 — AI Provider Abstraction + Mock Provider (Implemented / Awaiting Review)
+- **Files Created:**
+  - `packages/ai/src/sales-assistant/errors.ts`
+  - `packages/ai/src/sales-assistant/provider.ts`
+  - `packages/ai/src/sales-assistant/mock-provider.ts`
+  - `packages/ai/src/sales-assistant/index.ts`
+  - `packages/ai/src/tests/sales-assistant-provider.spec.ts`
+- **Files Modified:**
+  - `packages/ai/package.json` (added `@leadmate/shared` internal workspace dependency)
+  - `packages/ai/src/index.ts` (re-exported sales-assistant module)
+  - `docs/progress.md`
+- **Provider Interface:** `SalesAssistantProviderClient` defining `providerName: string` and stateless `generateDraft(input: NormalizedSalesAssistantInput): Promise<GeneratedSalesAssistantDraft>`.
+- **Normalized Input Contract:** `NormalizedSalesAssistantInput` encapsulating `draftType`, `language`, `tone`, optional `objective`, optional `customInstruction`, safe `NormalizedLeadContext`, optional `NormalizedBusinessContext` (contains caller-supplied trusted/approved business facts), and optional `NormalizedWarningsContext`. Zero DB models, sessions, credentials, or audit objects passed.
+- **Contact Safety (`PHONE != WHATSAPP`):** The provider contract defines the expected normalized trust boundary, where `whatsapp` must be populated by the calling service only from explicit verified/public WhatsApp evidence; the provider strictly never infers WhatsApp from `phone`, and phone presence alone never satisfies WhatsApp generation or suppresses `UNVERIFIED_WHATSAPP` warning.
+- **Provider Output Contract:** Guaranteed to parse with `generatedSalesAssistantDraftSchema`. Returns final draft output only (`subject`/`body` for EMAIL, `content` for others). Zero exposure of raw responses, reasoning, chain-of-thought, system prompts, API keys, or tokens.
+- **DRAFT-Only Invariant:** Every generated draft has `status = 'DRAFT'`. The provider cannot output `APPROVED`, `REJECTED`, or `SENT`.
+- **Normalized Warnings Engine:** Deterministically detects and emits `LIMITED_LEAD_CONTEXT`, `MISSING_PRODUCT_CONTEXT`, `MISSING_PRICE_CONTEXT`, `UNVERIFIED_WHATSAPP`, and `UNSUPPORTED_CLAIM_REMOVED` (deterministic MOCK behavior for sample claims in tests; does not claim complete semantic moderation).
+- **Caller-Supplied Trusted Facts (Anti-Fabrication):** Derives output solely from caller-supplied trusted facts (calling service is responsible for verifying source data); the provider strictly never fabricates prices, discounts, ratings, reviews, opening hours, certifications, guarantees, or delivery promises.
+- **Safe Error Normalization:** `SalesAssistantProviderError` with normalized codes (`PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `PROVIDER_RATE_LIMITED`, `INVALID_PROVIDER_RESPONSE`, `GENERATION_FAILED`), containing only `code`, `safeMessage`, and `retryable`.
+- **Mock Provider & Factory:** `MockSalesAssistantProvider` with deterministic language/tone templating and test-controlled failure simulation (`setSimulateFailure`); `getSalesAssistantProvider` factory resolving `MOCK` and rejecting any unsupported/real AI provider with `PROVIDER_UNAVAILABLE`.
+- **Zero Real AI / Zero External Network:** No OpenAI/Gemini/Anthropic SDKs, zero external network or HTTP requests.
+- **Zero DB / API / UI Scope:** Pure stateless domain abstraction. No database writes/orchestration (deferred to Step 4 domain service), no API routes/controllers, no frontend UI.
+- **Test Suite:** 29 tests in `packages/ai/src/tests/sales-assistant-provider.spec.ts` covering factory, all 5 draft types, all 3 languages, all 4 tones, schema validation, length bounds, email structure, warnings, anti-fabrication, controlled failures, secret leak prevention, and determinism.
 
 ---
 
