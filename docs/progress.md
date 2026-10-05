@@ -394,10 +394,22 @@
   - **RBAC:** Defined `Permissions.OUTREACH_READ`, `Permissions.OUTREACH_SEND`, `Permissions.OUTREACH_MANAGE` and mapped into `ROLE_PERMISSIONS` (SUPER_ADMIN/ADMIN/SALES_MANAGER have all 3, SALES_EXECUTIVE has READ/SEND, VIEWER has READ only).
   - **Safety Invariants:** Proved `PHONE != WHATSAPP` preserved with zero inference helpers; verified M5 `SalesAssistantDraftStatus` contains strictly `DRAFT`, `APPROVED`, `REJECTED` (no `SENT`).
   - **Test Suite:** Added 52 unit tests in `packages/shared/src/tests/outreach-schemas.spec.ts` (shared package total: 211 tests across 7 files).
-- **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
-- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** IMPLEMENTED / AWAITING REVIEW
-- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
-- **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
+- [2026-10-05] Step 2 (Outreach Delivery Persistence + Migration): COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
+- [2026-10-05] Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers): COMPLETE (`11f0c3f0d80d6675f69c566dc72f6a1805464a88`)
+- [2026-10-05] Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard): COMPLETE (`bc5081709a5782b1339503eacba2aaa75f7762b6`)
+  - Implemented `OutreachDeliveryService` in `packages/core/src/outreach/outreach-delivery.service.ts` with atomic delivery creation, immutable draft snapshotting (`approvedDraftSnapshotHash`), Gate A suppression enforcement, and post-transaction queue enqueueing.
+  - Implemented `BullMQOutreachDeliveryQueue` in `@leadmate/queues` (`jobId = deliveryId`).
+  - Implemented 61 unit tests in `packages/core/src/tests/outreach-delivery-service.spec.ts` and 3 tests in `packages/queues/src/tests/bullmq-outreach-delivery-queue.spec.ts`.
+- [2026-10-05] Step 5 (Outreach REST API + RBAC + Audit Logging): IMPLEMENTED / AWAITING REVIEW
+  - Implemented single canonical REST route family in `apps/api/src/routes/lead.routes.ts`: `POST /api/v1/leads/:id/outreach/deliveries`, `GET /api/v1/leads/:id/outreach/deliveries`, `GET /api/v1/leads/:id/outreach/deliveries/:deliveryId` (zero alias sprawl; removed legacy paths return 404).
+  - Authenticated via PostgreSQL server-side sessions (`leadmate_session` cookie; zero JWT/Bearer auth).
+  - Mandatory case-preserving `Idempotency-Key` HTTP header extraction and validation via `outreachIdempotencyKeySchema`.
+  - RBAC: `OUTREACH_SEND` for POST dispatch, `OUTREACH_READ` for GET queries; strict Sales Executive lead assignment defense-in-depth (`lead.assignedUserId === authenticatedUserId`), returning 403 `FORBIDDEN` for unassigned or other reps' leads.
+  - Canonical API error envelope and deterministic error mapping (`OUTREACH_DRAFT_NOT_APPROVED` -> 409, `OUTREACH_CHANNEL_INCOMPATIBLE` -> 422, `OUTREACH_RECIPIENT_INVALID` -> 422, `OUTREACH_RECIPIENT_SUPPRESSED` -> 422, `OUTREACH_IDEMPOTENCY_KEY_REUSED` -> 409, internal `QUEUE_ERROR` mapped to safe public `OUTREACH_DELIVERY_FAILED` 500 without leaking Redis/BullMQ internals).
+  - Public DTO data minimization with masked destinations via `maskRecipient` (zero raw PII, snapshots, hashes, or provider secrets).
+  - Authoritative audit logging emitting `lead.outreach_requested` for newly created deliveries; duplicate creation audits strictly suppressed on idempotent replay.
+  - Standard rate limiting and authentication conventions (no unapproved 30/min rate quotas invented).
+  - Implemented 31 integration tests in `apps/api/src/tests/outreach-api.spec.ts` (API package total: 534 tests across 20 files; full repo total: 1529 tests across 70 files).
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
 - **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED

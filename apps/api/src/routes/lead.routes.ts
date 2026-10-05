@@ -20,6 +20,7 @@ import { onlinePresenceController } from '../controllers/online-presence.control
 import { followUpController } from '../controllers/follow-up.controller.js';
 import { demoWebsiteController } from '../controllers/demo-website.controller.js';
 import { salesAssistantController } from '../controllers/sales-assistant.controller.js';
+import { outreachController } from '../controllers/outreach.controller.js';
 
 export const leadRouter = Router();
 
@@ -239,4 +240,28 @@ leadRouter.post(
   requireAuth,
   requirePermission(Permissions.SALES_ASSISTANT_REVIEW),
   salesAssistantController.rejectDraft
+);
+
+// POST /api/v1/leads/:id/outreach/deliveries -> Dispatch approved sales draft delivery
+leadRouter.post(
+  '/:id/outreach/deliveries',
+  requireAuth,
+  requirePermission(Permissions.OUTREACH_SEND),
+  outreachController.requestDelivery
+);
+
+// GET /api/v1/leads/:id/outreach/deliveries -> List outreach deliveries for lead
+leadRouter.get(
+  '/:id/outreach/deliveries',
+  requireAuth,
+  requirePermission(Permissions.OUTREACH_READ),
+  outreachController.listDeliveries
+);
+
+// GET /api/v1/leads/:id/outreach/deliveries/:deliveryId -> Get single outreach delivery detail
+leadRouter.get(
+  '/:id/outreach/deliveries/:deliveryId',
+  requireAuth,
+  requirePermission(Permissions.OUTREACH_READ),
+  outreachController.getDelivery
 );

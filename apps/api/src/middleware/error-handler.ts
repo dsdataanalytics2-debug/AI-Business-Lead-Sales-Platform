@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { ErrorCodes, DemoWebsiteErrorCode } from '@leadmate/shared';
+import { ErrorCodes, DemoWebsiteErrorCode, OutreachErrorCode } from '@leadmate/shared';
 import { StoreMateUnavailableError } from '@leadmate/storemate';
 import { SalesAssistantProviderError, SalesAssistantProviderErrorCode } from '@leadmate/ai';
 import { AppError } from '../lib/errors.js';
+import { OutreachServiceError } from '@leadmate/core';
 import { logger } from './logger.js';
 
 export function errorHandler(
@@ -91,7 +92,30 @@ export function errorHandler(
     return;
   }
 
-  // 4. Handle Custom App Errors
+  // 4. Handle Outreach Service Domain Errors
+  if (
+    err instanceof OutreachServiceError ||
+    (err && typeof err === 'object' && 'name' in err && (err as Error).name === 'OutreachServiceError')
+  ) {
+    const outreachErr = err as OutreachServiceError;
+    const isQueueError = outreachErr.code === 'QUEUE_ERROR';
+    const statusCode = outreachErr.statusCode;
+    const publicCode = isQueueError ? OutreachErrorCode.OUTREACH_DELIVERY_FAILED : outreachErr.code;
+    const publicMessage = isQueueError
+      ? 'Outreach delivery created but background queueing failed; delivery remains in REQUESTED status for retry'
+      : outreachErr.message;
+
+    res.status(statusCode).json({
+      error: {
+        code: publicCode,
+        message: publicMessage,
+        requestId
+      }
+    });
+    return;
+  }
+
+  // 5. Handle Custom App Errors
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: {
