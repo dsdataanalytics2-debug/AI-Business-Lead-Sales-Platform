@@ -1,15 +1,18 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M5 — AI Sales Assistant
-- **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `20bfcd28d3dbecd9c018d15283268f24d960acf5` (Step 5)
+## Current Milestone: M5 — AI Sales Assistant ✅ COMPLETE
+- **Status:** COMPLETE / CLOSED
+- **Final M5 Checkpoint:** `748600e3a8fd6007c6a86b21611254dacc60d304` (`fix(m5): harden sales assistant provider error contract`)
 - **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
 - **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
 - **Step 3 (AI Provider Abstraction + Mock Provider):** COMPLETE (`39495080d5478992c539bced5f4e3bb399669daf`)
 - **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** COMPLETE (`ae37ddebf985173b555cb3213232fdfa70accdfc`, `cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
+- **Step 4.1 (Sales Assistant API Regression Tests):** COMPLETE (`cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
 - **Step 5 (Lead Detail Sales Assistant UI):** COMPLETE (`20bfcd28d3dbecd9c018d15283268f24d960acf5`)
-- **Step 6 (E2E Integration, Security Hardening & Interaction Hardening):** IMPLEMENTED / AWAITING REVIEW
-- **Step 7 (Milestone Review & Closure):** NOT STARTED
+- **Step 6 (E2E Integration, Security Hardening & Interaction Hardening):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
+- **Step 6.1 (Fix Public AI Provider Error Contract):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
+- **Step 7 (Milestone Closure & Audit):** COMPLETE / awaiting closure commit
+- **Next Milestone:** Milestone M6 (NOT STARTED — AWAITING APPROVAL)
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
@@ -137,11 +140,13 @@
   - **Interaction & Browser Verification Status:** Existing repository test tooling operates in a Node environment (`environment: 'node'`) without client DOM testing utilities (`@testing-library/react`, `@testing-library/user-event`, `jsdom`, `happy-dom`, `Playwright`, `Cypress`). `renderToStaticMarkup` verifies static markup structure and attribute invariants only, not client event handling, async state transitions, or browser clipboard APIs. Automated manual browser verification was not run in this headless verification session. Comprehensive interactive client verification remains deferred to M5 Step 6 E2E integration.
   - Total M5 Step 5 new tests: 32 tests (17 display + 15 static render).
 
-### M5 Step 6 — E2E + Security + Interaction Hardening (Implemented / Awaiting Review)
+### M5 Step 6 & Step 6.1 — E2E + Security + Provider Error Contract Fix (Completed)
 - **Files Created:**
   - `apps/api/src/tests/m5-sales-assistant-e2e-security.spec.ts` (76 E2E integration & security tests)
   - `apps/web/src/tests/sales-assistant-flow.spec.ts` (8 frontend client flow & state transition tests)
 - **Files Modified:**
+  - `apps/api/src/middleware/error-handler.ts` (normalized provider error mapping to public `AI_*` codes)
+  - `apps/api/src/tests/sales-assistant-api.spec.ts` (updated assertions for public `AI_*` codes, 35 tests)
   - `docs/progress.md`
   - `docs/decisions.md`
 - **Scope & Objectives Verified:**
@@ -176,10 +181,72 @@
   - **UUID & Nonexistent ID Defense:** Malformed UUIDs return 422 `VALIDATION_ERROR` across all 5 endpoints; random nonexistent UUIDs return 404 `NOT_FOUND` without Prisma leaks.
   - **List Ordering:** Draft list returns newest first (`createdAt DESC`) and validates against `salesAssistantDraftListResponseSchema`.
   - **Frontend Client Flow & Interaction Verification:** Live HTTP server integration tests verify `apiClient.leads` generation, listing, review mutations, 409 error classification (`isConflict: true`), 429 rate limit classification, client-side RBAC enforcement, and clipboard formatting.
-  - **Product Invariants:** Zero real AI provider SDKs; zero external message sending (no WhatsApp/email dispatch); zero Prisma migration changes; Step 7 NOT STARTED.
-  - **Test Suite Results:** Dedicated test suite (76 API tests + 8 Web client tests = 84 tests) passing with 0 failures; full repository suite (1,308 tests across 64 files) 100% green.
+  - **Product Invariants:** Zero real AI provider SDKs; zero external message sending (no WhatsApp/email dispatch); zero Prisma migration changes.
+  - **Test Suite Results:** Dedicated test suite (76 API tests + 8 Web client tests = 84 tests) passing with 0 failures; full repository suite (1,310 tests across 64 files) 100% green.
+
+### M5 Step 7 — Milestone Closure & Final Verification (Completed / Awaiting Review)
+- **Scope Audit Result:** All 21 core M5 capabilities confirmed in place and passing automated tests:
+  1. Shared Sales Assistant contracts (`packages/shared/src/schemas/sales-assistant.ts`)
+  2. Multi-tenant database persistence (`packages/db/prisma/schema.prisma` `SalesAssistantDraft`)
+  3. AI provider abstraction interface (`packages/ai/src/sales-assistant/provider.ts`)
+  4. Deterministic MOCK provider with anti-fabrication rules (`MockSalesAssistantProvider`)
+  5. Domain generation and review service (`apps/api/src/services/sales-assistant.service.ts`)
+  6. Generate draft API (`POST /api/v1/leads/:id/sales-assistant/drafts`)
+  7. List drafts API (`GET /api/v1/leads/:id/sales-assistant/drafts`)
+  8. Read draft detail API (`GET /api/v1/leads/:id/sales-assistant/drafts/:draftId`)
+  9. Approve draft API (`POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/approve`)
+  10. Reject draft API (`POST /api/v1/leads/:id/sales-assistant/drafts/:draftId/reject`)
+  11. Role-based access control (`SALES_ASSISTANT_GENERATE`, `SALES_ASSISTANT_REVIEW`, `LEADS_READ`)
+  12. Authoritative audit logging (`lead.sales_assistant_draft_generated`, `lead.sales_assistant_draft_approved`, `lead.sales_assistant_draft_rejected`)
+  13. Provider error normalization (`AI_PROVIDER_TIMEOUT`, `AI_PROVIDER_UNAVAILABLE`, `AI_PROVIDER_RATE_LIMITED`, `AI_PROVIDER_BAD_GATEWAY`, `AI_GENERATION_FAILED`)
+  14. Lead detail UI card component (`apps/web/src/components/leads/sales-assistant-card.tsx`)
+  15. Interactive generation form (draft type, language, tone, objective, customInstruction)
+  16. Draft history timeline with selection and status badges
+  17. Draft preview with email subject/body vs non-email formatted text
+  18. System warnings mapping (5 canonical warning codes)
+  19. Copy-only UX with clipboard formatting ("Copy Email" / "Copy Draft")
+  20. Human approval required badge, notice, and non-native confirmation dialogs
+  21. Comprehensive E2E and security coverage across all layers
+- **Out-of-Scope Boundaries Confirmed:**
+  - Zero external AI provider integrations (no OpenAI, Gemini, Anthropic, DeepSeek, GLM, or local LLM HTTP servers).
+  - Zero outbound message dispatch (no WhatsApp sending, email sending, SMS dispatch, phone calling, campaign execution, or scheduled dispatch).
+  - Zero auto-approval or automatic sending; human approval is strictly internal review and does NOT send messages.
+  - Zero `SENT` status; draft status is strictly `DRAFT`, `APPROVED`, or `REJECTED`.
+  - Zero Milestone M6 outreach automation.
+- **Architectural & Security Baseline Delivered:**
+  - **Pure Multi-Tenancy:** All Sales Assistant queries and mutations are strictly scoped by the `organizationId` resolved from the authenticated server-side session (`leadmate_session` cookie). Cross-organization operations (generate, list, read, approve, reject) return the repository's safe 404 `NOT_FOUND` behavior with 0 mutations, 0 state disclosure, and 0 audit entries.
+  - **Contact Safety (`PHONE != WHATSAPP`):** Phone numbers are never inferred or promoted to WhatsApp. Missing verified/public WhatsApp contact evidence triggers `UNVERIFIED_WHATSAPP` warning and suppresses WhatsApp contact projection.
+  - **Data Minimization:** Provider output schemas, audit logs, and response DTOs strictly omit internal infrastructure, raw LLM payloads, system prompts, chain-of-thought, reasoning, API tokens, and operational prompt text.
+  - **Concurrency & Terminal State Locks:** Atomic conditional `updateMany` prevents concurrent review races; repeat reviews on terminal states return 409 `CONFLICT`.
+  - **Safe Error Normalization:** Internal provider errors are cleanly mapped to safe public `AI_*` error envelopes without stack traces or sensitive internals.
+  - **Safe UI Rendering:** Plain text rendering with `whitespace-pre-wrap` and zero use of `dangerouslySetInnerHTML`.
+- **Targeted Test Inventory (292 tests across 9 files):**
+  1. `packages/shared/src/tests/sales-assistant-schemas.spec.ts` (66 tests)
+  2. `packages/db/src/tests/sales-assistant-draft-persistence.spec.ts` (35 tests)
+  3. `packages/ai/src/tests/sales-assistant-provider.spec.ts` (29 tests)
+  4. `apps/api/src/tests/sales-assistant-service.spec.ts` (11 tests)
+  5. `apps/api/src/tests/sales-assistant-api.spec.ts` (35 tests)
+  6. `apps/api/src/tests/m5-sales-assistant-e2e-security.spec.ts` (76 tests)
+  7. `apps/web/src/tests/sales-assistant-display.spec.ts` (17 tests)
+  8. `apps/web/src/tests/sales-assistant-card-ui.spec.tsx` (15 tests)
+  9. `apps/web/src/tests/sales-assistant-flow.spec.ts` (8 tests)
+- **Full Repository Verification Baseline:**
+  - Full repo test suite: **1,310 passed** across **64 files** (0 failures).
+  - TypeScript typecheck (`npm run typecheck`): **0 errors** across all 9 workspaces.
+  - Web production build (`npm run build -w apps/web`): **SUCCESS** (8/8 routes compiled).
+  - Prisma schema validation: **VALID**.
+  - Clean dependency check (`npm ci --dry-run --ignore-scripts`): **SUCCESS**.
+- **Explicit Deferred Items & Known Limitations:**
+  - *DEFERRED (Pending Vendor Selection / Production AI Infra):* Live AI provider adapters (OpenAI, Gemini, Anthropic) deferred; mock provider with anti-fabrication templates is used for offline deterministic safety.
+  - *DEFERRED (Milestone M6 — Automated Outreach & Delivery):* External delivery mechanisms (WhatsApp Cloud API, SMTP/SES email delivery, telephony integrations, outbound campaigns, auto-sending, `SENT` lifecycle tracking).
+  - *KNOWN LIMITATION (Test Infrastructure):* The repository operates with Node-based test runners without client DOM/browser test frameworks (`@testing-library/react`, Playwright, Cypress); client interaction verification is performed via live HTTP integration tests (`apiClient.leads`) against Express.
+  - *DEFERRED (Telemetry & Operations):* Live LLM token usage tracking, inference cost attribution ledger, and dynamic provider circuit-breakers deferred until live AI vendor integration.
 
 ---
+
+## Milestone M6: Automated Outreach & Delivery
+- **Status:** NOT STARTED (Awaiting M5 Closure & Milestone Review)
+
 
 
 ## Current Milestone: M4 — StoreMate Demo Website Integration
