@@ -9,3 +9,4 @@ export const CORE_PACKAGE_NAME = '@leadmate/core';
 export * from './normalization/index.js';
 export * from './duplicates/index.js';
 export * from './analysis/index.js';
+export * from './outreach/index.js';

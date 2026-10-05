@@ -2,11 +2,11 @@
 
 ## Current Milestone: M6 — Automated Outreach & Delivery 🔄 IN PROGRESS
 - **Status:** IN PROGRESS
-- **Base Checkpoint:** `3b5207fccd60e0190c1c9ba8fcbb74495d98abd5` (`feat(m6): add outreach shared contracts`)
+- **Base Checkpoint:** `98dab882f5f3a8c2c569a952ca8228d0de5419e1` (`feat(m6): add outreach delivery persistence`)
 - **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
 - **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
-- **Step 2 (Outreach Delivery Persistence + Migration):** IMPLEMENTED / AWAITING REVIEW
-- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** NOT STARTED
+- **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
+- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** IMPLEMENTED / AWAITING REVIEW
 - **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
 - **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
@@ -29,7 +29,7 @@
   - Channel compatibility matrix: `WHATSAPP` $\rightarrow$ `WHATSAPP` only; `EMAIL` $\rightarrow$ `EMAIL` only; `PROPOSAL` $\rightarrow$ `EMAIL` only; `FOLLOW_UP` $\rightarrow$ `WHATSAPP` or `EMAIL`; `CALL_SCRIPT` $\rightarrow$ non-dispatchable.
   - RBAC: `OUTREACH_READ`, `OUTREACH_SEND`, `OUTREACH_MANAGE`.
 
-### M6 Step 2 — Outreach Delivery Persistence + Migration (Implemented / Awaiting Review)
+### M6 Step 2 — Outreach Delivery Persistence + Migration (Completed)
 - **Files Created:**
   - `packages/db/prisma/migrations/20261005060210_add_m6_outreach_delivery/migration.sql`
   - `packages/db/src/tests/outreach-delivery-persistence.spec.ts`
@@ -68,6 +68,37 @@
   - `packages/db/src/tests/outreach-delivery-persistence.spec.ts`: 23 targeted persistence tests passing (enum parity, creation, defaults, idempotency unique constraint, case sensitivity, resend support, cross-tenant lead/user/draft rejection, provider update, error storage, lifecycle transitions, and referential integrity restrict/cascade).
   - Full DB regression: **118 passed** across 8 test files.
   - Full repository test suite: **1,387 passed** across 66 test files (0 failures).
+
+### M6 Step 3 — Delivery Provider Abstraction + Deterministic Mock Providers (Implemented / Awaiting Review)
+- **Files Created:**
+  - `packages/core/src/outreach/interfaces.ts`
+  - `packages/core/src/outreach/errors.ts`
+  - `packages/core/src/outreach/mock-whatsapp-provider.ts`
+  - `packages/core/src/outreach/mock-email-provider.ts`
+  - `packages/core/src/outreach/registry.ts`
+  - `packages/core/src/outreach/index.ts`
+  - `packages/core/src/tests/outreach-delivery-provider.spec.ts`
+- **Files Modified:**
+  - `packages/core/src/index.ts`
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Architecture & Implementation Delivered:**
+  - **Provider Interface:** Defined `OutreachDeliveryProvider` requiring `readonly name: string`, `readonly channel: OutreachChannel`, and `send(input): Promise<OutreachProviderSendResult>`.
+  - **Typed Transport Inputs (Discriminated Union):** Implemented `OutreachProviderSendInput` as a clean discriminated union of `WhatsAppOutreachProviderSendInput` (requires `content`, forbids `subject`/`body`) and `EmailOutreachProviderSendInput` (requires `body`, optional `subject`, forbids `content`), carrying solely immutable transport snapshot data (`deliveryId`, `organizationId`, `recipientNormalized`, `providerIdempotencyToken`).
+  - **Deterministic Result Contract:** `OutreachProviderSendResult` carries `providerName`, `providerMessageId`, and `acceptedAt` Date (zero raw HTTP payloads, headers, or tokens).
+  - **Deterministic Provider Identifiers:** Mock providers generate deterministic message IDs as `mock-wa:<deliveryId>` and `mock-email:<deliveryId>` with zero randomness, guaranteeing stable assertions and replay identification across test suites.
+  - **Idempotency Token Handling:** Accepts caller-provided `providerIdempotencyToken` derived stably from `OutreachDelivery.id` without generating fresh random tokens on retry.
+  - **Internal Provider Error Taxonomy:** `OutreachProviderErrorCode` (`PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`, `RECIPIENT_REJECTED`, `CONTENT_REJECTED`, `INVALID_PROVIDER_RESPONSE`, `CHANNEL_MISMATCH`, `INVALID_INPUT`, `DELIVERY_FAILED`).
+  - **Deterministic Retryability:** `RETRYABLE_PROVIDER_ERROR_CODES` explicitly classifies `PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, and `PROVIDER_RATE_LIMITED` as `retryable: true`; semantic rejections, channel mismatches, and input faults are `retryable: false`.
+  - **Public Error Mapper:** `mapProviderErrorToPublicErrorCode` maps internal errors directly to canonical `OutreachErrorCode` enums (`CHANNEL_MISMATCH` $\rightarrow$ `OUTREACH_CHANNEL_INCOMPATIBLE`, `INVALID_INPUT` $\rightarrow$ `OUTREACH_DELIVERY_FAILED`, `CONTENT_REJECTED` $\rightarrow$ `OUTREACH_CONTENT_REJECTED`) without string parsing.
+  - **Deterministic Mock Providers & Clock Injection:** `MockWhatsAppDeliveryProvider` and `MockEmailDeliveryProvider` support instant scenario rule matching and simulation (`TIMEOUT`, `UNAVAILABLE`, `RATE_LIMITED`, `RECIPIENT_REJECTED`, `CONTENT_REJECTED`, `INVALID_PROVIDER_RESPONSE`, `CHANNEL_MISMATCH`) with optional injectable deterministic `clock?: () => Date` (defaults to `() => new Date()`), without artificial sleeps or network calls.
+  - **Provider Registry & Resolver:** `DefaultOutreachDeliveryProviderRegistry` and `getOutreachDeliveryProvider(channel)` provide channel-based provider lookup with defensive mismatch protection.
+  - **Defensive Channel Mismatch Guard:** Both providers fail closed with non-retryable `CHANNEL_MISMATCH` (`OUTREACH_CHANNEL_INCOMPATIBLE`) when supplied with cross-channel payloads.
+  - **Safety Boundaries:** Strict contact safety preserved (`PHONE != WHATSAPP`); zero network dependencies; zero provider secrets or environment credentials; zero database or queue coupling; zero state machine mutations.
+- **Test Suite Results:**
+  - Targeted provider tests (`packages/core/src/tests/outreach-delivery-provider.spec.ts`): **47 passed (47 total)** in 15ms.
+  - Package regression (`packages/core/src/tests`): **264 passed (264 total)** across **6 test files**.
+
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
@@ -319,8 +350,8 @@
   - **RBAC:** Defined `Permissions.OUTREACH_READ`, `Permissions.OUTREACH_SEND`, `Permissions.OUTREACH_MANAGE` and mapped into `ROLE_PERMISSIONS` (SUPER_ADMIN/ADMIN/SALES_MANAGER have all 3, SALES_EXECUTIVE has READ/SEND, VIEWER has READ only).
   - **Safety Invariants:** Proved `PHONE != WHATSAPP` preserved with zero inference helpers; verified M5 `SalesAssistantDraftStatus` contains strictly `DRAFT`, `APPROVED`, `REJECTED` (no `SENT`).
   - **Test Suite:** Added 52 unit tests in `packages/shared/src/tests/outreach-schemas.spec.ts` (shared package total: 211 tests across 7 files).
-- **Step 2 (Outreach Delivery Persistence + Migration):** IMPLEMENTED / AWAITING REVIEW
-- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** NOT STARTED
+- **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
+- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** IMPLEMENTED / AWAITING REVIEW
 - **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
 - **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
@@ -592,4 +623,4 @@ Actor (`userId`) and `organizationId` always come from the authenticated session
 
 ## Next Steps (Awaiting Kickoff)
 - **Milestone M5 — AI Sales Assistant:** COMPLETE / CLOSED.
-- **Milestone M6 — Automated Outreach & Delivery:** STEP 1 (COMPLETE / COMMITTED / PUSHED). STEP 2 — Outreach Delivery Persistence + Migration (IMPLEMENTED / AWAITING REVIEW). Steps 3–10 NOT STARTED.
+- **Milestone M6 — Automated Outreach & Delivery:** STEP 1 (COMPLETE). STEP 2 (COMPLETE). STEP 3 — Delivery Provider Abstraction + Deterministic Mock Providers (IMPLEMENTED / AWAITING REVIEW). Steps 4–10 NOT STARTED.
