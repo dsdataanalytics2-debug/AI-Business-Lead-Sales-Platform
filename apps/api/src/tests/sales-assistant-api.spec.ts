@@ -507,7 +507,7 @@ describe('M5 Step 4: AI Sales Assistant API, RBAC & Service Integration', () => 
         });
 
       expect(res.status).toBe(504);
-      expect(res.body.error.code).toBe(SalesAssistantProviderErrorCode.PROVIDER_TIMEOUT);
+      expect(res.body.error.code).toBe('AI_PROVIDER_TIMEOUT');
       expect(res.body.error.message).toBe('Simulated LLM gateway timeout');
 
       // Verify 0 rows persisted
@@ -535,7 +535,28 @@ describe('M5 Step 4: AI Sales Assistant API, RBAC & Service Integration', () => 
         });
 
       expect(res.status).toBe(503);
-      expect(res.body.error.code).toBe(SalesAssistantProviderErrorCode.PROVIDER_UNAVAILABLE);
+      expect(res.body.error.code).toBe('AI_PROVIDER_UNAVAILABLE');
+    });
+
+    it('maps PROVIDER_RATE_LIMITED to 429 and creates 0 database draft rows', async () => {
+      const failingMock = new MockSalesAssistantProvider({
+        simulateFailure: true,
+        failureErrorCode: SalesAssistantProviderErrorCode.PROVIDER_RATE_LIMITED,
+        failureErrorMessage: 'AI provider rate limit reached. Please wait a moment.'
+      });
+      salesAssistantService.setDefaultProvider(failingMock);
+
+      const res = await request(app)
+        .post(`/api/v1/leads/${testLeadA1Id}/sales-assistant/drafts`)
+        .set('Cookie', repA1Cookie)
+        .send({
+          type: SalesAssistantDraftType.WHATSAPP,
+          language: SalesAssistantLanguage.ENGLISH,
+          tone: SalesAssistantTone.PROFESSIONAL
+        });
+
+      expect(res.status).toBe(429);
+      expect(res.body.error.code).toBe('AI_PROVIDER_RATE_LIMITED');
     });
 
     it('maps INVALID_PROVIDER_RESPONSE to 502 and creates 0 database draft rows', async () => {
@@ -556,7 +577,28 @@ describe('M5 Step 4: AI Sales Assistant API, RBAC & Service Integration', () => 
         });
 
       expect(res.status).toBe(502);
-      expect(res.body.error.code).toBe(SalesAssistantProviderErrorCode.INVALID_PROVIDER_RESPONSE);
+      expect(res.body.error.code).toBe('AI_PROVIDER_BAD_GATEWAY');
+    });
+
+    it('maps GENERATION_FAILED to 500 and creates 0 database draft rows', async () => {
+      const failingMock = new MockSalesAssistantProvider({
+        simulateFailure: true,
+        failureErrorCode: SalesAssistantProviderErrorCode.GENERATION_FAILED,
+        failureErrorMessage: 'Internal AI generation failure'
+      });
+      salesAssistantService.setDefaultProvider(failingMock);
+
+      const res = await request(app)
+        .post(`/api/v1/leads/${testLeadA1Id}/sales-assistant/drafts`)
+        .set('Cookie', repA1Cookie)
+        .send({
+          type: SalesAssistantDraftType.CALL_SCRIPT,
+          language: SalesAssistantLanguage.ENGLISH,
+          tone: SalesAssistantTone.PROFESSIONAL
+        });
+
+      expect(res.status).toBe(500);
+      expect(res.body.error.code).toBe('AI_GENERATION_FAILED');
     });
   });
 

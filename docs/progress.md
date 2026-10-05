@@ -2,13 +2,14 @@
 
 ## Current Milestone: M5 — AI Sales Assistant
 - **Status:** IN PROGRESS
-- **Approved Base Checkpoint:** `ae37ddebf985173b555cb3213232fdfa70accdfc` (Step 4) / `cc0d9d1ae1a1dcd3523f789c16d5347133522e10` (Step 4.1)
+- **Approved Base Checkpoint:** `20bfcd28d3dbecd9c018d15283268f24d960acf5` (Step 5)
 - **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
 - **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
 - **Step 3 (AI Provider Abstraction + Mock Provider):** COMPLETE (`39495080d5478992c539bced5f4e3bb399669daf`)
 - **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** COMPLETE (`ae37ddebf985173b555cb3213232fdfa70accdfc`, `cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
-- **Step 5 (Lead Detail Sales Assistant UI):** IMPLEMENTED / AWAITING REVIEW
-- **Step 6 (E2E Integration, Security Hardening & Milestone Closure):** NOT STARTED
+- **Step 5 (Lead Detail Sales Assistant UI):** COMPLETE (`20bfcd28d3dbecd9c018d15283268f24d960acf5`)
+- **Step 6 (E2E Integration, Security Hardening & Interaction Hardening):** IMPLEMENTED / AWAITING REVIEW
+- **Step 7 (Milestone Review & Closure):** NOT STARTED
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
@@ -135,6 +136,48 @@
   - `apps/web/src/tests/sales-assistant-card-ui.spec.tsx`: 15 static render tests (using `renderToStaticMarkup` to verify DOM element IDs, character counters, form elements, DRAFT preview, EMAIL subject/body vs non-email content, warning banners, approval notices, RBAC button visibility, and strict prohibition of send buttons/SENT state).
   - **Interaction & Browser Verification Status:** Existing repository test tooling operates in a Node environment (`environment: 'node'`) without client DOM testing utilities (`@testing-library/react`, `@testing-library/user-event`, `jsdom`, `happy-dom`, `Playwright`, `Cypress`). `renderToStaticMarkup` verifies static markup structure and attribute invariants only, not client event handling, async state transitions, or browser clipboard APIs. Automated manual browser verification was not run in this headless verification session. Comprehensive interactive client verification remains deferred to M5 Step 6 E2E integration.
   - Total M5 Step 5 new tests: 32 tests (17 display + 15 static render).
+
+### M5 Step 6 — E2E + Security + Interaction Hardening (Implemented / Awaiting Review)
+- **Files Created:**
+  - `apps/api/src/tests/m5-sales-assistant-e2e-security.spec.ts` (76 E2E integration & security tests)
+  - `apps/web/src/tests/sales-assistant-flow.spec.ts` (8 frontend client flow & state transition tests)
+- **Files Modified:**
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Scope & Objectives Verified:**
+  - **Full E2E Generation Flow:** Authenticated, authorized caller generates drafts end-to-end, persists `DRAFT` status with safe context projection, creates audit log, and returns sanitized DTO without provider internals or raw prompts.
+  - **All 5 Draft Types:** Verified `WHATSAPP`, `EMAIL`, `CALL_SCRIPT`, `PROPOSAL`, `FOLLOW_UP`. `EMAIL` draft populates `emailSubject` and `emailBody` with `content: null`. Non-email drafts populate `content` with `emailSubject: null` and `emailBody: null`.
+  - **Language & Tone Matrix:** Verified `BANGLA`, `ENGLISH`, `MIXED` across `PROFESSIONAL`, `FRIENDLY`, `CONCISE`, `PERSUASIVE` without schema drift between shared contracts, AI provider, DB, and API.
+  - **Contact Safety (`PHONE != WHATSAPP`):** Leads with phone only emit `UNVERIFIED_WHATSAPP` and do not project WhatsApp contacts. Unverified WhatsApp contacts still emit `UNVERIFIED_WHATSAPP`. Explicitly verified/confirmed WhatsApp contacts suppress `UNVERIFIED_WHATSAPP`.
+  - **Adversarial `customInstruction` Trust Boundary:** Injection payloads attempting to override rules, force auto-approval, or request secrets fail to alter status (`DRAFT`), tenant scope (`organizationId`), RBAC, or leak system prompts/keys.
+  - **Strict Request Schema Defense:** 15 prohibited fields (`organizationId`, `createdByUserId`, `provider`, `model`, `systemPrompt`, `apiKey`, `warnings`, `content`, `emailSubject`, `emailBody`, `status`, `approvedAt`, `approvedByUserId`, `autoSend`, `sendNow`) strictly rejected with 422 `VALIDATION_ERROR` and 0 persisted draft rows.
+  - **Boundary Length Enforcement:** `objective` accepted at 300 chars, rejected at 301 (422); `customInstruction` accepted at 1000 chars, rejected at 1001 (422).
+  - **Multi-Tenant Isolation:** Org A user cannot generate, read, list, approve, or reject drafts of Org B leads (returns 404 `NOT_FOUND` with 0 state mutations and 0 audit events).
+  - **Cross-Lead Isolation:** Draft belonging to Lead A cannot be accessed or reviewed via Lead B route even within same organization (returns 404 `NOT_FOUND`).
+  - **RBAC Matrix:**
+    - Generation: `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `SALES_EXECUTIVE` allowed (201); `VIEWER` denied (403 `FORBIDDEN`, 0 drafts, 0 audits).
+    - Review: `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER` allowed (200); `SALES_EXECUTIVE` and `VIEWER` denied (403 `FORBIDDEN`, 0 mutations).
+    - Read/List: All authenticated organization roles including `VIEWER` permitted via `LEADS_READ`.
+  - **DRAFT-Only Human Approval Invariant:** Generation can never output or persist `APPROVED`, `REJECTED`, or `SENT`. Every generation produces `DRAFT`.
+  - **Review Transitions & Attribution:** Approve sets `approvedAt` and `approvedByUserId`. Reject sets `rejectedAt` and `rejectedByUserId`. Emits audit log and read endpoints reflect updated review status.
+  - **Terminal State Enforcement:** Duplicate reviews (`APPROVED -> approve/reject`, `REJECTED -> reject/approve`) rejected with 409 `CONFLICT` without reviewer rewrite or duplicate audits.
+  - **Concurrent Review Race Protection:** Atomic `updateMany` conditional lock ensures simultaneous review attempts resolve with exactly one winning terminal transition (200) and one conflict (409), leaving exactly one audit log.
+  - **Provider Failure Normalization & Contract Hardening:**
+    - Internal provider-domain errors (`PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`, `INVALID_PROVIDER_RESPONSE`, `GENERATION_FAILED`) are strictly translated in `errorHandler` into canonical public API error codes:
+      - `PROVIDER_TIMEOUT` $\rightarrow$ HTTP 504 `AI_PROVIDER_TIMEOUT` ("AI provider request timed out. Please try again.")
+      - `PROVIDER_UNAVAILABLE` $\rightarrow$ HTTP 503 `AI_PROVIDER_UNAVAILABLE` ("AI provider is currently unavailable. Please try again later.")
+      - `PROVIDER_RATE_LIMITED` $\rightarrow$ HTTP 429 `AI_PROVIDER_RATE_LIMITED` ("AI provider rate limit reached. Please wait a moment.")
+      - `INVALID_PROVIDER_RESPONSE` $\rightarrow$ HTTP 502 `AI_PROVIDER_BAD_GATEWAY` ("AI provider returned an invalid response. Please try again.")
+      - `GENERATION_FAILED` $\rightarrow$ HTTP 500 `AI_GENERATION_FAILED` ("AI generation failed. Please try again.")
+    - Corrected contract regression in Step 6.1 where internal provider error codes were previously emitted directly in HTTP responses rather than public `AI_*` codes.
+    - Zero draft persistence, zero success audits, and zero stack trace or internal credential leakage across all failure modes.
+  - **Audit & Response Data Minimization:** Audit logs and API responses strictly omit `content`, `emailBody`, `emailSubject`, `customInstruction`, `systemPrompt`, raw provider payloads, API keys, and token usage.
+  - **Rate Limiter Hardening:** Generation strictly limited to 30 requests per 60 seconds per user with `429 RATE_LIMITED` and `Retry-After` header.
+  - **UUID & Nonexistent ID Defense:** Malformed UUIDs return 422 `VALIDATION_ERROR` across all 5 endpoints; random nonexistent UUIDs return 404 `NOT_FOUND` without Prisma leaks.
+  - **List Ordering:** Draft list returns newest first (`createdAt DESC`) and validates against `salesAssistantDraftListResponseSchema`.
+  - **Frontend Client Flow & Interaction Verification:** Live HTTP server integration tests verify `apiClient.leads` generation, listing, review mutations, 409 error classification (`isConflict: true`), 429 rate limit classification, client-side RBAC enforcement, and clipboard formatting.
+  - **Product Invariants:** Zero real AI provider SDKs; zero external message sending (no WhatsApp/email dispatch); zero Prisma migration changes; Step 7 NOT STARTED.
+  - **Test Suite Results:** Dedicated test suite (76 API tests + 8 Web client tests = 84 tests) passing with 0 failures; full repository suite (1,308 tests across 64 files) 100% green.
 
 ---
 

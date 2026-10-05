@@ -56,16 +56,35 @@ export function errorHandler(
   ) {
     const providerErr = err as SalesAssistantProviderError;
     let statusCode = 500;
-    if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_UNAVAILABLE) statusCode = 503;
-    else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_TIMEOUT) statusCode = 504;
-    else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_RATE_LIMITED) statusCode = 429;
-    else if (providerErr.code === SalesAssistantProviderErrorCode.INVALID_PROVIDER_RESPONSE) statusCode = 502;
-    else if (providerErr.code === SalesAssistantProviderErrorCode.GENERATION_FAILED) statusCode = 500;
+    let publicCode = 'AI_GENERATION_FAILED';
+    let defaultSafeMessage = 'AI generation failed. Please try again.';
+
+    if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_TIMEOUT) {
+      statusCode = 504;
+      publicCode = 'AI_PROVIDER_TIMEOUT';
+      defaultSafeMessage = 'AI provider request timed out. Please try again.';
+    } else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_UNAVAILABLE) {
+      statusCode = 503;
+      publicCode = 'AI_PROVIDER_UNAVAILABLE';
+      defaultSafeMessage = 'AI provider is currently unavailable. Please try again later.';
+    } else if (providerErr.code === SalesAssistantProviderErrorCode.PROVIDER_RATE_LIMITED) {
+      statusCode = 429;
+      publicCode = 'AI_PROVIDER_RATE_LIMITED';
+      defaultSafeMessage = 'AI provider rate limit reached. Please wait a moment.';
+    } else if (providerErr.code === SalesAssistantProviderErrorCode.INVALID_PROVIDER_RESPONSE) {
+      statusCode = 502;
+      publicCode = 'AI_PROVIDER_BAD_GATEWAY';
+      defaultSafeMessage = 'AI provider returned an invalid response. Please try again.';
+    } else if (providerErr.code === SalesAssistantProviderErrorCode.GENERATION_FAILED) {
+      statusCode = 500;
+      publicCode = 'AI_GENERATION_FAILED';
+      defaultSafeMessage = 'AI generation failed. Please try again.';
+    }
 
     res.status(statusCode).json({
       error: {
-        code: providerErr.code,
-        message: providerErr.safeMessage,
+        code: publicCode,
+        message: providerErr.safeMessage || defaultSafeMessage,
         requestId
       }
     });
