@@ -245,12 +245,25 @@
 ---
 
 ## Milestone M6: Automated Outreach & Delivery
-- **Status:** STEP 0 — Architecture + Scope Freeze (AWAITING FINAL REVIEW)
-- **Approved Base Checkpoint:** `e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`
+- **Status:** STEP 1 — Shared Outreach Contracts + Permissions (IMPLEMENTED / AWAITING REVIEW)
+- **Approved Base Checkpoint:** `e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`
 - **M5 Status:** COMPLETE / CLOSED (`e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`)
-- **Step 0 (Architecture & Scope Freeze):** COMPLETED / AWAITING FINAL REVIEW
+- **Step 0 (Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
   - Created `docs/m6-outreach-architecture.md` defining delivery domain model (`OutreachDelivery`), core channels (`WHATSAPP`, `EMAIL`; `CALL` deferred from generic delivery), draft compatibility matrix, strict `PHONE != WHATSAPP` contact safety, recipient provenance, delivery state machine (`REQUESTED`, `QUEUED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`, `CANCELLED` with attempt failure != delivery failure, `PROCESSING -> QUEUED` on retryable backoff, and terminal `FAILED` only on exhausted budget or non-retryable error), immutable content snapshot + canonical JSON SHA-256 hash (`approvedDraftSnapshotHash`), recipient snapshot, mandatory client `Idempotency-Key` header with resend semantics, minimal BullMQ job payload (`{ deliveryId: string }`), worker database authority model, provider abstraction & deterministic mock provider strategy, retry/failure classification, provider-specific webhook verification, two-gate suppression defense (API + worker pre-flight), atomic cancellation race protection, provider call execution outside DB transactions, RBAC (`OUTREACH_SEND`, `OUTREACH_READ`, `OUTREACH_MANAGE`), Sales Executive assigned-leads-only rule, API contracts, audit events, data minimization, UI workflow & confirmation modal, bulk campaign boundary frozen as deferred to an unassigned future campaign milestone (preserving M7 for Team Management + Sales Dashboard + Analytics), Step 9 live provider-specific verification requirements, 11-stage roadmap (Step 0 architecture phase + Steps 1–10 implementation/closure), threat model, and open product questions.
-- **Step 1 (Shared Outreach Contracts & Permissions):** NOT STARTED
+- **Step 1 (Shared Outreach Contracts & Permissions):** IMPLEMENTED / AWAITING REVIEW
+  - Created `packages/shared/src/schemas/outreach.ts` and updated `packages/shared/src/enums.ts`, `packages/shared/src/permissions.ts`, `packages/shared/src/index.ts`.
+  - **Channels:** Defined `OutreachChannel` (`WHATSAPP`, `EMAIL`). `CALL` and `SMS` are strictly omitted.
+  - **Statuses & Terminal States:** Defined `OutreachDeliveryStatus` (7 statuses: `REQUESTED`, `QUEUED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`, `CANCELLED`), `OUTREACH_TERMINAL_STATUSES`, and `isOutreachDeliveryTerminal`.
+  - **State Machine Transitions:** Implemented `ALLOWED_OUTREACH_DELIVERY_TRANSITIONS` and `canTransitionOutreachStatus` guaranteeing attempt failure != delivery failure (`PROCESSING -> QUEUED` retry) and strict immutability of terminal states.
+  - **Public Error Codes:** Defined `OutreachErrorCode` with 13 canonical public error codes.
+  - **Dispatch Schema:** Implemented strict `sendOutreachDeliveryRequestSchema` requiring `draftId` and `channel`, optional `recipientContactId`, and strictly rejecting all unknown/internal/tampering fields via `.strict()`.
+  - **Idempotency Key:** Implemented `outreachIdempotencyKeySchema` validating case-preserving tokens (8-128 chars, `^[A-Za-z0-9._:-]+$`).
+  - **Draft / Channel Compatibility:** Implemented `ALLOWED_CHANNELS_FOR_DRAFT_TYPE`, `getAllowedOutreachChannelsForDraftType`, and `isOutreachChannelCompatible` enforcing single-channel mappings for `WHATSAPP`/`EMAIL`/`PROPOSAL`, explicit channel selection for `FOLLOW_UP`, and zero valid channels for `CALL_SCRIPT`.
+  - **Public DTOs:** Implemented safe public `outreachDeliverySummarySchema`, `outreachDeliveryResponseSchema`, and `outreachDeliveryListResponseSchema` with strict data minimization (zero raw recipients, snapshots, hashes, provider credentials, or providerMessageIds exposed).
+  - **Recipient Masking:** Implemented deterministic `maskRecipient` utility for phone and email destinations.
+  - **RBAC:** Defined `Permissions.OUTREACH_READ`, `Permissions.OUTREACH_SEND`, `Permissions.OUTREACH_MANAGE` and mapped into `ROLE_PERMISSIONS` (SUPER_ADMIN/ADMIN/SALES_MANAGER have all 3, SALES_EXECUTIVE has READ/SEND, VIEWER has READ only).
+  - **Safety Invariants:** Proved `PHONE != WHATSAPP` preserved with zero inference helpers; verified M5 `SalesAssistantDraftStatus` contains strictly `DRAFT`, `APPROVED`, `REJECTED` (no `SENT`).
+  - **Test Suite:** Added 52 unit tests in `packages/shared/src/tests/outreach-schemas.spec.ts` (shared package total: 211 tests across 7 files).
 - **Step 2 (Outreach Delivery Persistence & Migration):** NOT STARTED
 - **Step 3 (Provider Abstraction & Deterministic Mock Providers):** NOT STARTED
 - **Step 4 (Outreach Domain Service & BullMQ Queue):** NOT STARTED
@@ -524,4 +537,4 @@ Actor (`userId`) and `organizationId` always come from the authenticated session
 
 ## Next Steps (Awaiting Kickoff)
 - **Milestone M5 — AI Sales Assistant:** COMPLETE / CLOSED.
-- **Milestone M6 — Automated Outreach & Delivery:** STEP 0 — Architecture + Scope Freeze (AWAITING FINAL REVIEW). Steps 1–10 NOT STARTED.
+- **Milestone M6 — Automated Outreach & Delivery:** STEP 1 — Shared Outreach Contracts + Permissions (IMPLEMENTED / AWAITING REVIEW). Steps 2–10 NOT STARTED.

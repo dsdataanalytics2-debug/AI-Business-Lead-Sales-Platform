@@ -416,3 +416,102 @@ export enum SalesAssistantWarning {
   UNSUPPORTED_CLAIM_REMOVED = 'UNSUPPORTED_CLAIM_REMOVED',
   LIMITED_LEAD_CONTEXT = 'LIMITED_LEAD_CONTEXT'
 }
+
+/* =========================================================
+ * M6: Automated Outreach & Delivery Enums & State Machine
+ * ========================================================= */
+
+/**
+ * Core generic channels for outbound delivery.
+ * CALL is deferred from generic message delivery to a dedicated calling phase.
+ */
+export enum OutreachChannel {
+  WHATSAPP = 'WHATSAPP',
+  EMAIL = 'EMAIL'
+}
+
+/**
+ * Canonical lifecycle status for an OutreachDelivery transport record.
+ */
+export enum OutreachDeliveryStatus {
+  REQUESTED = 'REQUESTED',
+  QUEUED = 'QUEUED',
+  PROCESSING = 'PROCESSING',
+  SENT = 'SENT',
+  DELIVERED = 'DELIVERED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED'
+}
+
+/**
+ * Terminal states for outreach delivery transport.
+ * Terminal states are immutable: no further transitions are permitted.
+ */
+export const OUTREACH_TERMINAL_STATUSES: readonly OutreachDeliveryStatus[] = [
+  OutreachDeliveryStatus.DELIVERED,
+  OutreachDeliveryStatus.FAILED,
+  OutreachDeliveryStatus.CANCELLED
+] as const;
+
+export function isOutreachDeliveryTerminal(status: OutreachDeliveryStatus): boolean {
+  return (OUTREACH_TERMINAL_STATUSES as readonly OutreachDeliveryStatus[]).includes(status);
+}
+
+/**
+ * Deterministic state transition table for OutreachDelivery.
+ * Core rule: attempt failure != delivery failure.
+ * Retries transition PROCESSING -> QUEUED.
+ * FAILED is reached only when retry budget is exhausted or error is non-retryable.
+ */
+export const ALLOWED_OUTREACH_DELIVERY_TRANSITIONS: Record<
+  OutreachDeliveryStatus,
+  readonly OutreachDeliveryStatus[]
+> = {
+  [OutreachDeliveryStatus.REQUESTED]: [
+    OutreachDeliveryStatus.QUEUED,
+    OutreachDeliveryStatus.CANCELLED
+  ],
+  [OutreachDeliveryStatus.QUEUED]: [
+    OutreachDeliveryStatus.PROCESSING,
+    OutreachDeliveryStatus.CANCELLED
+  ],
+  [OutreachDeliveryStatus.PROCESSING]: [
+    OutreachDeliveryStatus.SENT,
+    OutreachDeliveryStatus.QUEUED,
+    OutreachDeliveryStatus.FAILED
+  ],
+  [OutreachDeliveryStatus.SENT]: [
+    OutreachDeliveryStatus.DELIVERED,
+    OutreachDeliveryStatus.FAILED
+  ],
+  [OutreachDeliveryStatus.DELIVERED]: [],
+  [OutreachDeliveryStatus.FAILED]: [],
+  [OutreachDeliveryStatus.CANCELLED]: []
+} as const;
+
+export function canTransitionOutreachStatus(
+  from: OutreachDeliveryStatus,
+  to: OutreachDeliveryStatus
+): boolean {
+  const allowed = ALLOWED_OUTREACH_DELIVERY_TRANSITIONS[from];
+  return allowed ? (allowed as readonly OutreachDeliveryStatus[]).includes(to) : false;
+}
+
+/**
+ * Public outreach error codes returned by the API or emitted by delivery pipeline.
+ */
+export enum OutreachErrorCode {
+  OUTREACH_IDEMPOTENCY_KEY_REUSED = 'OUTREACH_IDEMPOTENCY_KEY_REUSED',
+  OUTREACH_DRAFT_NOT_APPROVED = 'OUTREACH_DRAFT_NOT_APPROVED',
+  OUTREACH_DELIVERY_IN_FLIGHT = 'OUTREACH_DELIVERY_IN_FLIGHT',
+  OUTREACH_RECIPIENT_INVALID = 'OUTREACH_RECIPIENT_INVALID',
+  OUTREACH_RECIPIENT_SUPPRESSED = 'OUTREACH_RECIPIENT_SUPPRESSED',
+  OUTREACH_CHANNEL_INCOMPATIBLE = 'OUTREACH_CHANNEL_INCOMPATIBLE',
+  OUTREACH_RECIPIENT_REJECTED = 'OUTREACH_RECIPIENT_REJECTED',
+  OUTREACH_CONTENT_REJECTED = 'OUTREACH_CONTENT_REJECTED',
+  OUTREACH_PROVIDER_TIMEOUT = 'OUTREACH_PROVIDER_TIMEOUT',
+  OUTREACH_PROVIDER_UNAVAILABLE = 'OUTREACH_PROVIDER_UNAVAILABLE',
+  OUTREACH_PROVIDER_RATE_LIMITED = 'OUTREACH_PROVIDER_RATE_LIMITED',
+  OUTREACH_PROVIDER_BAD_GATEWAY = 'OUTREACH_PROVIDER_BAD_GATEWAY',
+  OUTREACH_DELIVERY_FAILED = 'OUTREACH_DELIVERY_FAILED'
+}

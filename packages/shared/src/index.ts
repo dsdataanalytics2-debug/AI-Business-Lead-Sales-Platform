@@ -11,3 +11,4 @@ export * from './schemas/crm.js';
 export * from './schemas/follow-up.js';
 export * from './schemas/demo-website.js';
 export * from './schemas/sales-assistant.js';
+export * from './schemas/outreach.js';
