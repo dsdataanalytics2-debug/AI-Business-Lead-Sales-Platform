@@ -11,8 +11,8 @@
 - **Step 5 (Lead Detail Sales Assistant UI):** COMPLETE (`20bfcd28d3dbecd9c018d15283268f24d960acf5`)
 - **Step 6 (E2E Integration, Security Hardening & Interaction Hardening):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
 - **Step 6.1 (Fix Public AI Provider Error Contract):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
-- **Step 7 (Milestone Closure & Audit):** COMPLETE / awaiting closure commit
-- **Next Milestone:** Milestone M6 (NOT STARTED — AWAITING APPROVAL)
+- **Step 7 (Milestone Closure & Audit):** COMPLETE (`e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`)
+- **Next Milestone:** Milestone M6 — Automated Outreach & Delivery (STEP 0 — Architecture + Scope Freeze)
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
@@ -245,7 +245,21 @@
 ---
 
 ## Milestone M6: Automated Outreach & Delivery
-- **Status:** NOT STARTED (Awaiting M5 Closure & Milestone Review)
+- **Status:** STEP 0 — Architecture + Scope Freeze (AWAITING FINAL REVIEW)
+- **Approved Base Checkpoint:** `e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`
+- **M5 Status:** COMPLETE / CLOSED (`e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`)
+- **Step 0 (Architecture & Scope Freeze):** COMPLETED / AWAITING FINAL REVIEW
+  - Created `docs/m6-outreach-architecture.md` defining delivery domain model (`OutreachDelivery`), core channels (`WHATSAPP`, `EMAIL`; `CALL` deferred from generic delivery), draft compatibility matrix, strict `PHONE != WHATSAPP` contact safety, recipient provenance, delivery state machine (`REQUESTED`, `QUEUED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`, `CANCELLED` with attempt failure != delivery failure, `PROCESSING -> QUEUED` on retryable backoff, and terminal `FAILED` only on exhausted budget or non-retryable error), immutable content snapshot + canonical JSON SHA-256 hash (`approvedDraftSnapshotHash`), recipient snapshot, mandatory client `Idempotency-Key` header with resend semantics, minimal BullMQ job payload (`{ deliveryId: string }`), worker database authority model, provider abstraction & deterministic mock provider strategy, retry/failure classification, provider-specific webhook verification, two-gate suppression defense (API + worker pre-flight), atomic cancellation race protection, provider call execution outside DB transactions, RBAC (`OUTREACH_SEND`, `OUTREACH_READ`, `OUTREACH_MANAGE`), Sales Executive assigned-leads-only rule, API contracts, audit events, data minimization, UI workflow & confirmation modal, bulk campaign boundary frozen as deferred to an unassigned future campaign milestone (preserving M7 for Team Management + Sales Dashboard + Analytics), Step 9 live provider-specific verification requirements, 11-stage roadmap (Step 0 architecture phase + Steps 1–10 implementation/closure), threat model, and open product questions.
+- **Step 1 (Shared Outreach Contracts & Permissions):** NOT STARTED
+- **Step 2 (Outreach Delivery Persistence & Migration):** NOT STARTED
+- **Step 3 (Provider Abstraction & Deterministic Mock Providers):** NOT STARTED
+- **Step 4 (Outreach Domain Service & BullMQ Queue):** NOT STARTED
+- **Step 5 (Outreach REST API, RBAC & Audit Logging):** NOT STARTED
+- **Step 6 (Lead Detail Outreach Delivery UI):** NOT STARTED
+- **Step 7 (Worker Execution & Webhook Status Processing):** NOT STARTED
+- **Step 8 (Comprehensive E2E & Security Hardening):** NOT STARTED
+- **Step 9 (Live Provider Adapter Integration & Provider-Specific Verification):** NOT STARTED
+- **Step 10 (Milestone Review & Closure):** NOT STARTED
 
 
 
@@ -509,5 +523,5 @@ Actor (`userId`) and `organizationId` always come from the authenticated session
 ---
 
 ## Next Steps (Awaiting Kickoff)
-- **Milestone M4 — StoreMate Demo Website Integration:** COMPLETE / CLOSED.
-- **Milestone M5:** NOT STARTED. Awaiting explicit approval and kickoff instructions.
+- **Milestone M5 — AI Sales Assistant:** COMPLETE / CLOSED.
+- **Milestone M6 — Automated Outreach & Delivery:** STEP 0 — Architecture + Scope Freeze (AWAITING FINAL REVIEW). Steps 1–10 NOT STARTED.
