@@ -15,6 +15,7 @@
     "@leadmate/core": "*",
     "@leadmate/datasources": "*",
     "@leadmate/db": "*",
+    "@leadmate/queues": "*",
     "@leadmate/shared": "*",
     "@leadmate/storemate": "*",
     "argon2": "^0.41.1",

@@ -2,12 +2,12 @@
 
 ## Current Milestone: M6 — Automated Outreach & Delivery 🔄 IN PROGRESS
 - **Status:** IN PROGRESS
-- **Base Checkpoint:** `98dab882f5f3a8c2c569a952ca8228d0de5419e1` (`feat(m6): add outreach delivery persistence`)
+- **Base Checkpoint:** `11f0c3f0d80d6675f69c566dc72f6a1805464a88` (`feat(m6): add outreach delivery provider abstraction`)
 - **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
 - **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
 - **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
-- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** IMPLEMENTED / AWAITING REVIEW
-- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
+- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** COMPLETE (`11f0c3f0d80d6675f69c566dc72f6a1805464a88`)
+- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** IMPLEMENTED / AWAITING REVIEW
 - **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
@@ -69,7 +69,7 @@
   - Full DB regression: **118 passed** across 8 test files.
   - Full repository test suite: **1,387 passed** across 66 test files (0 failures).
 
-### M6 Step 3 — Delivery Provider Abstraction + Deterministic Mock Providers (Implemented / Awaiting Review)
+### M6 Step 3 — Delivery Provider Abstraction + Deterministic Mock Providers (Completed)
 - **Files Created:**
   - `packages/core/src/outreach/interfaces.ts`
   - `packages/core/src/outreach/errors.ts`
@@ -98,6 +98,50 @@
 - **Test Suite Results:**
   - Targeted provider tests (`packages/core/src/tests/outreach-delivery-provider.spec.ts`): **47 passed (47 total)** in 15ms.
   - Package regression (`packages/core/src/tests`): **264 passed (264 total)** across **6 test files**.
+
+### M6 Step 4 — Outreach Service + Idempotent Request/Queue Creation + Suppression Guard (Completed)
+- **Files Created:**
+  - `packages/core/src/outreach/service-errors.ts`
+  - `packages/core/src/outreach/hashing.ts`
+  - `packages/core/src/outreach/queue.ts`
+  - `packages/core/src/outreach/outreach-delivery-service.ts`
+  - `packages/core/src/tests/outreach-delivery-service.spec.ts`
+  - `packages/queues/package.json`
+  - `packages/queues/tsconfig.json`
+  - `packages/queues/src/config/redis.ts`
+  - `packages/queues/src/index.ts`
+  - `packages/queues/src/outreach-delivery/bullmq-outreach-delivery-queue.ts`
+  - `packages/queues/src/tests/bullmq-outreach-delivery-queue.spec.ts`
+  - `apps/worker/src/queues/outreach-delivery.queue.ts`
+- **Files Modified:**
+  - `packages/core/src/outreach/index.ts`
+  - `apps/api/package.json`
+  - `apps/worker/package.json`
+  - `apps/worker/src/index.ts`
+  - `package-lock.json`
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Architecture & Implementation Delivered:**
+  - **Domain Service & Queue Decoupling:** Implemented `OutreachDeliveryService` in `@leadmate/core` accepting injectable `OutreachDeliveryQueue` interface, keeping `@leadmate/core` completely clean of BullMQ / ioredis dependencies. Extracted concrete BullMQ producer into `@leadmate/queues` (`BullMQOutreachDeliveryQueue`) so `apps/api` can instantiate the service without importing `apps/worker`.
+  - **Role & Entity-Aware Authorization:** Enforces role-based permissions (`OUTREACH_SEND` for `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `SALES_EXECUTIVE`; denies `VIEWER` with HTTP 403 `FORBIDDEN`). For `SALES_EXECUTIVE`, enforces entity assignment boundary (`lead.assignedUserId === authenticatedUserId`), preventing unassigned lead dispatches.
+  - **Tenant Isolation & Invariants:** Strictly scopes entity lookups by `organizationId`. Enforces that `draft.leadId === lead.id` and that the draft is in `APPROVED` status with `approvedAt` and `approvedByUserId` present (rejects unapproved drafts with 409 `OUTREACH_DRAFT_NOT_APPROVED`).
+  - **Channel Compatibility Matrix:** Enforces compatibility (`WHATSAPP` draft $\rightarrow$ `WHATSAPP` channel only; `EMAIL` / `PROPOSAL` draft $\rightarrow$ `EMAIL` channel only; `FOLLOW_UP` draft $\rightarrow$ `WHATSAPP` or `EMAIL`; `CALL_SCRIPT` $\rightarrow$ non-dispatchable). Incompatible requests fail closed with 422 `OUTREACH_CHANNEL_INCOMPATIBLE`.
+  - **Recipient Trust & Contact Provenance (PHONE != WHATSAPP):** For WhatsApp dispatches, requires explicit CRM contact with `ContactType.WHATSAPP` and verified/public provenance (`status === VERIFIED` or `whatsappStatus IN [PUBLICLY_LISTED, CONFIRMED]`). Prohibits auto-promoting plain `PHONE` numbers. For Email, normalizes destination to trimmed lowercase from `LeadContact` or `lead.primaryEmail`.
+  - **Suppression Gate A vs Idempotency Ordering:** Strict 4-case ordering: (1) existing non-REQUESTED replay returns historical delivery immediately without re-evaluating Gate A; (2) existing REQUESTED recovery re-evaluates Gate A before retrying enqueue; (3) same key with different fingerprint throws 409 `OUTREACH_IDEMPOTENCY_KEY_REUSED`; (4) new delivery request validates Gate A before DB row creation. Gate B is deferred to Step 7 worker pre-send.
+  - **Immutable Snapshot & Canonical Hashing:** `approvedDraftSnapshotHash` strictly hashes outbound transport content (`channel`, `subject`, `body`, `content`). `requestFingerprint` captures semantic request identity (`organizationId`, `leadId`, `draftId`, `channel`, `recipientContactId`, `recipientNormalized`).
+  - **Idempotency & Concurrency Protection:** Scoped by `@@unique([organizationId, idempotencyKey])`. Handles concurrent insert races (`P2002`) safely.
+  - **Conditional State Transition & Race Safety:** Transitions `REQUESTED -> QUEUED` conditionally via `updateMany({ where: { id, organizationId, status: 'REQUESTED' } })`. If 0 rows updated, reloads authoritative delivery and preserves newer state (`CANCELLED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`).
+  - **Queue Payload Minimization:** BullMQ job payload is strictly `{ deliveryId: string }` with deterministic `jobId = deliveryId`, with zero PII, message bodies, or auth secrets.
+- **Test Suite Results:**
+  - Targeted service tests (`packages/core/src/tests/outreach-delivery-service.spec.ts`): **52 passed (52 total)**.
+  - Queue adapter tests (`packages/queues/src/tests/bullmq-outreach-delivery-queue.spec.ts`): **3 passed (3 total)**.
+  - Core package regression (`packages/core/src/tests`): **316 passed (316 total)** across **7 test files**.
+  - Shared package regression (`packages/shared/src/tests`): **213 passed (213 total)** across **7 test files**.
+  - Database package regression (`packages/db/src/tests`): **118 passed (118 total)** across **8 test files**.
+  - Worker package tests (`apps/worker/src/tests`): **2 passed (2 total)** across **1 test file**.
+  - Full repository test suite: **1,489 passed (1,489 total)** across **69 test files** (0 failures).
+
+
 
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)

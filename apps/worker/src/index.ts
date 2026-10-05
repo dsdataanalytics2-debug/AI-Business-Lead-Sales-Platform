@@ -9,13 +9,24 @@ import {
   enqueueMaintenanceHealthJob
 } from './queues/maintenance.queue.js';
 
+import {
+  outreachDeliveryQueue,
+  createOutreachDeliveryQueue,
+  OUTREACH_DELIVERY_QUEUE_NAME,
+  enqueueOutreachDeliveryJob
+} from './queues/outreach-delivery.queue.js';
+
 export {
   createMaintenanceQueue,
   createMaintenanceWorker,
   MAINTENANCE_QUEUE_NAME,
   maintenanceWorker,
   maintenanceQueue,
-  enqueueMaintenanceHealthJob
+  enqueueMaintenanceHealthJob,
+  outreachDeliveryQueue,
+  createOutreachDeliveryQueue,
+  OUTREACH_DELIVERY_QUEUE_NAME,
+  enqueueOutreachDeliveryJob
 };
 
 async function startWorker() {
