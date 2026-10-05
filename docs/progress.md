@@ -1,18 +1,73 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M5 — AI Sales Assistant ✅ COMPLETE
-- **Status:** COMPLETE / CLOSED
-- **Final M5 Checkpoint:** `748600e3a8fd6007c6a86b21611254dacc60d304` (`fix(m5): harden sales assistant provider error contract`)
-- **Step 1 (AI Sales Assistant Contracts + Guardrails):** COMPLETE (`a09cd82b88a671f3408abdf3a472dd8ceb8c9ee7`)
-- **Step 2 (Sales Assistant Draft Persistence + Migration):** COMPLETE (`59a06bff3a51f6a7d7790b3845874bfa1359c867`)
-- **Step 3 (AI Provider Abstraction + Mock Provider):** COMPLETE (`39495080d5478992c539bced5f4e3bb399669daf`)
-- **Step 4 (Sales Assistant API Endpoints, RBAC & Audit Logging):** COMPLETE (`ae37ddebf985173b555cb3213232fdfa70accdfc`, `cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
-- **Step 4.1 (Sales Assistant API Regression Tests):** COMPLETE (`cc0d9d1ae1a1dcd3523f789c16d5347133522e10`)
-- **Step 5 (Lead Detail Sales Assistant UI):** COMPLETE (`20bfcd28d3dbecd9c018d15283268f24d960acf5`)
-- **Step 6 (E2E Integration, Security Hardening & Interaction Hardening):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
-- **Step 6.1 (Fix Public AI Provider Error Contract):** COMPLETE (`748600e3a8fd6007c6a86b21611254dacc60d304`)
-- **Step 7 (Milestone Closure & Audit):** COMPLETE (`e1342b5a1d5ee03909b3d7e375dba3faba6a0c21`)
-- **Next Milestone:** Milestone M6 — Automated Outreach & Delivery (STEP 0 — Architecture + Scope Freeze)
+## Current Milestone: M6 — Automated Outreach & Delivery 🔄 IN PROGRESS
+- **Status:** IN PROGRESS
+- **Base Checkpoint:** `3b5207fccd60e0190c1c9ba8fcbb74495d98abd5` (`feat(m6): add outreach shared contracts`)
+- **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
+- **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
+- **Step 2 (Outreach Delivery Persistence + Migration):** IMPLEMENTED / AWAITING REVIEW
+- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** NOT STARTED
+- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
+- **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
+- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
+- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
+- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED
+- **Step 9 (Live Provider Adapter Integration):** NOT STARTED
+- **Step 10 (Milestone Review & Closure):** NOT STARTED
+
+### M6 Step 1 — Shared Outreach Contracts + Permissions (Completed)
+- **Files Created:** `packages/shared/src/schemas/outreach.ts`, `packages/shared/src/tests/outreach-schemas.spec.ts`.
+- **Files Modified:** `packages/shared/src/enums.ts`, `packages/shared/src/permissions.ts`, `packages/shared/src/index.ts`, `docs/progress.md`.
+- **Contracts Implemented:**
+  - `OutreachChannel`: `WHATSAPP`, `EMAIL`.
+  - `OutreachDeliveryStatus`: `REQUESTED`, `QUEUED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`, `CANCELLED` (terminal states: `DELIVERED`, `FAILED`, `CANCELLED`).
+  - State machine transition validator: `isValidOutreachDeliveryTransition(from, to)`.
+  - Error enum: `OutreachErrorCode` (13 canonical codes).
+  - Public error contract: `lastErrorCode` strictly typed as `z.nativeEnum(OutreachErrorCode).nullable().optional()`; arbitrary/internal strings strictly rejected.
+  - Idempotency header contract: `outreachIdempotencyKeyHeaderSchema` (8-128 chars, case-preserving regex `^[A-Za-z0-9._:-]+$`).
+  - Send request schema: `sendOutreachDeliveryRequestSchema` marked `.strict()` with strict rejection of client-injected provider, status, or context overrides.
+  - Channel compatibility matrix: `WHATSAPP` $\rightarrow$ `WHATSAPP` only; `EMAIL` $\rightarrow$ `EMAIL` only; `PROPOSAL` $\rightarrow$ `EMAIL` only; `FOLLOW_UP` $\rightarrow$ `WHATSAPP` or `EMAIL`; `CALL_SCRIPT` $\rightarrow$ non-dispatchable.
+  - RBAC: `OUTREACH_READ`, `OUTREACH_SEND`, `OUTREACH_MANAGE`.
+
+### M6 Step 2 — Outreach Delivery Persistence + Migration (Implemented / Awaiting Review)
+- **Files Created:**
+  - `packages/db/prisma/migrations/20261005060210_add_m6_outreach_delivery/migration.sql`
+  - `packages/db/src/tests/outreach-delivery-persistence.spec.ts`
+- **Files Modified:**
+  - `packages/db/prisma/schema.prisma`
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Data Model & Invariants Implemented:**
+  - **Prisma Enums:** `OutreachChannel` (`WHATSAPP`, `EMAIL`), `OutreachDeliveryStatus` (`REQUESTED`, `QUEUED`, `PROCESSING`, `SENT`, `DELIVERED`, `FAILED`, `CANCELLED`).
+  - **OutreachDelivery Model:** Mapped to table `outreach_deliveries` with default `status = REQUESTED` and `attemptCount = 0`.
+  - **Tenant Isolation & Composite Foreign Keys:**
+    - `(organization_id)` $\rightarrow$ `organizations(id)` ON DELETE CASCADE
+    - `(lead_id, organization_id)` $\rightarrow$ `leads(id, organization_id)` ON DELETE CASCADE
+    - `(draft_id, organization_id)` $\rightarrow$ `sales_assistant_drafts(id, organization_id)` ON DELETE RESTRICT
+    - `(requested_by_user_id, organization_id)` $\rightarrow$ `users(id, organization_id)` ON DELETE RESTRICT
+  - **Recipient & Contact Safety:**
+    - `recipientNormalized`: Required scalar string snapshot of verified destination.
+    - `recipientContactId`: Nullable scalar UUID; contact foreign key omitted from DB schema to prevent un-scoped cross-tenant foreign key bypasses (enforced transactionally at Step 4 service layer).
+  - **Server-Managed Content Snapshots (Immutable-by-Domain):**
+    - `snapshotContent`: Nullable text for WhatsApp messages.
+    - `snapshotSubject`: Nullable text for Email messages.
+    - `snapshotBody`: Nullable text for Email messages.
+    - `approvedDraftSnapshotHash`: Required 64-char SHA-256 integrity hash snapshot taken at dispatch request time.
+    - Content snapshots are server-managed immutable-by-domain (persisted in standard PostgreSQL columns, with immutability preserved by application/worker domain invariants rather than DB-level row triggers).
+  - **Idempotency & Replay Protection:**
+    - `idempotencyKey`: Case-preserving client idempotency key with mandatory uniqueness constraint `@@unique([organizationId, idempotencyKey])`.
+    - `requestFingerprint`: SHA-256 fingerprint of normalized request parameters for parameter mismatch detection.
+  - **Provider Correlation & Error Diagnosis:**
+    - `providerName` & `providerMessageId`: Nullable correlation identifiers; indexed via `@@index([providerName, providerMessageId])` (non-unique to support multiple providers or test accounts without cross-account collision).
+    - `lastErrorCode` & `safeLastErrorMessage`: Internal diagnosis error fields. The max 500 length constraint for `safeLastErrorMessage` is enforced at the shared/public DTO boundary while stored in a flexible PostgreSQL text column.
+  - **Full Timestamp Lifecycle:** `requestedAt` (default `now()`), `queuedAt`, `processingAt`, `sentAt`, `deliveredAt`, `failedAt`, `cancelledAt`, `createdAt`, `updatedAt`.
+  - **Indexes:** `[organizationId, leadId, createdAt]`, `[organizationId, status, createdAt]`, `[organizationId, channel, status]`, `[providerName, providerMessageId]`, `[draftId]`, `[requestedByUserId]`, `@@unique([organizationId, idempotencyKey])`, `@@unique([id, organizationId])`.
+  - **Data Minimization:** Zero storage of raw provider request/response payloads, bearer tokens, API keys, secrets, system prompts, or reasoning traces.
+  - **Migration Safety:** Clean PostgreSQL migration `20261005060210_add_m6_outreach_delivery` containing strictly M6 types, table, indexes, and FKs without drops, destructive alters, or table rewrites. Applied cleanly to development and test databases.
+- **Test Suite Results:**
+  - `packages/db/src/tests/outreach-delivery-persistence.spec.ts`: 23 targeted persistence tests passing (enum parity, creation, defaults, idempotency unique constraint, case sensitivity, resend support, cross-tenant lead/user/draft rejection, provider update, error storage, lifecycle transitions, and referential integrity restrict/cascade).
+  - Full DB regression: **118 passed** across 8 test files.
+  - Full repository test suite: **1,387 passed** across 66 test files (0 failures).
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
@@ -264,14 +319,14 @@
   - **RBAC:** Defined `Permissions.OUTREACH_READ`, `Permissions.OUTREACH_SEND`, `Permissions.OUTREACH_MANAGE` and mapped into `ROLE_PERMISSIONS` (SUPER_ADMIN/ADMIN/SALES_MANAGER have all 3, SALES_EXECUTIVE has READ/SEND, VIEWER has READ only).
   - **Safety Invariants:** Proved `PHONE != WHATSAPP` preserved with zero inference helpers; verified M5 `SalesAssistantDraftStatus` contains strictly `DRAFT`, `APPROVED`, `REJECTED` (no `SENT`).
   - **Test Suite:** Added 52 unit tests in `packages/shared/src/tests/outreach-schemas.spec.ts` (shared package total: 211 tests across 7 files).
-- **Step 2 (Outreach Delivery Persistence & Migration):** NOT STARTED
-- **Step 3 (Provider Abstraction & Deterministic Mock Providers):** NOT STARTED
-- **Step 4 (Outreach Domain Service & BullMQ Queue):** NOT STARTED
-- **Step 5 (Outreach REST API, RBAC & Audit Logging):** NOT STARTED
-- **Step 6 (Lead Detail Outreach Delivery UI):** NOT STARTED
-- **Step 7 (Worker Execution & Webhook Status Processing):** NOT STARTED
-- **Step 8 (Comprehensive E2E & Security Hardening):** NOT STARTED
-- **Step 9 (Live Provider Adapter Integration & Provider-Specific Verification):** NOT STARTED
+- **Step 2 (Outreach Delivery Persistence + Migration):** IMPLEMENTED / AWAITING REVIEW
+- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** NOT STARTED
+- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** NOT STARTED
+- **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
+- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
+- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
+- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED
+- **Step 9 (Live Provider Adapter Integration):** NOT STARTED
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
 
@@ -537,4 +592,4 @@ Actor (`userId`) and `organizationId` always come from the authenticated session
 
 ## Next Steps (Awaiting Kickoff)
 - **Milestone M5 — AI Sales Assistant:** COMPLETE / CLOSED.
-- **Milestone M6 — Automated Outreach & Delivery:** STEP 1 — Shared Outreach Contracts + Permissions (IMPLEMENTED / AWAITING REVIEW). Steps 2–10 NOT STARTED.
+- **Milestone M6 — Automated Outreach & Delivery:** STEP 1 (COMPLETE / COMMITTED / PUSHED). STEP 2 — Outreach Delivery Persistence + Migration (IMPLEMENTED / AWAITING REVIEW). Steps 3–10 NOT STARTED.

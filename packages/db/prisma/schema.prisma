@@ -185,6 +185,21 @@ enum SalesAssistantWarning {
   LIMITED_LEAD_CONTEXT
 }
 
+enum OutreachChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum OutreachDeliveryStatus {
+  REQUESTED
+  QUEUED
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
+}
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -207,6 +222,7 @@ model Organization {
   followUpTasks          FollowUpTask[]
   demoWebsites           DemoWebsite[]
   salesAssistantDrafts   SalesAssistantDraft[]
+  outreachDeliveries     OutreachDelivery[]
 
   @@map("organizations")
 }
@@ -235,6 +251,7 @@ model User {
   createdSalesDrafts         SalesAssistantDraft[] @relation("SalesAssistantDraftCreatedBy")
   approvedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftApprovedBy")
   rejectedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftRejectedBy")
+  requestedOutreachDeliveries OutreachDelivery[]   @relation("OutreachDeliveryRequestedBy")
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -401,6 +418,7 @@ model Lead {
   followUpTasks          FollowUpTask[]
   demoWebsite            DemoWebsite?
   salesAssistantDrafts   SalesAssistantDraft[]
+  outreachDeliveries     OutreachDelivery[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -618,6 +636,7 @@ model SalesAssistantDraft {
   createdByUser  User         @relation("SalesAssistantDraftCreatedBy", fields: [createdByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
   approvedByUser User?        @relation("SalesAssistantDraftApprovedBy", fields: [approvedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
   rejectedByUser User?        @relation("SalesAssistantDraftRejectedBy", fields: [rejectedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  outreachDeliveries OutreachDelivery[]
 
   @@unique([id, organizationId])
   @@index([organizationId, leadId, createdAt])
@@ -625,4 +644,51 @@ model SalesAssistantDraft {
   @@index([organizationId, createdByUserId, createdAt])
   @@index([organizationId, type, createdAt])
   @@map("sales_assistant_drafts")
+}
+
+model OutreachDelivery {
+  id                        String                 @id @default(uuid())
+  organizationId            String                 @map("organization_id")
+  leadId                    String                 @map("lead_id")
+  draftId                   String                 @map("draft_id")
+  channel                   OutreachChannel
+  status                    OutreachDeliveryStatus @default(REQUESTED)
+  recipientContactId        String?                @map("recipient_contact_id")
+  recipientNormalized       String                 @map("recipient_normalized")
+  snapshotSubject           String?                @map("snapshot_subject")
+  snapshotBody              String?                @map("snapshot_body")
+  snapshotContent           String?                @map("snapshot_content")
+  approvedDraftSnapshotHash String                 @map("approved_draft_snapshot_hash")
+  idempotencyKey            String                 @map("idempotency_key")
+  requestFingerprint        String                 @map("request_fingerprint")
+  attemptCount              Int                    @default(0) @map("attempt_count")
+  providerName              String?                @map("provider_name")
+  providerMessageId         String?                @map("provider_message_id")
+  lastErrorCode             String?                @map("last_error_code")
+  safeLastErrorMessage      String?                @map("safe_last_error_message")
+  requestedByUserId         String                 @map("requested_by_user_id")
+  requestedAt               DateTime               @default(now()) @map("requested_at")
+  queuedAt                  DateTime?              @map("queued_at")
+  processingAt              DateTime?              @map("processing_at")
+  sentAt                    DateTime?              @map("sent_at")
+  deliveredAt               DateTime?              @map("delivered_at")
+  failedAt                  DateTime?              @map("failed_at")
+  cancelledAt               DateTime?              @map("cancelled_at")
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  updatedAt                 DateTime               @updatedAt @map("updated_at")
+
+  organization    Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead            Lead                @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  draft           SalesAssistantDraft @relation(fields: [draftId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  requestedByUser User                @relation("OutreachDeliveryRequestedBy", fields: [requestedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([organizationId, idempotencyKey])
+  @@unique([id, organizationId])
+  @@index([organizationId, leadId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, channel, status])
+  @@index([providerName, providerMessageId])
+  @@index([draftId])
+  @@index([requestedByUserId])
+  @@map("outreach_deliveries")
 }
