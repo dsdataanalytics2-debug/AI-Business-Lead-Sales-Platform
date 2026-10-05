@@ -578,6 +578,25 @@ describe('M6 Step 4: Outreach Delivery Service & Idempotent Enqueue', () => {
   });
 
   describe('3. Role Authorization & Sales Executive Assignment', () => {
+    it('allows SUPER_ADMIN to dispatch approved outreach delivery', async () => {
+      const summary = await service.requestDelivery({
+        ...baseValidInput,
+        authenticatedUserId: 'user-super-admin-001',
+        authenticatedUserRole: Role.SUPER_ADMIN,
+        idempotencyKey: 'idemp-superadmin-001'
+      });
+
+      expect(summary.status).toBe(OutreachDeliveryStatus.QUEUED);
+      expect(summary.leadId).toBe(validLeadId);
+      expect(summary.draftId).toBe(validDraftId);
+      expect(summary.channel).toBe(OutreachChannel.WHATSAPP);
+      expect(summary.recipientMasked).toBe('+88017****0001');
+      expect(summary.queuedAt).toBeDefined();
+
+      expect(queue.jobs).toHaveLength(1);
+      expect(queue.jobs[0].payload).toEqual({ deliveryId: summary.id });
+    });
+
     it('allows ADMIN to dispatch approved outreach delivery', async () => {
       const summary = await service.requestDelivery(baseValidInput);
 
@@ -615,28 +634,62 @@ describe('M6 Step 4: Outreach Delivery Service & Idempotent Enqueue', () => {
       expect(summary.status).toBe(OutreachDeliveryStatus.QUEUED);
     });
 
-    it('denies SALES_EXECUTIVE when lead is assigned to another user', async () => {
-      await expect(
-        service.requestDelivery({
+    it('denies SALES_EXECUTIVE when lead is assigned to another user (403 FORBIDDEN)', async () => {
+      try {
+        await service.requestDelivery({
           ...baseValidInput,
           authenticatedUserId: 'other-unassigned-exec-002',
           authenticatedUserRole: Role.SALES_EXECUTIVE,
           idempotencyKey: 'idemp-exec-unassigned-001'
-        })
-      ).rejects.toThrow('Sales Executives can only initiate outreach for leads assigned to them');
+        });
+        expect.unreachable('Should have thrown FORBIDDEN');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe('FORBIDDEN');
+        expect(err.statusCode).toBe(403);
+        expect(err.message).toBe('Sales Executives can only initiate outreach for leads assigned to them');
+      }
 
       expect(queue.jobs).toHaveLength(0);
       expect(dbState.deliveries).toHaveLength(0);
     });
 
-    it('denies VIEWER from initiating outreach deliveries', async () => {
-      await expect(
-        service.requestDelivery({
+    it('denies SALES_EXECUTIVE when lead is unassigned (assignedUserId === null) (403 FORBIDDEN)', async () => {
+      dbState.leads[0].assignedUserId = null;
+
+      try {
+        await service.requestDelivery({
+          ...baseValidInput,
+          authenticatedUserId: validExecId,
+          authenticatedUserRole: Role.SALES_EXECUTIVE,
+          idempotencyKey: 'idemp-exec-null-assigned-001'
+        });
+        expect.unreachable('Should have thrown FORBIDDEN');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe('FORBIDDEN');
+        expect(err.statusCode).toBe(403);
+        expect(err.message).toBe('Sales Executives can only initiate outreach for leads assigned to them');
+      }
+
+      expect(queue.jobs).toHaveLength(0);
+      expect(dbState.deliveries).toHaveLength(0);
+    });
+
+    it('denies VIEWER from initiating outreach deliveries (403 FORBIDDEN)', async () => {
+      try {
+        await service.requestDelivery({
           ...baseValidInput,
           authenticatedUserRole: Role.VIEWER,
           idempotencyKey: 'idemp-viewer-001'
-        })
-      ).rejects.toThrow('Role VIEWER is not authorized');
+        });
+        expect.unreachable('Should have thrown FORBIDDEN');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe('FORBIDDEN');
+        expect(err.statusCode).toBe(403);
+        expect(err.message).toContain('Role VIEWER is not authorized');
+      }
 
       expect(queue.jobs).toHaveLength(0);
       expect(dbState.deliveries).toHaveLength(0);
@@ -1439,6 +1492,158 @@ describe('M6 Step 4: Outreach Delivery Service & Idempotent Enqueue', () => {
           idempotencyKey: 'idemp-ambiguous-emails'
         })
       ).rejects.toThrow('Multiple email contacts found; recipientContactId must be specified');
+    });
+  });
+
+  describe('13. Explicit Contract-Lock Assertions', () => {
+    it('verifies unapproved draft throws OUTREACH_DRAFT_NOT_APPROVED with status 409', async () => {
+      dbState.drafts[0].status = SalesAssistantDraftStatus.DRAFT;
+      dbState.drafts[0].approvedAt = null;
+      dbState.drafts[0].approvedByUserId = null;
+
+      try {
+        await service.requestDelivery(baseValidInput);
+        expect.unreachable('Should have thrown OUTREACH_DRAFT_NOT_APPROVED');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_DRAFT_NOT_APPROVED);
+        expect(err.statusCode).toBe(409);
+      }
+    });
+
+    it('verifies cross-lead draft mismatch throws OUTREACH_DRAFT_NOT_APPROVED with status 409', async () => {
+      dbState.drafts[0].leadId = 'mismatched-lead-id';
+
+      try {
+        await service.requestDelivery(baseValidInput);
+        expect.unreachable('Should have thrown OUTREACH_DRAFT_NOT_APPROVED');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_DRAFT_NOT_APPROVED);
+        expect(err.statusCode).toBe(409);
+      }
+    });
+
+    it('verifies incompatible channel throws OUTREACH_CHANNEL_INCOMPATIBLE with status 422', async () => {
+      try {
+        await service.requestDelivery({
+          ...baseValidInput,
+          channel: OutreachChannel.EMAIL,
+          recipientContactId: validEmailContactId,
+          idempotencyKey: 'idemp-lock-compat-01'
+        });
+        expect.unreachable('Should have thrown OUTREACH_CHANNEL_INCOMPATIBLE');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_CHANNEL_INCOMPATIBLE);
+        expect(err.statusCode).toBe(422);
+      }
+    });
+
+    it('verifies idempotency key reuse with different fingerprint throws OUTREACH_IDEMPOTENCY_KEY_REUSED with status 409', async () => {
+      await service.requestDelivery(baseValidInput);
+
+      const otherDraftId = 'draft-other-lock';
+      dbState.drafts.push({
+        id: otherDraftId,
+        organizationId: validOrgId,
+        leadId: validLeadId,
+        createdByUserId: validExecId,
+        type: SalesAssistantDraftType.WHATSAPP,
+        status: SalesAssistantDraftStatus.APPROVED,
+        content: 'Different message body',
+        approvedAt: new Date('2026-10-05T10:00:00.000Z'),
+        approvedByUserId: validAdminId
+      });
+
+      try {
+        await service.requestDelivery({
+          ...baseValidInput,
+          draftId: otherDraftId
+        });
+        expect.unreachable('Should have thrown OUTREACH_IDEMPOTENCY_KEY_REUSED');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_IDEMPOTENCY_KEY_REUSED);
+        expect(err.statusCode).toBe(409);
+      }
+    });
+
+    it('verifies unverified WhatsApp contact throws OUTREACH_RECIPIENT_INVALID with status 422', async () => {
+      const unverifiedWaId = 'contact-unverified-wa';
+      dbState.leads[0].contacts.push({
+        id: unverifiedWaId,
+        leadId: validLeadId,
+        type: ContactType.WHATSAPP,
+        rawValue: '01799999999',
+        normalizedValue: '+8801799999999',
+        status: ContactStatus.FOUND, // Not VERIFIED
+        whatsappStatus: WhatsAppStatus.UNKNOWN, // Not PUBLICLY_LISTED or CONFIRMED
+        isPrimary: false
+      });
+
+      try {
+        await service.requestDelivery({
+          ...baseValidInput,
+          recipientContactId: unverifiedWaId,
+          idempotencyKey: 'idemp-unverified-wa'
+        });
+        expect.unreachable('Should have thrown OUTREACH_RECIPIENT_INVALID');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_RECIPIENT_INVALID);
+        expect(err.statusCode).toBe(422);
+      }
+    });
+
+    it('verifies ordinary phone contact for WhatsApp throws OUTREACH_RECIPIENT_INVALID with status 422', async () => {
+      const phoneId = 'contact-plain-phone-lock';
+      dbState.leads[0].contacts.push({
+        id: phoneId,
+        leadId: validLeadId,
+        type: ContactType.PHONE,
+        rawValue: '01788888888',
+        normalizedValue: '+8801788888888',
+        status: ContactStatus.VERIFIED,
+        whatsappStatus: WhatsAppStatus.UNKNOWN,
+        isPrimary: false
+      });
+
+      try {
+        await service.requestDelivery({
+          ...baseValidInput,
+          recipientContactId: phoneId,
+          idempotencyKey: 'idemp-phone-invalid-wa'
+        });
+        expect.unreachable('Should have thrown OUTREACH_RECIPIENT_INVALID');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_RECIPIENT_INVALID);
+        expect(err.statusCode).toBe(422);
+      }
+    });
+
+    it('verifies suppressed recipient throws OUTREACH_RECIPIENT_SUPPRESSED with status 422', async () => {
+      dbState.suppressions.push({
+        id: 'supp-lock-001',
+        organizationId: validOrgId,
+        type: SuppressionType.WHATSAPP,
+        normalizedValue: '+8801700000001',
+        channelScope: ChannelScope.ALL,
+        reason: SuppressionReason.OPT_OUT,
+        addedBy: 'admin',
+        addedAt: new Date(),
+        expiresAt: null
+      });
+
+      try {
+        await service.requestDelivery(baseValidInput);
+        expect.unreachable('Should have thrown OUTREACH_RECIPIENT_SUPPRESSED');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(OutreachServiceError);
+        expect(err.code).toBe(OutreachErrorCode.OUTREACH_RECIPIENT_SUPPRESSED);
+        expect(err.statusCode).toBe(422);
+      }
     });
   });
 });
