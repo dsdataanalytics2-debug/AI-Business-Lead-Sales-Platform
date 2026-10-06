@@ -49,6 +49,7 @@ import { OnlinePresenceAnalysisCard } from '@/components/leads/online-presence-a
 import { CrmCard } from '@/components/leads/crm-card';
 import { DemoWebsiteCard } from '@/components/leads/demo-website-card';
 import { SalesAssistantCard } from '@/components/leads/sales-assistant-card';
+import { OutreachCard } from '@/components/leads/outreach-card';
 
 export default function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -64,6 +65,8 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
   const canManageDemo = hasPermission(Permissions.DEMOS_MANAGE);
   const canGenerateSalesDraft = hasPermission(Permissions.SALES_ASSISTANT_GENERATE);
   const canReviewSalesDraft = hasPermission(Permissions.SALES_ASSISTANT_REVIEW);
+  const canSendOutreachPermission = hasPermission(Permissions.OUTREACH_SEND);
+  const canReadOutreachPermission = hasPermission(Permissions.OUTREACH_READ);
 
   // Pure reducer page state
   const [pageState, dispatch] = useReducer(leadDetailReducer, initialLeadDetailState);
@@ -792,6 +795,13 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
               canRead={canReadLeads}
               canGenerate={canGenerateSalesDraft}
               canReview={canReviewSalesDraft}
+            />
+
+            {/* Automated Outreach & Delivery Card (M6) */}
+            <OutreachCard
+              lead={lead}
+              canRead={canReadOutreachPermission && (user?.role !== 'SALES_EXECUTIVE' || Boolean(lead.assignedUserId && lead.assignedUserId === user?.id))}
+              canSend={canSendOutreachPermission && (user?.role !== 'SALES_EXECUTIVE' || Boolean(lead.assignedUserId && lead.assignedUserId === user?.id))}
             />
 
             {/* Direct Contacts Section */}

@@ -22,7 +22,9 @@ import {
   type CreateDemoWebsiteRequest,
   type DemoWebsiteSummary,
   type GenerateSalesAssistantDraftRequest,
-  type SalesAssistantDraftSummary
+  type SalesAssistantDraftSummary,
+  type SendOutreachDeliveryRequest,
+  type OutreachDeliverySummary
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -376,6 +378,47 @@ export const apiClient = {
           ...options,
           method: 'POST',
           body: JSON.stringify({})
+        }
+      ),
+    sendOutreachDelivery: (
+      id: string,
+      input: SendOutreachDeliveryRequest,
+      idempotencyKey: string,
+      options: RequestInit = {}
+    ): Promise<OutreachDeliverySummary> => {
+      const headers = new Headers(options.headers || {});
+      headers.set('Idempotency-Key', idempotencyKey);
+      return request<OutreachDeliverySummary>(
+        `/leads/${encodeURIComponent(id)}/outreach/deliveries`,
+        {
+          ...options,
+          method: 'POST',
+          headers,
+          body: JSON.stringify(input)
+        }
+      );
+    },
+    listOutreachDeliveries: (
+      id: string,
+      options: RequestInit = {}
+    ): Promise<{ deliveries: OutreachDeliverySummary[]; total: number }> =>
+      request<{ deliveries: OutreachDeliverySummary[]; total: number }>(
+        `/leads/${encodeURIComponent(id)}/outreach/deliveries`,
+        {
+          ...options,
+          method: 'GET'
+        }
+      ),
+    getOutreachDelivery: (
+      id: string,
+      deliveryId: string,
+      options: RequestInit = {}
+    ): Promise<OutreachDeliverySummary> =>
+      request<OutreachDeliverySummary>(
+        `/leads/${encodeURIComponent(id)}/outreach/deliveries/${encodeURIComponent(deliveryId)}`,
+        {
+          ...options,
+          method: 'GET'
         }
       )
   }

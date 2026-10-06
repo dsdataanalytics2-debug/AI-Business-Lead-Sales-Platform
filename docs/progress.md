@@ -400,7 +400,7 @@
   - Implemented `OutreachDeliveryService` in `packages/core/src/outreach/outreach-delivery.service.ts` with atomic delivery creation, immutable draft snapshotting (`approvedDraftSnapshotHash`), Gate A suppression enforcement, and post-transaction queue enqueueing.
   - Implemented `BullMQOutreachDeliveryQueue` in `@leadmate/queues` (`jobId = deliveryId`).
   - Implemented 61 unit tests in `packages/core/src/tests/outreach-delivery-service.spec.ts` and 3 tests in `packages/queues/src/tests/bullmq-outreach-delivery-queue.spec.ts`.
-- [2026-10-05] Step 5 (Outreach REST API + RBAC + Audit Logging): IMPLEMENTED / AWAITING REVIEW
+- [2026-10-05] Step 5 (Outreach REST API + RBAC + Audit Logging): COMPLETE (`8972d3c114d35e1654378f8cb4dfbcfbe83baab9`)
   - Implemented single canonical REST route family in `apps/api/src/routes/lead.routes.ts`: `POST /api/v1/leads/:id/outreach/deliveries`, `GET /api/v1/leads/:id/outreach/deliveries`, `GET /api/v1/leads/:id/outreach/deliveries/:deliveryId` (zero alias sprawl; removed legacy paths return 404).
   - Authenticated via PostgreSQL server-side sessions (`leadmate_session` cookie; zero JWT/Bearer auth).
   - Mandatory case-preserving `Idempotency-Key` HTTP header extraction and validation via `outreachIdempotencyKeySchema`.
@@ -409,8 +409,23 @@
   - Public DTO data minimization with masked destinations via `maskRecipient` (zero raw PII, snapshots, hashes, or provider secrets).
   - Authoritative audit logging emitting `lead.outreach_requested` for newly created deliveries; duplicate creation audits strictly suppressed on idempotent replay.
   - Standard rate limiting and authentication conventions (no unapproved 30/min rate quotas invented).
-  - Implemented 31 integration tests in `apps/api/src/tests/outreach-api.spec.ts` (API package total: 534 tests across 20 files; full repo total: 1529 tests across 70 files).
-- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
+  - Implemented 31 integration tests in `apps/api/src/tests/outreach-api.spec.ts`.
+- [2026-10-05] Step 6 (Lead Detail Outreach Delivery UI + Explicit Confirmation Modal): IMPLEMENTED / AWAITING REVIEW
+  - Created `apps/web/src/components/leads/outreach-card.tsx` and `apps/web/src/components/leads/outreach-delivery-modal.tsx`.
+  - Created `apps/web/src/lib/leads/outreach-display.ts` with complete status badge styling, honest labels/descriptions, channel formatters, recipient resolution helpers, and safe API error classification.
+  - Mounted `<OutreachCard />` on the Lead Detail page (`apps/web/src/app/leads/[id]/page.tsx`) beneath `<SalesAssistantCard />`.
+  - Extended `apiClient.leads` in `apps/web/src/lib/api-client.ts` with `sendOutreachDelivery(leadId, body, idempotencyKey)`, `listOutreachDeliveries(leadId, query)`, and `getOutreachDelivery(leadId, deliveryId)` passing case-preserving `Idempotency-Key` HTTP headers and strict JSON body without body `idempotencyKey`.
+  - **Human-in-the-Loop Safety:** Mandatory 2-step confirmation modal (`OutreachDeliveryModal`) with prominent non-delivery queueing disclaimer (`OUTREACH_DISPATCH_DISCLAIMER`), draft preview (subject/body for Email, content for WhatsApp), channel indicator, and masked recipient confirmation.
+  - **Channel Compatibility Guard:** WhatsApp drafts lock channel to WhatsApp; Email and Proposal drafts lock channel to Email; Follow-up drafts require explicit user channel selection; Call scripts display an exclusion notice without dispatch controls.
+  - **Contact Provenance & `PHONE != WHATSAPP`:** Recipient candidate resolution strictly filters for verified WhatsApp contacts for WhatsApp channel (plain voice phone contacts strictly excluded) and verified email contacts / primary email for Email channel.
+  - **Double-Click & Idempotency Safeguards:** UI generates dynamic UUID `Idempotency-Key` per dispatch attempt, locks confirm button during pending HTTP submissions to prevent double clicks, preserves same key on retry of failed queueing, and generates new key on intentional resend.
+  - **Data Minimization & Security:** Zero PII or tokens stored in localStorage/sessionStorage; deliveries table and modals render masked destinations only.
+  - **RBAC Matrix in UI:** `canSend` enabled for `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, and assigned `SALES_EXECUTIVE`; restricted read-only mode displayed for unassigned representatives and `VIEWER` role.
+  - **Targeted Test Suites:**
+    - `apps/web/src/tests/outreach-display.spec.ts` (13 unit tests)
+    - `apps/web/src/tests/outreach-card-ui.spec.tsx` (8 component render & interaction tests)
+    - `apps/web/src/tests/outreach-flow.spec.ts` (10 live API client integration tests)
+    - Total Step 6 new tests: 31 tests.
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
 - **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED
 - **Step 9 (Live Provider Adapter Integration):** NOT STARTED
