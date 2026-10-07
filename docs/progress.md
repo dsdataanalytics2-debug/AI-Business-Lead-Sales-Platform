@@ -1,8 +1,8 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M6 — Automated Outreach & Delivery 🔄 IN PROGRESS
-- **Status:** IN PROGRESS
-- **Base Checkpoint:** `76343f93895ee03762b08547c9bdc30a334471d9` (`feat(m6): add outreach delivery ui`)
+## Current Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
+- **Status:** COMPLETE
+- **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
 - **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
 - **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
@@ -12,8 +12,8 @@
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** COMPLETE (`657ff84fd755a4d9d2e32d1c3fe8f65b71e10671`)
 - **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** COMPLETE (`28bb9cf10a78cbab8746fcc54c5ec8a0c1bd8e8b`)
-- **Step 9 (Live Provider Adapter Integration):** IN PROGRESS (Step 9 Meta: COMPLETE; Step 9 Email Resend: IMPLEMENTED / AWAITING REVIEW)
-- **Step 10 (Milestone Review & Closure):** NOT STARTED
+- **Step 9 (Live Provider Adapter Integration — Meta WhatsApp & Resend Email):** COMPLETE (`e498542377882c4e1a46590f794bb49ef1196ecd`)
+- **Step 10 (Milestone Review & Closure):** IMPLEMENTED / AWAITING REVIEW
 
 ### M6 Step 1 — Shared Outreach Contracts + Permissions (Completed)
 - **Files Created:** `packages/shared/src/schemas/outreach.ts`, `packages/shared/src/tests/outreach-schemas.spec.ts`.
@@ -289,6 +289,51 @@
   - **Worker Environment & Registry:** `apps/worker` validates environment configuration fail-closed when `OUTREACH_EMAIL_PROVIDER=resend` and provides `createWorkerProviderRegistry()` configuring `ResendEmailDeliveryProvider` for production delivery.
   - **No Live Sending:** 100% offline mock tests; zero real emails dispatched.
 
+### M6 Step 10 — Milestone Review & Closure (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Milestone Scope Closed:** Automated Outreach & Delivery (Steps 0–10).
+- **Final Provider Production Matrix:**
+  - **WhatsApp:**
+    - Mock: `MockWhatsAppDeliveryProvider` (development & offline testing)
+    - Live: `MetaWhatsAppDeliveryProvider` (`META_WHATSAPP`) via Meta WhatsApp Cloud API (`POST /{phoneNumberId}/messages`)
+    - Configuration: `OUTREACH_WHATSAPP_PROVIDER=mock|meta` (explicit fail-closed validation in production)
+  - **Email:**
+    - Mock: `MockEmailDeliveryProvider` (development & offline testing)
+    - Live: `ResendEmailDeliveryProvider` (`RESEND_EMAIL`) via Resend Transactional Email API (`POST /emails`)
+    - Configuration: `OUTREACH_EMAIL_PROVIDER=mock|resend` (explicit fail-closed validation in production)
+- **Hardened Invariants Preserved:**
+  - **Human-in-the-Loop Isolation:** Draft approval (`DRAFT -> APPROVED`) never auto-transmits; dedicated human dispatch action required (`POST /leads/:id/outreach/deliveries`).
+  - **Contact Provenance & PHONE != WHATSAPP:** WhatsApp strictly requires verified CRM contact (`status === VERIFIED` or `whatsappStatus IN [PUBLICLY_LISTED, CONFIRMED]`); plain phone numbers never auto-promoted.
+  - **Email Destination & Recipient Rules:** EMAIL delivery resolves destination either from (A) an existing `ContactType.EMAIL` contact (via explicit `recipientContactId` or single existing email contact; multiple email contacts require explicit `recipientContactId`), or (B) `lead.primaryEmail` fallback ONLY when zero `ContactType.EMAIL` contacts exist on the lead (`primaryEmail` is ignored when email contact rows exist). EMAIL does NOT require `ContactStatus.VERIFIED` (WhatsApp provenance rules do not apply to EMAIL). Raw client-supplied email strings remain strictly prohibited. Outbound payload sends exact immutable approved snapshot (`subject`, `text: snapshotBody` without invented HTML markup).
+  - **Exact Delivery State Machine Transitions:**
+    - `REQUESTED -> QUEUED | CANCELLED`
+    - `QUEUED -> PROCESSING | CANCELLED`
+    - `PROCESSING -> SENT | QUEUED` (retryable failure within 3 attempts) `| FAILED` (non-retryable failure or attempts exhausted)
+    - `SENT -> DELIVERED | FAILED`
+    - Terminal states: `DELIVERED`, `FAILED`, `CANCELLED` (strictly forward-only; terminal states never reopen).
+    - Cancellation is permitted strictly from `REQUESTED` or `QUEUED` under `OUTREACH_MANAGE`; in-flight `PROCESSING` cancellation returns HTTP 409 `OUTREACH_DELIVERY_IN_FLIGHT`; cancelled stale queue jobs safely no-op.
+  - **Two-Gate Suppression Defense:** Evaluated at API request time (Gate A) and worker pre-flight (Gate B).
+  - **Strict Idempotency:** API unique `[organizationId, idempotencyKey]` returns 200 on identical replay, 409 on parameter divergence; Resend forwards `providerIdempotencyToken` (bounded ~24h retention, 409 concurrent mapped to retryable `PROVIDER_RATE_LIMITED`, 409 invalid mapped to terminal `DELIVERY_FAILED`).
+  - **Queue Authority & Attempt Budget:** BullMQ job payload is strictly `{ deliveryId: string }`; worker loads PostgreSQL state authoritatively; `attemptCount` strictly equals actual `provider.send` calls (max 3 attempts).
+  - **Webhook Defense-in-Depth:** Route-scoped raw buffer parsing (256kb limit) before JSON parsing; Meta HMAC-SHA256 and Resend Svix signature verification; `organizationId = null` rejects tenant spoofing; terminal events mapped strictly to `DELIVERED`/`FAILED`; non-terminal analytics events ignored; out-of-order events recorded as `UNRESOLVED` without illegal status regressions, reconciled upon replay after `SENT`; ambiguous correlation fails closed (`UNMATCHED`).
+  - **Branding & Identifiers:** LeadAtlas public branding preserved (`/brand/leadatlas-logo.jpg`); internal `@leadmate/*`, database models, and API paths preserved without churn.
+- **M6 Deferred Technical Debt & Operational Items:**
+  1. *Meta Cloud API Timeout Ambiguity:* Meta does not provide native arbitrary-message idempotency keys on Graph API; timeout recovery relies on at-most-once safety with operator reconciliation when message state is ambiguous.
+  2. *Meta Provider Correlation Scoping:* Multi-WABA / multi-account setup will require correlation queries to include `accountId` / `phoneNumberId` alongside `providerMessageId`.
+  3. *Resend Idempotency Retention Window:* Bounded provider retention (~24 hours); replays after 24 hours require internal deduplication defense.
+  4. *Webhook Event Table Retention & Archival:* `OutreachWebhookEvent` table growth requires future periodic cleanup or partitioning cron.
+  5. *Distributed Rate Limiting:* Worker rate limiting relies on provider 429 backoff; future high-volume pipelines should consider Redis token bucket rate limiters per channel/tenant.
+  6. *Bulk Campaign Orchestration:* Intentionally excluded from M6 single-lead architecture; deferred to future campaign milestone.
+  7. *Live Provider Monitoring & Credential Rotation:* Production runbooks for credential rotation and delivery latency alerts.
+  8. *StoreMate Live Transport:* Remains strictly deferred behind `StoreMateUnavailableError` (503) pending human contractual signoff.
+- **Verification Baseline:**
+  - Targeted M6 Test Matrix: **20 test files passed (20 total), 408 tests passed (408 total)**.
+  - Full Repository Test Suite: **87 test files passed (87 total), 1,756 tests passed (1,756 total)**, 0 failures.
+  - Workspace Typecheck: **0 errors** across all 10 workspaces.
+  - Next.js Web Build: **Successful production compilation** (all 8 routes generated).
+  - Prisma Schema Validation: **Valid**.
+  - npm ci dry-run: **Clean**.
+  - Zero live credentials, zero live external API sends.
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
