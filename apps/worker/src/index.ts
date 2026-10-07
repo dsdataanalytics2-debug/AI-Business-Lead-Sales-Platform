@@ -15,6 +15,10 @@ import {
   OUTREACH_DELIVERY_QUEUE_NAME,
   enqueueOutreachDeliveryJob
 } from './queues/outreach-delivery.queue.js';
+import {
+  outreachDeliveryWorker,
+  createOutreachDeliveryWorker
+} from './workers/outreach-delivery.worker.js';
 
 export {
   createMaintenanceQueue,
@@ -26,7 +30,9 @@ export {
   outreachDeliveryQueue,
   createOutreachDeliveryQueue,
   OUTREACH_DELIVERY_QUEUE_NAME,
-  enqueueOutreachDeliveryJob
+  enqueueOutreachDeliveryJob,
+  outreachDeliveryWorker,
+  createOutreachDeliveryWorker
 };
 
 async function startWorker() {
@@ -49,7 +55,7 @@ async function startWorker() {
   }
 
   logger.info(
-    { workerPid: process.pid, queues: ['maintenance'] },
+    { workerPid: process.pid, queues: ['maintenance', 'outreach-delivery'] },
     'LeadMate Worker is running and ready to process jobs'
   );
 
@@ -58,6 +64,8 @@ async function startWorker() {
     try {
       await maintenanceWorker.close();
       await maintenanceQueue.close();
+      await outreachDeliveryWorker.close();
+      await outreachDeliveryQueue.close();
       logger.info('Worker and queues closed successfully.');
       process.exit(0);
     } catch (err) {

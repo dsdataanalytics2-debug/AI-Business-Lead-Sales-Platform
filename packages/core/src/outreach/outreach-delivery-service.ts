@@ -40,6 +40,14 @@ export interface RequestOutreachDeliveryInput {
   readonly idempotencyKey: string;
 }
 
+export interface CancelOutreachDeliveryInput {
+  readonly organizationId: string;
+  readonly authenticatedUserId: string;
+  readonly authenticatedUserRole: Role;
+  readonly leadId: string;
+  readonly deliveryId: string;
+}
+
 export interface OutreachDeliveryServiceOptions {
   prisma?: PrismaClient;
   queue?: OutreachDeliveryQueue;
@@ -387,6 +395,152 @@ export class OutreachDeliveryService {
       });
     }
   }
+
+  /**
+   * Cancels a pending outreach delivery.
+   *
+   * Permitted only when delivery is in REQUESTED or QUEUED status.
+   * Guarded by OUTREACH_MANAGE permission.
+   * Sales Executives and Viewers are strictly forbidden.
+   * Returns 409 OUTREACH_DELIVERY_IN_FLIGHT if already in PROCESSING, SENT, or terminal states.
+   * Idempotent: returns existing delivery if already CANCELLED.
+   */
+  public async cancelDelivery(
+    input: CancelOutreachDeliveryInput
+  ): Promise<OutreachDeliverySummary> {
+    const now = this.clock();
+
+    // 1. RBAC authorization check: requires OUTREACH_MANAGE
+    if (!hasPermission(input.authenticatedUserRole, Permissions.OUTREACH_MANAGE)) {
+      throw new OutreachServiceError({
+        code: 'FORBIDDEN',
+        message: 'You lack permission to cancel outreach deliveries'
+      });
+    }
+
+    // 2. Verify Lead exists in organization
+    const lead = await this.prisma.lead.findUnique({
+      where: {
+        id_organizationId: {
+          id: input.leadId,
+          organizationId: input.organizationId
+        }
+      }
+    });
+
+    if (!lead) {
+      throw new OutreachServiceError({
+        code: 'NOT_FOUND',
+        message: 'Lead not found in organization'
+      });
+    }
+
+    // 3. Find Delivery scoped to organization and lead
+    const delivery = await this.prisma.outreachDelivery.findFirst({
+      where: {
+        id: input.deliveryId,
+        leadId: input.leadId,
+        organizationId: input.organizationId
+      }
+    });
+
+    if (!delivery) {
+      throw new OutreachServiceError({
+        code: 'NOT_FOUND',
+        message: 'Outreach delivery not found'
+      });
+    }
+
+    const currentStatus = delivery.status as OutreachDeliveryStatus;
+
+    // 4. Idempotent no-op if already CANCELLED
+    if (currentStatus === OutreachDeliveryStatus.CANCELLED) {
+      return this.mapToSummary(delivery);
+    }
+
+    // 5. In-flight / terminal check
+    if (
+      currentStatus === OutreachDeliveryStatus.PROCESSING ||
+      currentStatus === OutreachDeliveryStatus.SENT ||
+      currentStatus === OutreachDeliveryStatus.DELIVERED ||
+      currentStatus === OutreachDeliveryStatus.FAILED
+    ) {
+      throw new OutreachServiceError({
+        code: OutreachErrorCode.OUTREACH_DELIVERY_IN_FLIGHT,
+        message: `Delivery is in state ${currentStatus} and cannot be cancelled`,
+        statusCode: 409
+      });
+    }
+
+    // 6. Atomic state transition: [REQUESTED, QUEUED] -> CANCELLED
+    const updateResult = await this.prisma.outreachDelivery.updateMany({
+      where: {
+        id: input.deliveryId,
+        organizationId: input.organizationId,
+        leadId: input.leadId,
+        status: { in: [OutreachDeliveryStatus.REQUESTED as any, OutreachDeliveryStatus.QUEUED as any] }
+      },
+      data: {
+        status: OutreachDeliveryStatus.CANCELLED as any,
+        cancelledAt: now
+      }
+    });
+
+    if (updateResult.count === 0) {
+      // Race: worker claim won or another concurrent cancellation
+      const reloaded = await this.prisma.outreachDelivery.findUnique({
+        where: { id: input.deliveryId }
+      });
+      if (reloaded?.status === OutreachDeliveryStatus.CANCELLED) {
+        return this.mapToSummary(reloaded);
+      }
+      throw new OutreachServiceError({
+        code: OutreachErrorCode.OUTREACH_DELIVERY_IN_FLIGHT,
+        message: `Delivery transitioned to ${reloaded?.status ?? 'another state'} and cannot be cancelled`,
+        statusCode: 409
+      });
+    }
+
+    // 7. Best-effort BullMQ queue removal
+    if (this.queue.removeJob) {
+      try {
+        await this.queue.removeJob(input.deliveryId);
+      } catch {
+        // Best effort: worker handles stale job by reloading DB and no-oping
+      }
+    }
+
+    // 8. Record audit log
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          organizationId: input.organizationId,
+          userId: input.authenticatedUserId,
+          action: 'lead.outreach_cancelled',
+          entityType: 'OutreachDelivery',
+          entityId: delivery.id,
+          after: {
+            leadId: input.leadId,
+            draftId: delivery.draftId,
+            channel: delivery.channel,
+            previousStatus: currentStatus,
+            status: OutreachDeliveryStatus.CANCELLED
+          }
+        }
+      });
+    } catch {
+      // Best-effort audit logging
+    }
+
+    const reloaded = await this.prisma.outreachDelivery.findUnique({
+      where: { id: input.deliveryId }
+    });
+
+    return this.mapToSummary(
+      reloaded ?? { ...delivery, status: OutreachDeliveryStatus.CANCELLED, cancelledAt: now }
+    );
+  }
+
 
   private validateIdempotencyKey(key: unknown): void {
     const parseResult = outreachIdempotencyKeySchema.safeParse(key);

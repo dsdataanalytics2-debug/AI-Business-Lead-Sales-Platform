@@ -54,6 +54,17 @@ export class BullMQOutreachDeliveryQueue implements OutreachDeliveryQueue {
     return { jobId: job.id ?? payload.deliveryId };
   }
 
+  public async removeJob(jobId: string): Promise<void> {
+    try {
+      const job = await this.queue.getJob(jobId);
+      if (job) {
+        await job.remove();
+      }
+    } catch {
+      // Best-effort job removal: DB status is authoritative
+    }
+  }
+
   public async close(): Promise<void> {
     await this.queue.close();
   }

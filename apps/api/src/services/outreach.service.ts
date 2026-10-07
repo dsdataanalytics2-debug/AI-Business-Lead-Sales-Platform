@@ -243,6 +243,25 @@ export class OutreachService {
   }
 
   /**
+   * Cancels a pending outreach delivery.
+   */
+  public async cancelDelivery(
+    context: OutreachRequestContext,
+    leadId: string,
+    deliveryId: string
+  ): Promise<OutreachDeliverySummary> {
+    const { organizationId, userId, role } = context;
+
+    return this.deliveryService.cancelDelivery({
+      organizationId,
+      authenticatedUserId: userId,
+      authenticatedUserRole: role,
+      leadId,
+      deliveryId
+    });
+  }
+
+  /**
    * Safe mapping from raw database record to public OutreachDeliverySummary DTO.
    * Data minimization: strictly excludes recipientNormalized, snapshot fields,
    * hashes, idempotency keys, and provider internal message IDs.

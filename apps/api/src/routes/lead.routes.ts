@@ -265,3 +265,11 @@ leadRouter.get(
   requirePermission(Permissions.OUTREACH_READ),
   outreachController.getDelivery
 );
+
+// POST /api/v1/leads/:id/outreach/deliveries/:deliveryId/cancel -> Cancel pending outreach delivery
+leadRouter.post(
+  '/:id/outreach/deliveries/:deliveryId/cancel',
+  requireAuth,
+  requirePermission(Permissions.OUTREACH_MANAGE),
+  outreachController.cancelDelivery
+);

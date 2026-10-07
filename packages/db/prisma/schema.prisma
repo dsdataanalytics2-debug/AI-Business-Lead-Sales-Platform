@@ -223,6 +223,7 @@ model Organization {
   demoWebsites           DemoWebsite[]
   salesAssistantDrafts   SalesAssistantDraft[]
   outreachDeliveries     OutreachDelivery[]
+  outreachWebhookEvents  OutreachWebhookEvent[]
 
   @@map("organizations")
 }
@@ -691,4 +692,26 @@ model OutreachDelivery {
   @@index([draftId])
   @@index([requestedByUserId])
   @@map("outreach_deliveries")
+}
+
+model OutreachWebhookEvent {
+  id                String    @id @default(uuid())
+  organizationId    String?   @map("organization_id")
+  providerName      String    @map("provider_name")
+  eventId           String    @map("event_id")
+  providerMessageId String    @map("provider_message_id")
+  eventType         String    @map("event_type")
+  receivedAt        DateTime  @default(now()) @map("received_at")
+  processedAt       DateTime? @map("processed_at")
+  processingStatus  String    @default("PENDING") @map("processing_status")
+  safeErrorMessage  String?   @map("safe_error_message")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([providerName, eventId])
+  @@index([providerName, providerMessageId])
+  @@index([organizationId, createdAt])
+  @@map("outreach_webhook_events")
 }

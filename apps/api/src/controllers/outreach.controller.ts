@@ -120,6 +120,34 @@ export class OutreachController {
       next(err);
     }
   }
+
+  /**
+   * POST /api/v1/leads/:id/outreach/deliveries/:deliveryId/cancel
+   *
+   * Cancels a pending outreach delivery.
+   */
+  async cancelDelivery(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id, deliveryId } = deliveryParamsSchema.parse(req.params);
+
+      const result = await outreachService.cancelDelivery(
+        {
+          organizationId: req.user!.organizationId,
+          userId: req.user!.id,
+          role: req.user!.role as Role,
+          correlationId: String(req.id || 'unknown')
+        },
+        id,
+        deliveryId
+      );
+
+      res.status(200).json({
+        data: result
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const outreachController = new OutreachController();

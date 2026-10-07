@@ -24,6 +24,7 @@ export interface OutreachDeliveryQueueEnqueueResult {
  */
 export interface OutreachDeliveryQueue {
   enqueue(payload: OutreachDeliveryJobPayload): Promise<OutreachDeliveryQueueEnqueueResult>;
+  removeJob?(jobId: string): Promise<void>;
 }
 
 /**
@@ -50,6 +51,10 @@ export class InMemoryOutreachDeliveryQueue implements OutreachDeliveryQueue {
     }
 
     return { jobId };
+  }
+
+  public async removeJob(jobId: string): Promise<void> {
+    this.jobs = this.jobs.filter((j) => j.jobId !== jobId);
   }
 
   public simulateFailure(error?: Error): void {

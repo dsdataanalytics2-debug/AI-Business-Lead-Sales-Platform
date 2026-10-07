@@ -2,15 +2,15 @@
 
 ## Current Milestone: M6 — Automated Outreach & Delivery 🔄 IN PROGRESS
 - **Status:** IN PROGRESS
-- **Base Checkpoint:** `11f0c3f0d80d6675f69c566dc72f6a1805464a88` (`feat(m6): add outreach delivery provider abstraction`)
+- **Base Checkpoint:** `76343f93895ee03762b08547c9bdc30a334471d9` (`feat(m6): add outreach delivery ui`)
 - **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
 - **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
 - **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
 - **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** COMPLETE (`11f0c3f0d80d6675f69c566dc72f6a1805464a88`)
-- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** IMPLEMENTED / AWAITING REVIEW
-- **Step 5 (Outreach REST API + RBAC + Audit Logging):** NOT STARTED
-- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** NOT STARTED
-- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** NOT STARTED
+- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** COMPLETE (`f08bdf0`)
+- **Step 5 (Outreach REST API + RBAC + Audit Logging):** COMPLETE (`2958517`)
+- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
+- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** IMPLEMENTED / READY FOR REVIEW
 - **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED
 - **Step 9 (Live Provider Adapter Integration):** NOT STARTED
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
@@ -141,8 +141,40 @@
   - Worker package tests (`apps/worker/src/tests`): **2 passed (2 total)** across **1 test file**.
   - Full repository test suite: **1,489 passed (1,489 total)** across **69 test files** (0 failures).
 
-
-
+### M6 Step 7 — Worker Execution + Retry + Cancellation + Webhook Framework (Implemented / Ready for Review)
+- **Files Created:**
+  - `packages/core/src/outreach/worker-delivery-executor.ts`
+  - `packages/core/src/outreach/webhook-event-processor.ts`
+  - `packages/core/src/tests/worker-delivery-executor.spec.ts`
+  - `packages/core/src/tests/webhook-event-processor.spec.ts`
+  - `packages/core/src/tests/outreach-cancellation.spec.ts`
+  - `packages/db/prisma/migrations/20261006120000_add_m6_step7_outreach_webhook_events/migration.sql`
+  - `apps/worker/src/workers/outreach-delivery.worker.ts`
+  - `apps/api/src/tests/outreach-cancellation-and-webhook.spec.ts`
+- **Files Modified:**
+  - `packages/db/prisma/schema.prisma`
+  - `packages/core/src/outreach/index.ts`
+  - `packages/core/src/outreach/queue.ts`
+  - `packages/core/src/outreach/outreach-delivery-service.ts`
+  - `packages/queues/src/outreach-delivery/bullmq-outreach-delivery-queue.ts`
+  - `apps/worker/src/index.ts`
+  - `apps/api/src/routes/lead.routes.ts`
+  - `apps/api/src/controllers/outreach.controller.ts`
+  - `apps/api/src/services/outreach.service.ts`
+  - `apps/api/src/app.ts`
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Architecture & Implementation Delivered:**
+  - **Worker Delivery Execution (`WorkerDeliveryExecutor`):** BullMQ worker consumes `{ deliveryId }` job and delegates execution to `WorkerDeliveryExecutor`. Reloads authoritative PostgreSQL record with tenant relations (`lead`, `draft`, `requestedByUser`), verifies cross-model tenant consistency (fails closed on discrepancy), checks non-dispatchable terminal states (`CANCELLED`, `SENT`, `DELIVERED`, `FAILED` -> no-op skip), handles `REQUESTED` race via `OutreachRequestedRaceError` (safe requeue), protects against duplicate physical processing when already in `PROCESSING` (reconciliation-required ambiguity, 0 resends), atomically claims `QUEUED -> PROCESSING`, validates Suppression Gate B immediately before provider dispatch, verifies immutable `approvedDraftSnapshotHash`, increments `attemptCount` once for actual physical send attempt outside DB transactions, and maps results to `SENT` (success) or `FAILED` (terminal/exhausted) or `QUEUED` (retryable with remaining attempts).
+  - **Accepted-But-Persistence Ambiguity Safety:** Verified with deterministic failure-injection test: when provider send succeeds but subsequent DB update to `SENT` fails, record remains `PROCESSING`; subsequent executions see pre-existing `PROCESSING`, make ZERO physical resends (total `provider.send` call count === 1), do not mark `DELIVERED` or `SENT` or `FAILED`, leaving state safe for reconciliation.
+  - **Retry & Backoff Framework:** Frozen retry policy: `maxAttempts = 3`, BullMQ `attempts = 3`, `backoff.type = 'exponential'`, `backoff.delay = 2000` ms. Retryable provider errors within budget transition status back to `QUEUED`, record public sanitized error code and message, and rethrow the provider error to trigger BullMQ exponential backoff. Non-retryable errors or exhausted budgets transition status to `FAILED`, record safe error diagnostics and audit log, and complete without worker retry.
+  - **Atomic Cancellation (`cancelDelivery`):** Guarded by `OUTREACH_MANAGE` permission. Scoped strictly by `organizationId` and `leadId`. Transitions `[REQUESTED, QUEUED] -> CANCELLED` with `cancelledAt` timestamp. Fails closed with 409 `OUTREACH_DELIVERY_IN_FLIGHT` if delivery is in `PROCESSING`, `SENT`, `DELIVERED`, or `FAILED`. Idempotent for already-cancelled deliveries. Best-effort queue cleanup via `queue.removeJob(deliveryId)`: queue failure leaves database `CANCELLED` state intact without rollback and returns successful cancellation summary. Authoritative `lead.outreach_cancelled` audit log recorded.
+  - **Normalized Webhook Framework (`OutreachWebhookEventProcessor`):** Strictly provider-neutral internal domain processor. Generic public webhook HTTP route and universal HMAC schemes are omitted from Step 7 (deferred to Step 9 provider-specific verified adapters). Input contains only normalized trusted event fields. Idempotent replay deduplication via `[providerName, eventId]`. Correlates delivery strictly via `(providerName, providerMessageId)`. Enforces forward-only transitions (`SENT -> DELIVERED`, `SENT -> FAILED`) with timestamp capture and safe error recording. Prevents state regression from terminal `DELIVERED`, `FAILED`, or `CANCELLED`.
+  - **Zero Step 6 Modification Invariant:** Frontend workspace (`apps/web`) remains 100% untouched and closed at commit `76343f93895ee03762b08547c9bdc30a334471d9`.
+- **Test Suite Verification:**
+  - Targeted Step 7 unit & integration tests: **35 passed (35 total)** across 4 test suites (`worker-delivery-executor.spec.ts`, `webhook-event-processor.spec.ts`, `outreach-cancellation.spec.ts`, `outreach-cancellation-and-webhook.spec.ts`).
+  - Full repository test suite: **1,602 passed (1,602 total)** across **77 test files** (0 failures).
+  - TypeScript typecheck: clean across all 11 monorepo workspaces.
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
