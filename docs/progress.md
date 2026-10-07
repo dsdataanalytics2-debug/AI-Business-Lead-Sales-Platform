@@ -1,19 +1,128 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
+## Current Milestone: M7 — Team Management + Sales Dashboard + Analytics 🔄 IN PROGRESS
+- **Status:** IN PROGRESS
+- **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
+- **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
+- **Step 1 (Shared Contracts & RBAC Permissions):** NOT STARTED
+- **Step 2 (Team Management Domain Service, DB Indexes & API):** NOT STARTED
+- **Step 3 (Team Management UI):** NOT STARTED
+- **Step 4 (Sales Analytics Domain Engine):** NOT STARTED
+- **Step 5 (Sales Dashboard REST API & Scoping):** NOT STARTED
+- **Step 6 (Sales Dashboard UI Core):** NOT STARTED
+- **Step 7 (Team Workload & Outreach Analytics UI):** NOT STARTED
+- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** NOT STARTED
+- **Step 9 (E2E Integration & Full Workspace Regression):** NOT STARTED
+- **Step 10 (Milestone Review & Closure):** NOT STARTED
+
+## Completed Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
-- **Step 0 (Outreach Architecture & Scope Freeze):** COMPLETE (`e1e3c177391dbe62002c9aa9aa8c9a4fe8a81507`)
-- **Step 1 (Shared Outreach Contracts + Permissions):** COMPLETE (`3b5207fccd60e0190c1c9ba8fcbb74495d98abd5`)
-- **Step 2 (Outreach Delivery Persistence + Migration):** COMPLETE (`98dab882f5f3a8c2c569a952ca8228d0de5419e1`)
-- **Step 3 (Delivery Provider Abstraction + Deterministic Mock Providers):** COMPLETE (`11f0c3f0d80d6675f69c566dc72f6a1805464a88`)
-- **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** COMPLETE (`f08bdf0`)
-- **Step 5 (Outreach REST API + RBAC + Audit Logging):** COMPLETE (`2958517`)
-- **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
-- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** COMPLETE (`657ff84fd755a4d9d2e32d1c3fe8f65b71e10671`)
-- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** COMPLETE (`28bb9cf10a78cbab8746fcc54c5ec8a0c1bd8e8b`)
-- **Step 9 (Live Provider Adapter Integration — Meta WhatsApp & Resend Email):** COMPLETE (`e498542377882c4e1a46590f794bb49ef1196ecd`)
-- **Step 10 (Milestone Review & Closure):** IMPLEMENTED / AWAITING REVIEW
+- **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
+
+### M7 Step 0 — Architecture & Scope Freeze (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
+- **Primary Goals & Scoped Modules:**
+  - A. **Team Management:** Organization user management, role assignments, profile edits, activation/deactivation, and workload visibility.
+  - B. **Sales Dashboard:** Real-time pipeline KPI cards, funnel metrics, follow-up workload, and outreach performance.
+  - C. **Analytics Engine:** Indexed real-time database aggregates for lead lifecycle, sales executive performance, outreach delivery, and lead sources.
+- **Architectural Guardrails & Frozen Decisions:**
+  - **Team Hierarchy Decision:** No `managerId`, `teamId`, or `departmentId` columns added to `User`. The operational sales manager role exercises tenant-wide sales oversight; all members belong directly to the `Organization`.
+  - **User Onboarding Model:** Reuses existing Option A (Admin creates member with temporary password using Argon2id hashing via `hashPassword`). No complex email token invitation subsystem introduced in M7.
+  - **User Activation & Invariant:** Relies on existing `User.isActive`. Deactivated users are blocked from logging in (`session.service.ts` rejects immediately), excluded from new assignment dropdowns (`lead.service.ts listAssignees` filters `isActive: true`), while historical assignments and audit logs remain intact (`onDelete: Restrict`). No silent reassignment or deletion.
+  - **Role Management & Permission Matrix (`USERS_READ` / `USERS_MANAGE`):**
+    - `SUPER_ADMIN`: `USERS_READ` + `USERS_MANAGE` (full user management across all roles within tenant).
+    - `ADMIN`: `USERS_READ` + `USERS_MANAGE` (can manage `SALES_MANAGER`, `SALES_EXECUTIVE`, `VIEWER`; cannot create/promote to `SUPER_ADMIN` or peer `ADMIN`; cannot edit/deactivate `SUPER_ADMIN`).
+    - `SALES_MANAGER`: `USERS_READ` (read-only member list and workload visibility; cannot create, edit, or deactivate users).
+    - `SALES_EXECUTIVE`: No `USERS_READ`, no `USERS_MANAGE` (cannot access `/team` or user roster).
+    - `VIEWER`: No `USERS_READ`, no `USERS_MANAGE` (observer only; cannot access `/team` or user roster).
+    - Safety guards: no self-role demotion, no self-deactivation (`targetUserId !== currentUserId`), and last active `SUPER_ADMIN` in tenant cannot be demoted or deactivated (HTTP 409).
+  - **Lead Assignment Authority:** `Lead.assignedUserId` remains single source of truth. Reassignment strictly uses existing CRM route (`PATCH /api/v1/leads/:id/assignment`) with `LEADS_ASSIGN` permission and audit logging.
+  - **Stage Date Semantics & Limitation (Why `updatedAt` is NOT used):**
+    - The `Lead` model does NOT have an authoritative scalar timestamp column (`wonAt`, `lostAt`, `stageChangedAt`).
+    - `Lead.updatedAt` is modified on any lead mutation (contact additions, assignment changes, notes, manual field edits, rating changes), making `updatedAt` unsafe as a proxy for conversion or stage transition dates.
+    - Historical transitions are recorded in `CrmActivity` (`type: STAGE_CHANGED`), but querying JSON metadata is unindexed for dashboard aggregates.
+    - Explicit M7 Step 0 Limitation: Stage counts across the pipeline are defined strictly as **CURRENT-STATE snapshots** (`crmStage = ...`), decoupled from date-range transition filters.
+    - Schema Change Proposal (Deferred to future Step 2 persistence, NOT implemented in Step 0): Evaluate adding dedicated timestamps (`stageChangedAt DateTime?`, `wonAt DateTime?`, `lostAt DateTime?`) to `Lead` updated transactionally in `updateCrmStage`.
+  - **Canonical Cohort Conversion Rate Formula:**
+    - To eliminate population mixing between creation dates and transition dates, M7 freezes a single canonical cohort formula:
+      $$\text{Cohort Conversion Rate} = \frac{\text{Leads created in selected period that are currently WON}}{\text{Total Leads created in selected period}} \times 100$$
+    - Denominator: `count(Lead WHERE organizationId = :org [AND assignedUserId = :user] AND createdAt BETWEEN from AND to)`.
+    - Numerator: `count(Lead WHERE organizationId = :org [AND assignedUserId = :user] AND createdAt BETWEEN from AND to AND crmStage = WON)`.
+    - Zero-denominator behavior: Safe `0.0%` when denominator is 0 (never NaN, never divide-by-zero).
+    - Single-population guarantee: Denominator and numerator evaluate the exact same cohort of leads acquired during the selected period.
+  - **Funnel Semantics (Current Pipeline Distribution):**
+    - The funnel is defined strictly as **Current Pipeline Distribution by `crmStage`** (breakdown of active lead volume across `NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`).
+    - It is NOT a historical drop-off transition funnel because the database tracks current stage state, not historical stage progression. UI wording will explicitly display "Current Pipeline Distribution by Stage".
+  - **Analytics RBAC & Sales Executive Scoping Rule:**
+    - Core Invariant: **Permission grants capability. Service/API scope determines data visibility.**
+    - Step 1 grants `REPORTS_READ` to: `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `SALES_EXECUTIVE`, and `VIEWER`.
+    - `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`: Tenant-wide analytics across all sales reps and unassigned leads.
+    - `VIEWER`: Tenant-wide read-only dashboard visibility (cannot view or mutate `/team` user roster).
+    - `SALES_EXECUTIVE`: API/service layer strictly scopes all analytics queries to `WHERE organizationId = req.user.organizationId AND assignedUserId = req.user.id`. A sales executive NEVER gains tenant-wide reports simply by possessing `REPORTS_READ`. Frontend hiding is never relied upon; scoping is unconditionally enforced in database queries.
+  - **Sales Team Performance Table (No Leaderboard / Gamification):**
+    - UI section is named **Sales Team Performance Table** (or **Team Performance Table**), explicitly rejecting "Leaderboard" terminology, arbitrary composite scores, or subjective employee rankings.
+    - Deterministic column sorting is permitted only by explicit operational metrics (e.g., Assigned Leads, Cohort Won, Overdue Follow-ups, Cohort Conversion Rate) at the user's explicit request.
+  - **Workload vs Period Performance Metric Distinction:**
+    - **Current Workload Metrics** (Point-in-time snapshot, independent of date picker):
+      - `activeLeadsCount`: Count of leads assigned to rep where `crmStage NOT IN [WON, LOST]`.
+      - `pendingFollowUpsCount`: Count of follow-up tasks assigned to rep with `status = PENDING`.
+      - `overdueFollowUpsCount`: Count of follow-up tasks assigned to rep with `status = PENDING` and `dueAt < now()`.
+    - **Selected-Period Performance Metrics** (Filtered by `from` and `to` date range):
+      - `leadsCreatedInPeriod`: Cohort leads created in period (`createdAt BETWEEN from AND to`) assigned to rep.
+      - `cohortWonCount`: Leads created in period assigned to rep that are currently `crmStage = WON`.
+      - `cohortConversionRate`: `(cohortWonCount / leadsCreatedInPeriod) * 100` (safe `0.0%` on zero denominator).
+      - `outreachSentCount`: Outreach deliveries in the send cohort (`sentAt BETWEEN from AND to`) for rep's leads.
+      - `outreachDeliveredCount`: Deliveries in the send cohort currently `status = DELIVERED` (`sentAt BETWEEN from AND to`).
+      - `outreachFailedCount`: Deliveries in the send cohort currently `status = FAILED` (`sentAt BETWEEN from AND to`).
+      - `outreachAwaitingCount`: Deliveries in the send cohort currently `status = SENT` (`sentAt BETWEEN from AND to`) awaiting provider terminal receipt.
+      - `resolvedDeliverySuccessRate`: `(outreachDeliveredCount / (outreachDeliveredCount + outreachFailedCount)) * 100` (safe `0.0%` on zero terminal outcomes; both numerator and denominator evaluate the exact same send cohort and exclude pending `SENT` sends).
+  - **Deterministic KPI Contract Table:**
+
+| Metric | Meaning | Source Model | Filter / Status | Timestamp Semantics | Assignee Scope | Zero-Denominator Behavior |
+|---|---|---|---|---|---|---|
+| **Total Leads (Period Cohort)** | Total leads created within the selected date range | `Lead` | All stages | `createdAt BETWEEN from AND to` | All or rep-scoped (`assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Current Stage Counts** | Current number of leads in each CRM stage (current pipeline/state distribution) | `Lead` | Specific `crmStage` (`NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`) | Current state snapshot (no date filter for total pipeline snapshot) | All or rep-scoped (`assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Cohort Conversion Rate** | Percentage of leads acquired during the period that have reached WON status | `Lead` | Numerator: `crmStage = WON`; Denominator: Total leads in cohort | Numerator and Denominator: `createdAt BETWEEN from AND to` | All or rep-scoped (`assignedUserId`) | `0.0%` if denominator is 0 (never NaN / error) |
+| **Follow-ups Due Today** | Pending tasks scheduled for action within today's operational window | `FollowUpTask` | `status = PENDING` | `dueAt BETWEEN startOfDay AND endOfDay` (in org timezone) | All or rep-scoped (`assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Overdue Follow-ups** | Pending tasks whose due date has passed without completion | `FollowUpTask` | `status = PENDING` | `dueAt < now()` | All or rep-scoped (`assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Outreach Sent (Send Cohort)** | Total outbound messages dispatched to delivery network within selected window | `OutreachDelivery` | `sentAt IS NOT NULL` (all statuses in send cohort) | `sentAt BETWEEN from AND to` (Send Cohort) | All or rep-scoped (via `lead.assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Outreach Delivered** | Messages from the send cohort confirmed delivered by provider | `OutreachDelivery` | `status = DELIVERED` | `sentAt BETWEEN from AND to` (Same Send Cohort; not `deliveredAt`) | All or rep-scoped (via `lead.assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Outreach Failed** | Messages from the send cohort that failed delivery or bounced | `OutreachDelivery` | `status = FAILED` | `sentAt BETWEEN from AND to` (Same Send Cohort; not `failedAt`) | All or rep-scoped (via `lead.assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Awaiting Delivery** | Messages from the send cohort in flight awaiting provider terminal callback | `OutreachDelivery` | `status = SENT` | `sentAt BETWEEN from AND to` (Same Send Cohort) | All or rep-scoped (via `lead.assignedUserId`) | N/A (integer $\ge$ 0) |
+| **Resolved Delivery Success Rate** | Ratio of confirmed deliveries to resolved terminal outcomes within the send cohort | `OutreachDelivery` | Numerator: `status = DELIVERED`; Denominator: `status IN [DELIVERED, FAILED]` | Numerator & Denominator: `sentAt BETWEEN from AND to` (Same Send Cohort) | All or rep-scoped (via `lead.assignedUserId`) | `0.0%` if resolved count is 0 (never NaN / error) |
+| **Active Workload (Per Rep)** | Count of active non-terminal leads assigned to sales rep | `Lead` | `crmStage NOT IN [WON, LOST]` | Current state snapshot | Scoped to specific sales rep (`assignedUserId`) | N/A (integer $\ge$ 0) |
+
+  - **Date & Timezone Semantics:** Each metric uses dedicated date column (`Lead.createdAt`, `FollowUpTask.dueAt`, `OutreachDelivery.sentAt`). Outreach analytics evaluate a single send cohort via `sentAt`. Calendar day bucketing uses `Organization.timezone` (`@default("Asia/Dhaka")`).
+  - **Analytics Architecture:** Direct indexed Prisma/PostgreSQL aggregates with parallel `Promise.all` execution. Zero external OLAP warehouse (no ClickHouse/Elasticsearch), zero premature Redis caching, zero WebSocket/SSE transports.
+  - **Proposed Indexes (Targeted Query Pattern Alignment):**
+    - `Lead`:
+      - `[organizationId, createdAt]` (tenant-wide period cohort queries)
+      - `[organizationId, assignedUserId, createdAt]` (sales-executive period cohort queries)
+      - `[organizationId, assignedUserId, crmStage]` (rep-scoped current stage counts & active workload queries)
+      - `[organizationId, primarySource]` (tenant-wide lead source distribution)
+      - *(Note: `[organizationId, crmStage]` and `[organizationId, assignedUserId]` already exist in `schema.prisma`)*
+    - `FollowUpTask`:
+      - `[organizationId, status, dueAt]` (tenant-wide due today and overdue follow-up queries; rep-scoped `[organizationId, assignedUserId, status, dueAt]` already exists)
+    - `OutreachDelivery`:
+      - `[organizationId, sentAt]` (sufficient for tenant-wide send cohort queries; `[organizationId, status, createdAt]` already exists)
+      - Evaluated for future query shapes (propose for Step 2 evaluation, not implemented in Step 0): `[organizationId, channel, sentAt]` for channel-filtered send cohorts and `[organizationId, status, sentAt]` for status aggregations within send cohorts.
+  - **Frontend UI & Charts:** Responsive layout using existing Tailwind CSS & Lucide icons. Visual SVG/Tailwind bars and progress metrics (no heavy chart library bloat).
+  - **Audit Logging:** Emits `team.member_created`, `team.member_updated`, `team.member_role_changed`, `team.member_activated`, `team.member_deactivated` with zero password or token leakage.
+  - **Explicitly Deferred:** StoreMate live external provider integration remains deferred behind 503; bulk multi-lead campaigns deferred; internal `@leadmate/*` renaming deferred.
+- **10-Step Implementation Roadmap:**
+  - Step 0: Architecture & Scope Freeze (Current)
+  - Step 1: Shared Contracts & RBAC Permissions
+  - Step 2: Team Management Domain Service, DB Indexes & API
+  - Step 3: Team Management UI (`/team`)
+  - Step 4: Sales Analytics Domain Engine
+  - Step 5: Sales Dashboard REST API & Scoping
+  - Step 6: Sales Dashboard UI Core (`/dashboard`)
+  - Step 7: Advanced Team Workload & Outreach Analytics UI
+  - Step 8: Security, Tenant Isolation & Query Optimization Hardening
+  - Step 9: E2E Integration & Full Workspace Regression
+  - Step 10: Milestone Review & Closure
 
 ### M6 Step 1 — Shared Outreach Contracts + Permissions (Completed)
 - **Files Created:** `packages/shared/src/schemas/outreach.ts`, `packages/shared/src/tests/outreach-schemas.spec.ts`.
