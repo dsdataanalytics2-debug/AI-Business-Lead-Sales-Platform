@@ -3,8 +3,8 @@ import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 
 export const metadata: Metadata = {
-  title: 'LeadMate — AI Business Lead & Sales Platform',
-  description: 'AI-powered business lead discovery, enrichment, scoring, CRM and StoreMate demo generation'
+  title: 'LeadAtlas | AI Lead & Sales Platform',
+  description: 'AI-powered business discovery, lead intelligence, CRM, and sales automation platform.'
 };
 
 export default function RootLayout({

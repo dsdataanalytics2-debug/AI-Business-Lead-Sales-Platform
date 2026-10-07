@@ -606,7 +606,7 @@ export function DemoWebsiteCard({
                   Remove this demo website?
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  The demo website will be unpublished and marked as removed. The historical record and audit trail remain preserved in LeadMate.
+                  The demo website will be unpublished and marked as removed. The historical record and audit trail remain preserved in LeadAtlas.
                 </p>
               </div>
             </div>

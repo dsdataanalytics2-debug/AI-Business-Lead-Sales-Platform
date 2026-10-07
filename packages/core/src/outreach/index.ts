@@ -25,3 +25,5 @@ export * from './queue.js';
 export * from './outreach-delivery-service.js';
 export * from './worker-delivery-executor.js';
 export * from './webhook-event-processor.js';
+export * from './meta-whatsapp-provider.js';
+export * from './meta-whatsapp-normalizer.js';

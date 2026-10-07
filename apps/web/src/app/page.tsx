@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
@@ -21,10 +22,17 @@ export default function HomePage() {
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-600 animate-pulse flex items-center justify-center text-white font-bold text-sm">
-          LM
+        <div className="w-12 h-12 relative">
+          <Image
+            src="/brand/leadatlas-logo.jpg"
+            alt="LeadAtlas"
+            width={48}
+            height={48}
+            priority
+            className="object-contain"
+          />
         </div>
-        <div className="text-xs text-slate-400 font-mono">Initializing LeadMate...</div>
+        <div className="text-xs text-slate-400 font-mono">Initializing LeadAtlas...</div>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -61,11 +62,18 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-slate-900/90 border border-slate-800 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
         {/* Header */}
         <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30 mb-3">
-            LM
+          <div className="w-20 h-20 relative mb-3">
+            <Image
+              src="/brand/leadatlas-logo.jpg"
+              alt="LeadAtlas"
+              width={80}
+              height={80}
+              priority
+              className="object-contain"
+            />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-white">LeadMate</h1>
-          <p className="text-xs text-slate-400 mt-1">AI Business Lead & Sales Enablement Platform</p>
+          <h1 className="text-xl font-bold tracking-tight text-white">LeadAtlas</h1>
+          <p className="text-xs text-slate-400 mt-1">AI-Powered Lead Discovery & Sales Automation</p>
         </div>
 
         {/* Error Alert */}

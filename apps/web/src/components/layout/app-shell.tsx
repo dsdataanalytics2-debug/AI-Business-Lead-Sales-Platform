@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
@@ -64,11 +65,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden md:flex flex-col w-64 border-r border-slate-800 bg-slate-950/80 backdrop-blur-sm">
         {/* Brand */}
         <div className="h-16 flex items-center px-6 border-b border-slate-800 gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-            LM
+          <div className="w-8 h-8 relative flex-shrink-0">
+            <Image
+              src="/brand/leadatlas-logo.jpg"
+              alt="LeadAtlas"
+              width={32}
+              height={32}
+              priority
+              className="object-contain"
+            />
           </div>
           <div>
-            <div className="font-semibold text-slate-100 text-sm tracking-tight">LeadMate</div>
+            <div className="font-semibold text-slate-100 text-sm tracking-tight">LeadAtlas</div>
             <div className="text-[10px] text-indigo-400 font-medium tracking-wide uppercase">AI Sales Platform</div>
           </div>
         </div>
@@ -139,10 +147,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="relative flex flex-col w-72 max-w-[80vw] bg-slate-950 border-r border-slate-800 p-4">
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-xs text-white">
-                  LM
+                <div className="w-7 h-7 relative flex-shrink-0">
+                  <Image
+                    src="/brand/leadatlas-logo.jpg"
+                    alt="LeadAtlas"
+                    width={28}
+                    height={28}
+                    className="object-contain"
+                  />
                 </div>
-                <span className="font-semibold text-sm">LeadMate</span>
+                <span className="font-semibold text-sm">LeadAtlas</span>
               </div>
               <button onClick={() => setMobileOpen(false)} className="text-slate-400 hover:text-white">
                 <X className="w-5 h-5" />
@@ -202,7 +216,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu className="w-5 h-5" />
             </button>
             <div className="text-xs font-medium text-slate-400 hidden sm:block">
-              LeadMate Default Org • <span className="text-slate-200">Asia/Dhaka</span>
+              LeadAtlas
             </div>
           </div>
 

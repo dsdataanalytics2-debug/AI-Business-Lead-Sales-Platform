@@ -557,4 +557,67 @@ describe('M6 Step 3: Outreach Delivery Provider Abstraction & Deterministic Mock
       expect(result.providerMessageId).toBe('mock-wa:del-wa-1001');
     });
   });
+
+  describe('10. Mock / Live Meta WhatsApp Contract Parity', () => {
+    it('both Mock and Meta providers implement OutreachDeliveryProvider interface correctly', async () => {
+      const mockProvider = new MockWhatsAppDeliveryProvider();
+      const metaProvider = new (await import('../outreach/meta-whatsapp-provider.js')).MetaWhatsAppDeliveryProvider({
+        config: {
+          accessToken: 'fake-token',
+          phoneNumberId: 'fake-phone-id'
+        },
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ messages: [{ id: 'wamid.PARITY_TEST_1' }] })
+        })) as any
+      });
+
+      // Name & Channel contract
+      expect(mockProvider.channel).toBe(OutreachChannel.WHATSAPP);
+      expect(metaProvider.channel).toBe(OutreachChannel.WHATSAPP);
+
+      // Both reject missing deliveryId with INVALID_INPUT
+      await expect(
+        mockProvider.send({ ...validWhatsAppInput, deliveryId: '' })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.INVALID_INPUT });
+
+      await expect(
+        metaProvider.send({ ...validWhatsAppInput, deliveryId: '' })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.INVALID_INPUT });
+
+      // Both reject CHANNEL_MISMATCH
+      await expect(
+        mockProvider.send({ ...validWhatsAppInput, channel: OutreachChannel.EMAIL as any })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.CHANNEL_MISMATCH });
+
+      await expect(
+        metaProvider.send({ ...validWhatsAppInput, channel: OutreachChannel.EMAIL as any })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.CHANNEL_MISMATCH });
+
+      // Both return OutreachProviderSendResult with acceptedAt
+      const mockResult = await mockProvider.send(validWhatsAppInput);
+      const metaResult = await metaProvider.send(validWhatsAppInput);
+
+      expect(mockResult.providerName).toBe(MOCK_WHATSAPP_PROVIDER_NAME);
+      expect(mockResult.acceptedAt).toBeInstanceOf(Date);
+      expect(metaResult.providerName).toBe('META_WHATSAPP');
+      expect(metaResult.acceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('registry switches to live Meta WhatsApp provider when metaWhatsAppOptions are configured', async () => {
+      const { META_WHATSAPP_PROVIDER_NAME } = await import('../outreach/meta-whatsapp-provider.js');
+      const registry = createDefaultOutreachDeliveryProviderRegistry({
+        metaWhatsAppOptions: {
+          config: {
+            accessToken: 'test-token',
+            phoneNumberId: 'test-phone-id'
+          }
+        }
+      });
+
+      const provider = registry.getProvider(OutreachChannel.WHATSAPP);
+      expect(provider.name).toBe(META_WHATSAPP_PROVIDER_NAME);
+    });
+  });
 });

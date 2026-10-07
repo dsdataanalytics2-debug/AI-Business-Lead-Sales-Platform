@@ -11,8 +11,8 @@
 - **Step 5 (Outreach REST API + RBAC + Audit Logging):** COMPLETE (`2958517`)
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** COMPLETE (`657ff84fd755a4d9d2e32d1c3fe8f65b71e10671`)
-- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** IMPLEMENTED / AWAITING REVIEW
-- **Step 9 (Live Provider Adapter Integration):** NOT STARTED
+- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** COMPLETE (`28bb9cf10a78cbab8746fcc54c5ec8a0c1bd8e8b`)
+- **Step 9 (Live Provider Adapter Integration):** IMPLEMENTED / AWAITING REVIEW (Meta WhatsApp live pilot & webhook adapter; live email blocked on vendor decision)
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
 ### M6 Step 1 — Shared Outreach Contracts + Permissions (Completed)
@@ -203,6 +203,46 @@
   - **Worker Fault Injection:** Malformed job payload or non-UUID deliveryId fails safely. Unknown deliveryId marks skipped failure without leakage. Cross-tenant relational corruption (mismatched lead, draft, or user org) fails closed with zero provider calls.
   - **Invariant Verification:** `attemptCount` strictly equals actual `provider.send` invocations across all success, retry, exhaustion, and suppression paths. Timestamps are mutually exclusive and consistent (`failedAt` only on `FAILED`, `sentAt` only on `SENT+`, `deliveredAt` only on `DELIVERED`, `cancelledAt` only on `CANCELLED`).
   - **Zero Frontend Changes:** `apps/web` remains 100% untouched. No live external network or providers configured.
+
+### M6 Step 9 — Live Provider Adapter Integration (Meta WhatsApp Cloud API Pilot & Webhook Adapter) (Implemented / Awaiting Review)
+- **Files Created:**
+  - `packages/core/src/outreach/meta-whatsapp-provider.ts` (Meta WhatsApp Cloud API outbound delivery provider implementing `OutreachDeliveryProvider`)
+  - `packages/core/src/outreach/meta-whatsapp-normalizer.ts` (Meta webhook payload validator and normalizer emitting `NormalizedOutreachWebhookEvent[]`)
+  - `packages/core/src/tests/meta-whatsapp-provider.spec.ts` (15 unit & fault injection tests for Meta outbound provider)
+  - `packages/core/src/tests/meta-whatsapp-normalizer.spec.ts` (5 normalization & security tests for Meta webhook events)
+  - `apps/api/src/middleware/meta-webhook-auth.ts` (Cryptographic HMAC SHA-256 signature verification over raw request body buffer)
+  - `apps/api/src/routes/meta-webhook.routes.ts` (Dedicated Meta webhook challenge and event ingestion endpoints)
+  - `apps/api/src/tests/meta-whatsapp-webhook.spec.ts` (9 end-to-end webhook verification & correlation tests)
+  - `apps/worker/src/config/env.ts` (Worker fail-closed configuration schema for live Meta provider mode)
+- **Files Modified:**
+  - `packages/core/src/outreach/registry.ts` (Registered `META_WHATSAPP` and options in provider registry)
+  - `packages/core/src/outreach/index.ts` (Exported Meta provider and normalizer)
+  - `packages/core/src/tests/outreach-delivery-provider.spec.ts` (Updated provider contract tests verifying mock/live parity)
+  - `apps/api/src/config/env.ts` (Added `OUTREACH_WHATSAPP_PROVIDER` and `META_WHATSAPP_*` fail-closed configuration)
+  - `apps/api/src/app.ts` (Added raw body capture and mounted `/api/v1/webhooks/meta/whatsapp` router)
+  - `apps/worker/src/workers/outreach-delivery.worker.ts` (Integrated worker provider registry with live/mock switching)
+  - `.env.example` (Documented Meta WhatsApp environment variables)
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Scope & Hardening Validated:**
+  - **Meta WhatsApp Cloud API Outbound Adapter (`MetaWhatsAppDeliveryProvider`):** Implements `OutreachDeliveryProvider` for `WHATSAPP` channel. Formats outbound requests to Graph API `/{phoneNumberId}/messages`. Injects custom `fetch` enabling 100% deterministic offline unit testing. Enforces strict input validation, recipient normalization, and authorization headers (`Bearer ${accessToken}`).
+  - **Error Classification & Sanitization:** Maps HTTP/Graph errors deterministically:
+    - HTTP 429 & Graph rate limits $\rightarrow$ `PROVIDER_RATE_LIMITED` (retryable)
+    - HTTP 5xx & network/fetch failures $\rightarrow$ `PROVIDER_UNAVAILABLE` (retryable)
+    - Abort / timeout $\rightarrow$ `PROVIDER_TIMEOUT` (retryable)
+    - Graph error 131026/131051 $\rightarrow$ `RECIPIENT_REJECTED` (non-retryable terminal)
+    - Graph error 131047/131048 $\rightarrow$ `CONTENT_REJECTED` (non-retryable terminal)
+    - HTTP 401/403/Graph 190 (bad auth/token) $\rightarrow$ `DELIVERY_FAILED` (non-retryable terminal)
+    - Malformed response / HTTP 200 without message ID $\rightarrow$ `INVALID_PROVIDER_RESPONSE` (non-retryable terminal)
+    - Raw tokens and sensitive credentials are sanitized; never leaked in errors, logs, or exceptions.
+  - **Meta Webhook Normalizer (`MetaWhatsAppWebhookNormalizer`):** Strictly parses verified Meta webhook payloads. Filters for `messages` field and status updates (`delivered`, `failed`). Safely ignores intermediate statuses (`sent`, `read`) and inbound messages. Constructs deterministic `eventId` (`meta-wa:${messageId}:${status}:${timestamp}`). Sets `organizationId = null` to prevent incoming tenant spoofing, relying on Step 8 correlation engine.
+  - **Cryptographic Webhook Signature Verification (`verifyMetaSignatureHeader`):** Captures exact raw body buffer via `express.json({ verify })`. Verifies `x-hub-signature-256` using constant-time `crypto.timingSafeEqual`. Rejects missing or invalid signatures with HTTP 401 Unauthorized before JSON parsing or domain execution.
+  - **Meta Webhook Endpoints:**
+    - `GET /api/v1/webhooks/meta/whatsapp`: Handles Meta webhook challenge verification (`hub.mode === 'subscribe'`, `hub.verify_token`), returning `hub.challenge` as plain text (200 OK) or 403 Forbidden.
+    - `POST /api/v1/webhooks/meta/whatsapp`: Cryptographically verifies signature, normalizes payload, processes events via `OutreachWebhookEventProcessor`, and returns HTTP 200 `{ status: 'EVENT_RECEIVED' }`.
+  - **Worker Environment & Registry:** `apps/worker` validates environment configuration fail-closed when `OUTREACH_WHATSAPP_PROVIDER=meta` and provides `createWorkerProviderRegistry()` configuring `MetaWhatsAppDeliveryProvider` for production delivery.
+  - **Blocked-On-Human Live Email Vendor Status:** Email delivery remains on `MockEmailDeliveryProvider`. Live email provider is strictly reported as `BLOCKED-ON-HUMAN: Live email vendor selection` without inventing speculative vendors.
+  - **Safety Invariants Preserved:** Absolute contact safety `PHONE != WHATSAPP` intact. Two-gate suppression defense intact. Zero credential exposure. Zero frontend modifications (`apps/web` untouched).
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.

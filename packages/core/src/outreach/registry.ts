@@ -15,9 +15,11 @@ import {
   MockEmailDeliveryProvider,
   MOCK_EMAIL_PROVIDER_NAME
 } from './mock-email-provider.js';
+import { META_WHATSAPP_PROVIDER_NAME } from './meta-whatsapp-provider.js';
 
 export const OutreachDeliveryProviderName = {
   MOCK_WHATSAPP: MOCK_WHATSAPP_PROVIDER_NAME,
+  META_WHATSAPP: META_WHATSAPP_PROVIDER_NAME,
   MOCK_EMAIL: MOCK_EMAIL_PROVIDER_NAME
 } as const;
 
@@ -40,19 +42,43 @@ export interface OutreachDeliveryProviderRegistry {
   registerProvider(provider: OutreachDeliveryProvider): void;
 }
 
+import {
+  MetaWhatsAppDeliveryProvider,
+  type MetaWhatsAppProviderConfig,
+  type MetaWhatsAppFetchFn
+} from './meta-whatsapp-provider.js';
+
+export interface MetaWhatsAppRegistryOptions {
+  config: MetaWhatsAppProviderConfig;
+  fetchFn?: MetaWhatsAppFetchFn;
+  clock?: () => Date;
+}
+
 export interface DefaultRegistryOptions {
   whatsAppOptions?: MockDeliveryProviderOptions;
   emailOptions?: MockDeliveryProviderOptions;
+  metaWhatsAppOptions?: MetaWhatsAppRegistryOptions;
 }
 
 /**
- * Default in-memory provider registry initialized with deterministic mock providers.
+ * Default in-memory provider registry initialized with deterministic mock or live providers.
  */
 export class DefaultOutreachDeliveryProviderRegistry implements OutreachDeliveryProviderRegistry {
   private readonly providers = new Map<OutreachChannel, OutreachDeliveryProvider>();
 
   constructor(options: DefaultRegistryOptions = {}) {
-    this.registerProvider(new MockWhatsAppDeliveryProvider(options.whatsAppOptions));
+    if (options.metaWhatsAppOptions) {
+      this.registerProvider(
+        new MetaWhatsAppDeliveryProvider({
+          config: options.metaWhatsAppOptions.config,
+          fetchFn: options.metaWhatsAppOptions.fetchFn,
+          clock: options.metaWhatsAppOptions.clock
+        })
+      );
+    } else {
+      this.registerProvider(new MockWhatsAppDeliveryProvider(options.whatsAppOptions));
+    }
+
     this.registerProvider(new MockEmailDeliveryProvider(options.emailOptions));
   }
 

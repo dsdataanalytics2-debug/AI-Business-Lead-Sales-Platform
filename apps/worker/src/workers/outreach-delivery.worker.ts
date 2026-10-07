@@ -76,12 +76,39 @@ export function createOutreachDeliveryProcessor(
   };
 }
 
+import { workerEnv } from '../config/env.js';
+import {
+  createDefaultOutreachDeliveryProviderRegistry,
+  type OutreachDeliveryProviderRegistry
+} from '@leadmate/core';
+
+export function createWorkerProviderRegistry(): OutreachDeliveryProviderRegistry | undefined {
+  if (workerEnv.OUTREACH_WHATSAPP_PROVIDER === 'meta') {
+    return createDefaultOutreachDeliveryProviderRegistry({
+      metaWhatsAppOptions: {
+        config: {
+          accessToken: workerEnv.META_WHATSAPP_ACCESS_TOKEN!,
+          phoneNumberId: workerEnv.META_WHATSAPP_PHONE_NUMBER_ID!,
+          apiVersion: workerEnv.META_WHATSAPP_API_VERSION,
+          baseUrl: workerEnv.META_WHATSAPP_BASE_URL,
+          timeoutMs: workerEnv.META_WHATSAPP_TIMEOUT_MS
+        }
+      }
+    });
+  }
+  return undefined;
+}
+
 export function createOutreachDeliveryWorker(
   options: OutreachDeliveryWorkerOptions = {}
 ): Worker<OutreachDeliveryJobData, WorkerDeliveryExecutionResult> {
   const connection =
     options.connection ?? createRedisConnection({ name: 'outreach-delivery-worker' });
-  const executor = options.executor ?? new WorkerDeliveryExecutor();
+  const executor =
+    options.executor ??
+    new WorkerDeliveryExecutor({
+      providerRegistry: createWorkerProviderRegistry()
+    });
   const processor = createOutreachDeliveryProcessor(executor);
 
   const worker = new Worker<OutreachDeliveryJobData, WorkerDeliveryExecutionResult>(

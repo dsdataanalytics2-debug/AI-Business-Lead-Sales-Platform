@@ -54,7 +54,7 @@ export default function DashboardPage() {
                 Hello, {user.name}
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                LeadMate Foundation (Milestone M0) initialized successfully.
+                LeadAtlas Platform • AI-Powered Lead Discovery & Sales Automation
               </p>
             </div>
 

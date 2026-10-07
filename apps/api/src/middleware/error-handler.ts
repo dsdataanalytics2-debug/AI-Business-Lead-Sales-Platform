@@ -16,6 +16,29 @@ export function errorHandler(
 ): void {
   const requestId = req.id || 'unknown';
 
+  // 0. Handle Body-Parser Payload Too Large / Syntax Errors
+  if ((err as any)?.type === 'entity.too.large' || (err as any)?.status === 413) {
+    res.status(413).json({
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload exceeds maximum allowed size',
+        requestId
+      }
+    });
+    return;
+  }
+
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400) {
+    res.status(400).json({
+      error: {
+        code: ErrorCodes.VALIDATION_ERROR,
+        message: 'Malformed JSON payload',
+        requestId
+      }
+    });
+    return;
+  }
+
   // 1. Handle Zod validation errors
   if (err instanceof ZodError) {
     const details = err.issues.map((issue) => ({
