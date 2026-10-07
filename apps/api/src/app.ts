@@ -12,6 +12,7 @@ import { healthRouter } from './routes/health.routes.js';
 import { businessSearchRouter } from './routes/business-search.routes.js';
 import { leadRouter } from './routes/lead.routes.js';
 import { metaWhatsAppWebhookRouter } from './routes/meta-webhook.routes.js';
+import { resendEmailWebhookRouter } from './routes/resend-webhook.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -28,8 +29,9 @@ export function createApp(): Express {
   app.use(requestIdMiddleware);
   app.use(httpLogger);
 
-  // Dedicated Webhook routes (provider-specific route with dedicated raw-body parsing)
+  // Dedicated Webhook routes (provider-specific routes with dedicated raw-body parsing)
   app.use('/api/v1/webhooks/meta/whatsapp', metaWhatsAppWebhookRouter);
+  app.use('/api/v1/webhooks/resend/email', resendEmailWebhookRouter);
 
   // Application body parsing (normal JSON parser for application routes, WITHOUT rawBody attachment)
   app.use(express.json({ limit: '2mb' }));

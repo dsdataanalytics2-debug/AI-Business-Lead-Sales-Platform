@@ -12,7 +12,7 @@
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
 - **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** COMPLETE (`657ff84fd755a4d9d2e32d1c3fe8f65b71e10671`)
 - **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** COMPLETE (`28bb9cf10a78cbab8746fcc54c5ec8a0c1bd8e8b`)
-- **Step 9 (Live Provider Adapter Integration):** IMPLEMENTED / AWAITING REVIEW (Meta WhatsApp live pilot & webhook adapter; live email blocked on vendor decision)
+- **Step 9 (Live Provider Adapter Integration):** IN PROGRESS (Step 9 Meta: COMPLETE; Step 9 Email Resend: IMPLEMENTED / AWAITING REVIEW)
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
 ### M6 Step 1 — Shared Outreach Contracts + Permissions (Completed)
@@ -243,6 +243,52 @@
   - **Worker Environment & Registry:** `apps/worker` validates environment configuration fail-closed when `OUTREACH_WHATSAPP_PROVIDER=meta` and provides `createWorkerProviderRegistry()` configuring `MetaWhatsAppDeliveryProvider` for production delivery.
   - **Blocked-On-Human Live Email Vendor Status:** Email delivery remains on `MockEmailDeliveryProvider`. Live email provider is strictly reported as `BLOCKED-ON-HUMAN: Live email vendor selection` without inventing speculative vendors.
   - **Safety Invariants Preserved:** Absolute contact safety `PHONE != WHATSAPP` intact. Two-gate suppression defense intact. Zero credential exposure. Zero frontend modifications (`apps/web` untouched).
+
+### M6 Step 9B — Resend Live Email Provider Integration (Implemented / Awaiting Review)
+- **Files Created:**
+  - `packages/core/src/outreach/resend-email-provider.ts` (Resend Email outbound delivery provider implementing `OutreachDeliveryProvider`)
+  - `packages/core/src/outreach/resend-email-normalizer.ts` (Resend webhook payload validator and normalizer emitting `NormalizedOutreachWebhookEvent[]`)
+  - `packages/core/src/tests/resend-email-provider.spec.ts` (Unit & fault injection tests for Resend outbound provider)
+  - `packages/core/src/tests/resend-email-normalizer.spec.ts` (Normalization & security tests for Resend webhook events)
+  - `apps/api/src/middleware/resend-webhook-auth.ts` (Cryptographic Svix HMAC SHA-256 signature verification over raw request body buffer)
+  - `apps/api/src/routes/resend-webhook.routes.ts` (Dedicated Resend webhook delivery receipt ingestion endpoint)
+  - `apps/api/src/tests/resend-email-webhook.spec.ts` (End-to-end webhook verification & correlation tests)
+- **Files Modified:**
+  - `packages/core/src/outreach/registry.ts` (Registered `RESEND_EMAIL` and options in provider registry)
+  - `packages/core/src/outreach/index.ts` (Exported Resend provider and normalizer)
+  - `packages/core/src/tests/outreach-delivery-provider.spec.ts` (Updated provider contract tests verifying mock/live parity)
+  - `apps/api/src/config/env.ts` (Added `OUTREACH_EMAIL_PROVIDER` and `RESEND_*` fail-closed configuration)
+  - `apps/api/src/app.ts` (Mounted `/api/v1/webhooks/resend/email` before application JSON parser)
+  - `apps/worker/src/config/env.ts` (Worker fail-closed configuration schema for live Resend provider mode)
+  - `apps/worker/src/workers/outreach-delivery.worker.ts` (Integrated worker provider registry with Resend live/mock switching)
+  - `.env.example` (Documented Resend email environment variables)
+  - `docs/progress.md`
+  - `docs/decisions.md`
+- **Scope & Hardening Validated:**
+  - **Resend Outbound Delivery Adapter (`ResendEmailDeliveryProvider`):** Implements `OutreachDeliveryProvider` for `EMAIL` channel. Dispatches approved snapshots (`subject`, `text: snapshotBody` without invented HTML markup) to Resend `POST /emails`. Supports native provider deduplication via `Idempotency-Key: ${providerIdempotencyToken}` header. Provider idempotency retention is bounded (~24 hours) with strict same-payload semantics (never claiming universal or indefinite exactly-once); 36-char delivery UUID fits comfortably within provider limits. Injects custom `fetchFn` for 100% deterministic offline unit testing. Enforces strict input validation, recipient email structure, and `Authorization: Bearer ${apiKey}` headers.
+  - **Error Classification & Sanitization:** Maps HTTP/Resend errors deterministically:
+    - HTTP 409 `concurrent_idempotent_requests` $\rightarrow$ `PROVIDER_RATE_LIMITED` (retryable)
+    - HTTP 409 `invalid_idempotent_request` $\rightarrow$ `DELIVERY_FAILED` (non-retryable terminal)
+    - HTTP 429 & rate limit errors $\rightarrow$ `PROVIDER_RATE_LIMITED` (retryable)
+    - HTTP 5xx & network/fetch failures $\rightarrow$ `PROVIDER_UNAVAILABLE` (retryable)
+    - Abort / timeout $\rightarrow$ `PROVIDER_TIMEOUT` (retryable)
+    - HTTP 422 with recipient bounce/unroutable indicators $\rightarrow$ `RECIPIENT_REJECTED` (non-retryable terminal)
+    - HTTP 422 with content/policy/spam indicators $\rightarrow$ `CONTENT_REJECTED` (non-retryable terminal)
+    - HTTP 422/403 with unverified sender domain $\rightarrow$ `DELIVERY_FAILED` (non-retryable terminal)
+    - HTTP 401/403 (bad auth/key) $\rightarrow$ `DELIVERY_FAILED` (non-retryable terminal)
+    - Malformed response / HTTP 200 without email ID $\rightarrow$ `INVALID_PROVIDER_RESPONSE` (non-retryable terminal)
+    - Zero API key or secret leakage in logs, errors, or exceptions.
+  - **Resend Webhook Normalizer (`normalizeResendEmailWebhookPayload`):** Strictly parses verified Resend webhook payloads. Maps terminal delivery events:
+    - `email.delivered` $\rightarrow$ `DELIVERED`
+    - `email.bounced` $\rightarrow$ `FAILED` with `OUTREACH_RECIPIENT_REJECTED`
+    - `email.failed` $\rightarrow$ `FAILED` with `OUTREACH_DELIVERY_FAILED`
+    - `email.suppressed` $\rightarrow$ `FAILED` with `OUTREACH_RECIPIENT_REJECTED`
+    Safely ignores non-terminal / analytics events (`email.sent`, `email.delivery_delayed`, `email.opened`, `email.clicked`, `email.complained`). Extracts authoritative `providerMessageId` (`data.email_id || data.id`) for all terminal events. Constructs deterministic `eventId` (`resend:${event.id}` or `resend:${emailId}:${type}:${timestamp}`). Sets `organizationId = null` to prevent incoming tenant spoofing, relying on Step 8 correlation engine.
+  - **Svix Webhook Signature Verification (`verifyResendWebhookSignature`):** Verifies Svix headers (`svix-id`, `svix-timestamp`, `svix-signature`) using constant-time `crypto.timingSafeEqual` over `${svixId}.${svixTimestamp}.${rawBody}` buffer and base64-decoded `whsec_` secret. Rejects missing/invalid signatures or expired timestamps (> 300s) with HTTP 401 Unauthorized before JSON parsing.
+  - **Resend Webhook Endpoint (`POST /api/v1/webhooks/resend/email`):** Dedicated route with 256kb raw body parsing, Svix signature verification, safe 400 error handling on malformed JSON, and event dispatch through `OutreachWebhookEventProcessor`. Requires `RESEND_WEBHOOK_SECRET` fail-closed in API environment schema when `NODE_ENV=production` and `OUTREACH_EMAIL_PROVIDER=resend`, while keeping worker schema free of unneeded webhook secrets.
+  - **Worker Environment & Registry:** `apps/worker` validates environment configuration fail-closed when `OUTREACH_EMAIL_PROVIDER=resend` and provides `createWorkerProviderRegistry()` configuring `ResendEmailDeliveryProvider` for production delivery.
+  - **No Live Sending:** 100% offline mock tests; zero real emails dispatched.
+
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.

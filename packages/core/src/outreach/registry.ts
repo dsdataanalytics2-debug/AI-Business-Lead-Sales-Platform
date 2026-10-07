@@ -16,11 +16,18 @@ import {
   MOCK_EMAIL_PROVIDER_NAME
 } from './mock-email-provider.js';
 import { META_WHATSAPP_PROVIDER_NAME } from './meta-whatsapp-provider.js';
+import {
+  RESEND_EMAIL_PROVIDER_NAME,
+  ResendEmailDeliveryProvider,
+  type ResendEmailProviderConfig,
+  type ResendEmailFetchFn
+} from './resend-email-provider.js';
 
 export const OutreachDeliveryProviderName = {
   MOCK_WHATSAPP: MOCK_WHATSAPP_PROVIDER_NAME,
   META_WHATSAPP: META_WHATSAPP_PROVIDER_NAME,
-  MOCK_EMAIL: MOCK_EMAIL_PROVIDER_NAME
+  MOCK_EMAIL: MOCK_EMAIL_PROVIDER_NAME,
+  RESEND_EMAIL: RESEND_EMAIL_PROVIDER_NAME
 } as const;
 
 export type OutreachDeliveryProviderName =
@@ -54,10 +61,17 @@ export interface MetaWhatsAppRegistryOptions {
   clock?: () => Date;
 }
 
+export interface ResendEmailRegistryOptions {
+  config: ResendEmailProviderConfig;
+  fetchFn?: ResendEmailFetchFn;
+  clock?: () => Date;
+}
+
 export interface DefaultRegistryOptions {
   whatsAppOptions?: MockDeliveryProviderOptions;
   emailOptions?: MockDeliveryProviderOptions;
   metaWhatsAppOptions?: MetaWhatsAppRegistryOptions;
+  resendEmailOptions?: ResendEmailRegistryOptions;
 }
 
 /**
@@ -79,7 +93,17 @@ export class DefaultOutreachDeliveryProviderRegistry implements OutreachDelivery
       this.registerProvider(new MockWhatsAppDeliveryProvider(options.whatsAppOptions));
     }
 
-    this.registerProvider(new MockEmailDeliveryProvider(options.emailOptions));
+    if (options.resendEmailOptions) {
+      this.registerProvider(
+        new ResendEmailDeliveryProvider({
+          config: options.resendEmailOptions.config,
+          fetchFn: options.resendEmailOptions.fetchFn,
+          clock: options.resendEmailOptions.clock
+        })
+      );
+    } else {
+      this.registerProvider(new MockEmailDeliveryProvider(options.emailOptions));
+    }
   }
 
   public getProvider(channel: OutreachChannel): OutreachDeliveryProvider {

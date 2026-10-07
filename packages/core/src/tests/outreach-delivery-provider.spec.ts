@@ -620,4 +620,73 @@ describe('M6 Step 3: Outreach Delivery Provider Abstraction & Deterministic Mock
       expect(provider.name).toBe(META_WHATSAPP_PROVIDER_NAME);
     });
   });
+
+  describe('11. Mock / Live Resend Email Contract Parity', () => {
+    it('both Mock and Resend providers implement OutreachDeliveryProvider interface correctly', async () => {
+      const mockProvider = new MockEmailDeliveryProvider();
+      const { ResendEmailDeliveryProvider, RESEND_EMAIL_PROVIDER_NAME } = await import(
+        '../outreach/resend-email-provider.js'
+      );
+      const resendProvider = new ResendEmailDeliveryProvider({
+        config: {
+          apiKey: 're_test_key_123',
+          fromEmail: 'onboarding@resend.dev',
+          fromName: 'LeadMate Team'
+        },
+        fetchFn: (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ id: 'resend_email_id_999' })
+        })) as any
+      });
+
+      // Name & Channel contract
+      expect(mockProvider.channel).toBe(OutreachChannel.EMAIL);
+      expect(resendProvider.channel).toBe(OutreachChannel.EMAIL);
+      expect(resendProvider.name).toBe(RESEND_EMAIL_PROVIDER_NAME);
+
+      // Both reject missing deliveryId with INVALID_INPUT
+      await expect(
+        mockProvider.send({ ...validEmailInput, deliveryId: '' })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.INVALID_INPUT });
+
+      await expect(
+        resendProvider.send({ ...validEmailInput, deliveryId: '' })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.INVALID_INPUT });
+
+      // Both reject CHANNEL_MISMATCH
+      await expect(
+        mockProvider.send({ ...validEmailInput, channel: OutreachChannel.WHATSAPP as any })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.CHANNEL_MISMATCH });
+
+      await expect(
+        resendProvider.send({ ...validEmailInput, channel: OutreachChannel.WHATSAPP as any })
+      ).rejects.toMatchObject({ code: OutreachProviderErrorCode.CHANNEL_MISMATCH });
+
+      // Both return OutreachProviderSendResult with acceptedAt
+      const mockResult = await mockProvider.send(validEmailInput);
+      const resendResult = await resendProvider.send(validEmailInput);
+
+      expect(mockResult.providerName).toBe(MOCK_EMAIL_PROVIDER_NAME);
+      expect(mockResult.acceptedAt).toBeInstanceOf(Date);
+      expect(resendResult.providerName).toBe(RESEND_EMAIL_PROVIDER_NAME);
+      expect(resendResult.providerMessageId).toBe('resend_email_id_999');
+      expect(resendResult.acceptedAt).toBeInstanceOf(Date);
+    });
+
+    it('registry switches to live Resend Email provider when resendEmailOptions are configured', async () => {
+      const { RESEND_EMAIL_PROVIDER_NAME } = await import('../outreach/resend-email-provider.js');
+      const registry = createDefaultOutreachDeliveryProviderRegistry({
+        resendEmailOptions: {
+          config: {
+            apiKey: 're_live_key',
+            fromEmail: 'sales@example.com'
+          }
+        }
+      });
+
+      const provider = registry.getProvider(OutreachChannel.EMAIL);
+      expect(provider.name).toBe(RESEND_EMAIL_PROVIDER_NAME);
+    });
+  });
 });

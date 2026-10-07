@@ -273,7 +273,8 @@ describe('Meta WhatsApp Webhook Endpoint Security & Ingestion', () => {
         NODE_ENV: 'production',
         DATABASE_URL: 'postgresql://localhost:5432/test',
         SESSION_SECRET: 'super-secret-session-key-at-least-16-chars',
-        OUTREACH_WHATSAPP_PROVIDER: 'mock'
+        OUTREACH_WHATSAPP_PROVIDER: 'mock',
+        OUTREACH_EMAIL_PROVIDER: 'mock'
       });
       expect(parsed.success).toBe(true);
       if (parsed.success) {
@@ -287,7 +288,8 @@ describe('Meta WhatsApp Webhook Endpoint Security & Ingestion', () => {
         NODE_ENV: 'production',
         DATABASE_URL: 'postgresql://localhost:5432/test',
         SESSION_SECRET: 'super-secret-session-key-at-least-16-chars',
-        OUTREACH_WHATSAPP_PROVIDER: 'meta'
+        OUTREACH_WHATSAPP_PROVIDER: 'meta',
+        OUTREACH_EMAIL_PROVIDER: 'mock'
       });
       expect(parsed.success).toBe(false);
       if (!parsed.success) {
@@ -306,6 +308,7 @@ describe('Meta WhatsApp Webhook Endpoint Security & Ingestion', () => {
         DATABASE_URL: 'postgresql://localhost:5432/test',
         SESSION_SECRET: 'super-secret-session-key-at-least-16-chars',
         OUTREACH_WHATSAPP_PROVIDER: 'meta',
+        OUTREACH_EMAIL_PROVIDER: 'mock',
         META_WHATSAPP_ACCESS_TOKEN: 'valid-meta-token',
         META_WHATSAPP_PHONE_NUMBER_ID: '1234567890',
         META_WHATSAPP_APP_SECRET: 'valid-meta-app-secret',

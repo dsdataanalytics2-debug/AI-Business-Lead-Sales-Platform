@@ -83,20 +83,41 @@ import {
 } from '@leadmate/core';
 
 export function createWorkerProviderRegistry(): OutreachDeliveryProviderRegistry | undefined {
-  if (workerEnv.OUTREACH_WHATSAPP_PROVIDER === 'meta') {
-    return createDefaultOutreachDeliveryProviderRegistry({
-      metaWhatsAppOptions: {
-        config: {
-          accessToken: workerEnv.META_WHATSAPP_ACCESS_TOKEN!,
-          phoneNumberId: workerEnv.META_WHATSAPP_PHONE_NUMBER_ID!,
-          apiVersion: workerEnv.META_WHATSAPP_API_VERSION,
-          baseUrl: workerEnv.META_WHATSAPP_BASE_URL,
-          timeoutMs: workerEnv.META_WHATSAPP_TIMEOUT_MS
-        }
-      }
-    });
+  const isMeta = workerEnv.OUTREACH_WHATSAPP_PROVIDER === 'meta';
+  const isResend = workerEnv.OUTREACH_EMAIL_PROVIDER === 'resend';
+
+  if (!isMeta && !isResend) {
+    return undefined;
   }
-  return undefined;
+
+  return createDefaultOutreachDeliveryProviderRegistry({
+    ...(isMeta
+      ? {
+          metaWhatsAppOptions: {
+            config: {
+              accessToken: workerEnv.META_WHATSAPP_ACCESS_TOKEN!,
+              phoneNumberId: workerEnv.META_WHATSAPP_PHONE_NUMBER_ID!,
+              apiVersion: workerEnv.META_WHATSAPP_API_VERSION,
+              baseUrl: workerEnv.META_WHATSAPP_BASE_URL,
+              timeoutMs: workerEnv.META_WHATSAPP_TIMEOUT_MS
+            }
+          }
+        }
+      : {}),
+    ...(isResend
+      ? {
+          resendEmailOptions: {
+            config: {
+              apiKey: workerEnv.RESEND_API_KEY!,
+              fromEmail: workerEnv.RESEND_FROM_EMAIL!,
+              fromName: workerEnv.RESEND_FROM_NAME,
+              baseUrl: workerEnv.RESEND_API_BASE_URL,
+              timeoutMs: workerEnv.RESEND_TIMEOUT_MS
+            }
+          }
+        }
+      : {})
+  });
 }
 
 export function createOutreachDeliveryWorker(

@@ -27,3 +27,5 @@ export * from './worker-delivery-executor.js';
 export * from './webhook-event-processor.js';
 export * from './meta-whatsapp-provider.js';
 export * from './meta-whatsapp-normalizer.js';
+export * from './resend-email-provider.js';
+export * from './resend-email-normalizer.js';

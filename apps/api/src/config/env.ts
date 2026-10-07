@@ -26,7 +26,15 @@ const envSchema = z.object({
   META_WHATSAPP_VERIFY_TOKEN: z.string().optional(),
   META_WHATSAPP_API_VERSION: z.string().default('v22.0'),
   META_WHATSAPP_BASE_URL: z.string().default('https://graph.facebook.com'),
-  META_WHATSAPP_TIMEOUT_MS: z.coerce.number().default(10000)
+  META_WHATSAPP_TIMEOUT_MS: z.coerce.number().default(10000),
+
+  OUTREACH_EMAIL_PROVIDER: z.enum(['mock', 'resend']).optional(),
+  RESEND_API_KEY: z.string().optional(),
+  RESEND_FROM_EMAIL: z.string().optional(),
+  RESEND_FROM_NAME: z.string().optional(),
+  RESEND_API_BASE_URL: z.string().default('https://api.resend.com'),
+  RESEND_TIMEOUT_MS: z.coerce.number().default(10000),
+  RESEND_WEBHOOK_SECRET: z.string().optional()
 }).superRefine((data, ctx) => {
   const isProduction = data.NODE_ENV === 'production';
   if (isProduction && !data.OUTREACH_WHATSAPP_PROVIDER) {
@@ -70,9 +78,45 @@ const envSchema = z.object({
       });
     }
   }
+
+  if (isProduction && !data.OUTREACH_EMAIL_PROVIDER) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['OUTREACH_EMAIL_PROVIDER'],
+      message: 'OUTREACH_EMAIL_PROVIDER must be explicitly configured in production (cannot default implicitly)'
+    });
+    return;
+  }
+
+  const effectiveEmailProvider = data.OUTREACH_EMAIL_PROVIDER ?? 'mock';
+
+  if (effectiveEmailProvider === 'resend') {
+    if (!data.RESEND_API_KEY || data.RESEND_API_KEY.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_API_KEY'],
+        message: 'RESEND_API_KEY is required when OUTREACH_EMAIL_PROVIDER is resend'
+      });
+    }
+    if (!data.RESEND_FROM_EMAIL || data.RESEND_FROM_EMAIL.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_FROM_EMAIL'],
+        message: 'RESEND_FROM_EMAIL is required when OUTREACH_EMAIL_PROVIDER is resend'
+      });
+    }
+    if (isProduction && (!data.RESEND_WEBHOOK_SECRET || data.RESEND_WEBHOOK_SECRET.trim().length === 0)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_WEBHOOK_SECRET'],
+        message: 'RESEND_WEBHOOK_SECRET is required in production when OUTREACH_EMAIL_PROVIDER is resend'
+      });
+    }
+  }
 }).transform((data) => ({
   ...data,
-  OUTREACH_WHATSAPP_PROVIDER: data.OUTREACH_WHATSAPP_PROVIDER ?? 'mock'
+  OUTREACH_WHATSAPP_PROVIDER: data.OUTREACH_WHATSAPP_PROVIDER ?? 'mock',
+  OUTREACH_EMAIL_PROVIDER: data.OUTREACH_EMAIL_PROVIDER ?? 'mock'
 }));
 
 export { envSchema };
