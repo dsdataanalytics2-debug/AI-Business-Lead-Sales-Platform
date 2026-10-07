@@ -36,6 +36,16 @@ function createMockPrismaClient(state: InMemoryDbState) {
         };
         state.webhookEvents.push(event);
         return JSON.parse(JSON.stringify(event));
+      },
+      update: async ({ where, data }: { where: { id: string }; data: any }) => {
+        const idx = state.webhookEvents.findIndex((e) => e.id === where.id);
+        if (idx === -1) throw new Error('Webhook event not found');
+        state.webhookEvents[idx] = {
+          ...state.webhookEvents[idx],
+          ...data,
+          updatedAt: new Date()
+        };
+        return JSON.parse(JSON.stringify(state.webhookEvents[idx]));
       }
     },
     outreachDelivery: {
@@ -46,6 +56,15 @@ function createMockPrismaClient(state: InMemoryDbState) {
             d.providerMessageId === where.providerMessageId
         );
         return found ? JSON.parse(JSON.stringify(found)) : null;
+      },
+      findMany: async ({ where, take }: { where: any; take?: number }) => {
+        const matches = state.deliveries.filter(
+          (d) =>
+            d.providerName === where.providerName &&
+            d.providerMessageId === where.providerMessageId
+        );
+        const results = typeof take === 'number' ? matches.slice(0, take) : matches;
+        return JSON.parse(JSON.stringify(results));
       },
       update: async ({ where, data }: { where: { id: string }; data: any }) => {
         const idx = state.deliveries.findIndex((d) => d.id === where.id);
@@ -350,5 +369,197 @@ describe('M6 Step 7: OutreachWebhookEventProcessor Spec Suite', () => {
     // Verifies 0 delivery status mutations and 0 audit logs created
     expect(dbState.deliveries.length).toBe(initialDeliveryCount);
     expect(dbState.auditLogs.length).toBe(initialAuditCount);
+  });
+
+  it('8. Cross-Tenant Ambiguity: multiple matching deliveries fail closed without mutating deliveries or leaking candidate tenants', async () => {
+    const orgA = 'org-tenant-a';
+    const orgB = 'org-tenant-b';
+    const sharedMsgId = 'wamid-shared-collision-999';
+
+    // Seed delivery in Org A
+    dbState.deliveries.push({
+      id: 'del-org-a',
+      organizationId: orgA,
+      leadId: 'lead-a',
+      draftId: 'draft-a',
+      requestedByUserId: 'user-a',
+      channel: OutreachChannel.WHATSAPP,
+      status: OutreachDeliveryStatus.SENT,
+      providerName,
+      providerMessageId: sharedMsgId
+    });
+
+    // Seed delivery in Org B
+    dbState.deliveries.push({
+      id: 'del-org-b',
+      organizationId: orgB,
+      leadId: 'lead-b',
+      draftId: 'draft-b',
+      requestedByUserId: 'user-b',
+      channel: OutreachChannel.WHATSAPP,
+      status: OutreachDeliveryStatus.SENT,
+      providerName,
+      providerMessageId: sharedMsgId
+    });
+
+    const processor = new OutreachWebhookEventProcessor({
+      prisma: mockPrisma,
+      clock: () => fixedClock
+    });
+
+    const result = await processor.processEvent({
+      providerName,
+      eventId: 'evt-ambig-01',
+      providerMessageId: sharedMsgId,
+      eventType: 'DELIVERED'
+    });
+
+    // Processor fails closed
+    expect(result.ok).toBe(false);
+    expect(result.matched).toBe(false);
+    expect(result.safeMessage).toBe('Ambiguous provider message correlation');
+
+    // Zero delivery mutations across Org A & Org B
+    const delA = dbState.deliveries.find((d) => d.id === 'del-org-a');
+    const delB = dbState.deliveries.find((d) => d.id === 'del-org-b');
+    expect(delA.status).toBe(OutreachDeliveryStatus.SENT);
+    expect(delB.status).toBe(OutreachDeliveryStatus.SENT);
+    expect(delA.deliveredAt).toBeUndefined();
+    expect(delB.deliveredAt).toBeUndefined();
+
+    // Zero audit logs emitted
+    expect(dbState.auditLogs.length).toBe(0);
+
+    // Webhook event safely stored with organizationId = null
+    const savedEvent = dbState.webhookEvents.find((e) => e.eventId === 'evt-ambig-01');
+    expect(savedEvent).toBeDefined();
+    expect(savedEvent.organizationId).toBeNull();
+    expect(savedEvent.processingStatus).toBe('UNMATCHED');
+    expect(savedEvent.safeErrorMessage).toBe('Ambiguous provider message correlation');
+  });
+
+  it('9. Out-of-order DELIVERED event: deferred when delivery is PROCESSING, reconciles on replay after SENT', async () => {
+    // 1. Delivery is in pre-terminal state PROCESSING
+    dbState.deliveries[0].status = OutreachDeliveryStatus.PROCESSING;
+
+    const processor = new OutreachWebhookEventProcessor({
+      prisma: mockPrisma,
+      clock: () => fixedClock
+    });
+
+    // 2. DELIVERED event E1 arrives out of order
+    const e1: NormalizedOutreachWebhookEvent = {
+      providerName,
+      eventId: 'evt-ooo-del-1',
+      providerMessageId,
+      eventType: 'DELIVERED',
+      timestamp: fixedClock
+    };
+
+    const r1 = await processor.processEvent(e1);
+
+    // 3. Delivery remains PROCESSING, event deferred/UNRESOLVED
+    expect(r1.ok).toBe(true);
+    expect(r1.duplicate).toBe(false);
+    expect(r1.matched).toBe(true);
+    expect(r1.newStatus).toBe(OutreachDeliveryStatus.PROCESSING);
+    expect(dbState.deliveries[0].status).toBe(OutreachDeliveryStatus.PROCESSING);
+    expect(dbState.auditLogs.length).toBe(0);
+
+    const savedE1 = dbState.webhookEvents.find((e) => e.eventId === 'evt-ooo-del-1');
+    expect(savedE1).toBeDefined();
+    expect(savedE1.processingStatus).toBe('UNRESOLVED');
+    expect(savedE1.processedAt).toBeNull();
+
+    // 4. Delivery transitions normally to SENT (e.g. worker finishes dispatch)
+    dbState.deliveries[0].status = OutreachDeliveryStatus.SENT;
+
+    // 5. Replay SAME eventId E1
+    const r2 = await processor.processEvent(e1);
+
+    // 6. Processor applies SENT -> DELIVERED, emits audit log, finalizes event as PROCESSED
+    expect(r2.ok).toBe(true);
+    expect(r2.duplicate).toBe(false);
+    expect(r2.previousStatus).toBe(OutreachDeliveryStatus.SENT);
+    expect(r2.newStatus).toBe(OutreachDeliveryStatus.DELIVERED);
+    expect(dbState.deliveries[0].status).toBe(OutreachDeliveryStatus.DELIVERED);
+    expect(dbState.deliveries[0].deliveredAt).toEqual(fixedClock);
+
+    expect(dbState.auditLogs.length).toBe(1);
+    expect(dbState.auditLogs[0].action).toBe('lead.outreach_delivered');
+
+    const updatedE1 = dbState.webhookEvents.find((e) => e.eventId === 'evt-ooo-del-1');
+    expect(updatedE1.processingStatus).toBe('PROCESSED');
+    expect(updatedE1.processedAt).toEqual(fixedClock);
+
+    // 7. Third replay of E1 is duplicate no-op
+    const r3 = await processor.processEvent(e1);
+    expect(r3.ok).toBe(true);
+    expect(r3.duplicate).toBe(true);
+    expect(dbState.auditLogs.length).toBe(1);
+  });
+
+  it('10. Out-of-order FAILED event: deferred when delivery is PROCESSING, reconciles on replay after SENT', async () => {
+    // 1. Delivery is in pre-terminal state PROCESSING
+    dbState.deliveries[0].status = OutreachDeliveryStatus.PROCESSING;
+
+    const processor = new OutreachWebhookEventProcessor({
+      prisma: mockPrisma,
+      clock: () => fixedClock
+    });
+
+    // 2. FAILED event E2 arrives out of order
+    const e2: NormalizedOutreachWebhookEvent = {
+      providerName,
+      eventId: 'evt-ooo-fail-2',
+      providerMessageId,
+      eventType: 'FAILED',
+      safeErrorCode: OutreachErrorCode.OUTREACH_DELIVERY_FAILED,
+      safeErrorMessage: 'Downstream network failure',
+      timestamp: fixedClock
+    };
+
+    const r1 = await processor.processEvent(e2);
+
+    // 3. Delivery remains PROCESSING, event deferred/UNRESOLVED
+    expect(r1.ok).toBe(true);
+    expect(r1.duplicate).toBe(false);
+    expect(r1.matched).toBe(true);
+    expect(r1.newStatus).toBe(OutreachDeliveryStatus.PROCESSING);
+    expect(dbState.deliveries[0].status).toBe(OutreachDeliveryStatus.PROCESSING);
+    expect(dbState.auditLogs.length).toBe(0);
+
+    const savedE2 = dbState.webhookEvents.find((e) => e.eventId === 'evt-ooo-fail-2');
+    expect(savedE2).toBeDefined();
+    expect(savedE2.processingStatus).toBe('UNRESOLVED');
+    expect(savedE2.processedAt).toBeNull();
+
+    // 4. Delivery transitions normally to SENT
+    dbState.deliveries[0].status = OutreachDeliveryStatus.SENT;
+
+    // 5. Replay SAME eventId E2
+    const r2 = await processor.processEvent(e2);
+
+    // 6. Processor applies SENT -> FAILED, emits audit log, finalizes event as PROCESSED
+    expect(r2.ok).toBe(true);
+    expect(r2.duplicate).toBe(false);
+    expect(r2.previousStatus).toBe(OutreachDeliveryStatus.SENT);
+    expect(r2.newStatus).toBe(OutreachDeliveryStatus.FAILED);
+    expect(dbState.deliveries[0].status).toBe(OutreachDeliveryStatus.FAILED);
+    expect(dbState.deliveries[0].failedAt).toEqual(fixedClock);
+    expect(dbState.deliveries[0].lastErrorCode).toBe(OutreachErrorCode.OUTREACH_DELIVERY_FAILED);
+
+    expect(dbState.auditLogs.length).toBe(1);
+    expect(dbState.auditLogs[0].action).toBe('lead.outreach_failed');
+
+    const updatedE2 = dbState.webhookEvents.find((e) => e.eventId === 'evt-ooo-fail-2');
+    expect(updatedE2.processingStatus).toBe('PROCESSED');
+    expect(updatedE2.processedAt).toEqual(fixedClock);
+
+    // 7. Third replay of E2 is duplicate no-op
+    const r3 = await processor.processEvent(e2);
+    expect(r3.ok).toBe(true);
+    expect(r3.duplicate).toBe(true);
+    expect(dbState.auditLogs.length).toBe(1);
   });
 });

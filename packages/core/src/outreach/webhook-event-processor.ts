@@ -67,7 +67,7 @@ export class OutreachWebhookEventProcessor {
       }
     });
 
-    if (existingEvent) {
+    if (existingEvent && existingEvent.processingStatus === 'PROCESSED') {
       return {
         ok: true,
         duplicate: true,
@@ -77,30 +77,42 @@ export class OutreachWebhookEventProcessor {
     }
 
     // 2. Correlate Delivery via (providerName, providerMessageId)
-    const delivery = await this.prisma.outreachDelivery.findFirst({
+    // Query enough rows to distinguish: 0 matches, 1 match, >1 matches (ambiguous correlation fail-closed)
+    const matchingDeliveries = await this.prisma.outreachDelivery.findMany({
       where: {
         providerName: event.providerName,
         providerMessageId: event.providerMessageId
-      }
+      },
+      take: 2
     });
 
-    if (!delivery) {
+    if (matchingDeliveries.length === 0) {
       // Record unmatched event safely
-      try {
-        await this.prisma.outreachWebhookEvent.create({
+      if (existingEvent) {
+        await this.prisma.outreachWebhookEvent.update({
+          where: { id: existingEvent.id },
           data: {
-            providerName: event.providerName,
-            eventId: event.eventId,
-            providerMessageId: event.providerMessageId,
-            eventType: event.eventType,
-            receivedAt: now,
-            processedAt: now,
             processingStatus: 'UNMATCHED',
             safeErrorMessage: 'No correlated delivery found'
           }
         });
-      } catch {
-        // Replay collision guard
+      } else {
+        try {
+          await this.prisma.outreachWebhookEvent.create({
+            data: {
+              providerName: event.providerName,
+              eventId: event.eventId,
+              providerMessageId: event.providerMessageId,
+              eventType: event.eventType,
+              receivedAt: now,
+              processedAt: now,
+              processingStatus: 'UNMATCHED',
+              safeErrorMessage: 'No correlated delivery found'
+            }
+          });
+        } catch {
+          // Replay collision guard
+        }
       }
 
       return {
@@ -111,86 +123,196 @@ export class OutreachWebhookEventProcessor {
       };
     }
 
+    if (matchingDeliveries.length > 1) {
+      // FAIL CLOSED: ambiguous providerMessageId correlation across multiple deliveries/tenants.
+      // Do not mutate ANY delivery, do not pick first row, organizationId must remain null.
+      if (existingEvent) {
+        await this.prisma.outreachWebhookEvent.update({
+          where: { id: existingEvent.id },
+          data: {
+            organizationId: null,
+            processingStatus: 'UNMATCHED',
+            safeErrorMessage: 'Ambiguous provider message correlation'
+          }
+        });
+      } else {
+        try {
+          await this.prisma.outreachWebhookEvent.create({
+            data: {
+              organizationId: null,
+              providerName: event.providerName,
+              eventId: event.eventId,
+              providerMessageId: event.providerMessageId,
+              eventType: event.eventType,
+              receivedAt: now,
+              processedAt: now,
+              processingStatus: 'UNMATCHED',
+              safeErrorMessage: 'Ambiguous provider message correlation'
+            }
+          });
+        } catch {
+          // Replay collision guard
+        }
+      }
+
+      return {
+        ok: false,
+        duplicate: false,
+        matched: false,
+        safeMessage: 'Ambiguous provider message correlation'
+      };
+    }
+
+    const delivery = matchingDeliveries[0];
     const previousStatus = delivery.status as OutreachDeliveryStatus;
     let newStatus = previousStatus;
     let shouldAudit = false;
     let auditAction = '';
     let auditMetadata: Record<string, unknown> = {};
+    let finalProcessingStatus: string = 'PROCESSED';
+    let processedAtDate: Date | null = now;
+    let safeStatusErrorMessage: string | null = null;
+
+    // Check if delivery is in a pre-terminal state (REQUESTED, QUEUED, PROCESSING)
+    const isPreTerminal =
+      previousStatus === OutreachDeliveryStatus.REQUESTED ||
+      previousStatus === OutreachDeliveryStatus.QUEUED ||
+      previousStatus === OutreachDeliveryStatus.PROCESSING;
 
     // 3. Permissible State Transition Logic
-    if (event.eventType === 'DELIVERED') {
+    if (isPreTerminal) {
+      // Out-of-order terminal event arrived before delivery reached SENT.
+      // Defer event so it is NOT marked PROCESSED (processedAt = null, processingStatus = 'UNRESOLVED').
+      // Delivery status machine is NOT altered (no illegal PROCESSING -> DELIVERED).
+      finalProcessingStatus = 'UNRESOLVED';
+      processedAtDate = null;
+      safeStatusErrorMessage = 'Delivery has not reached SENT status; event deferred for reconciliation';
+    } else if (event.eventType === 'DELIVERED') {
       if (previousStatus === OutreachDeliveryStatus.SENT) {
-        // SENT -> DELIVERED
-        newStatus = OutreachDeliveryStatus.DELIVERED;
-        await this.prisma.outreachDelivery.update({
-          where: { id: delivery.id },
-          data: {
-            status: OutreachDeliveryStatus.DELIVERED,
-            deliveredAt: eventTimestamp
-          }
-        });
-        shouldAudit = true;
-        auditAction = 'lead.outreach_delivered';
-        auditMetadata = {
-          leadId: delivery.leadId,
-          draftId: delivery.draftId,
-          channel: delivery.channel,
-          status: OutreachDeliveryStatus.DELIVERED
-        };
+        // Atomic conditional transition: SENT -> DELIVERED
+        let transitionSucceeded = true;
+        if (typeof this.prisma.outreachDelivery.updateMany === 'function') {
+          const updateResult = await this.prisma.outreachDelivery.updateMany({
+            where: {
+              id: delivery.id,
+              status: OutreachDeliveryStatus.SENT
+            },
+            data: {
+              status: OutreachDeliveryStatus.DELIVERED,
+              deliveredAt: eventTimestamp
+            }
+          });
+          transitionSucceeded = updateResult.count > 0;
+        } else {
+          await this.prisma.outreachDelivery.update({
+            where: { id: delivery.id },
+            data: {
+              status: OutreachDeliveryStatus.DELIVERED,
+              deliveredAt: eventTimestamp
+            }
+          });
+        }
+
+        if (transitionSucceeded) {
+          newStatus = OutreachDeliveryStatus.DELIVERED;
+          shouldAudit = true;
+          auditAction = 'lead.outreach_delivered';
+          auditMetadata = {
+            leadId: delivery.leadId,
+            draftId: delivery.draftId,
+            channel: delivery.channel,
+            status: OutreachDeliveryStatus.DELIVERED
+          };
+        }
       } else {
         // Late or reordered event: delivery is already DELIVERED, FAILED, or CANCELLED
         // Do not regress or alter state
       }
     } else if (event.eventType === 'FAILED') {
       if (previousStatus === OutreachDeliveryStatus.SENT) {
-        // SENT -> FAILED
-        newStatus = OutreachDeliveryStatus.FAILED;
+        // Atomic conditional transition: SENT -> FAILED
         const mappedCode =
           event.safeErrorCode ?? OutreachErrorCode.OUTREACH_DELIVERY_FAILED;
         const mappedMessage =
           event.safeErrorMessage ?? 'Downstream delivery failure reported by provider';
 
-        await this.prisma.outreachDelivery.update({
-          where: { id: delivery.id },
-          data: {
+        let transitionSucceeded = true;
+        if (typeof this.prisma.outreachDelivery.updateMany === 'function') {
+          const updateResult = await this.prisma.outreachDelivery.updateMany({
+            where: {
+              id: delivery.id,
+              status: OutreachDeliveryStatus.SENT
+            },
+            data: {
+              status: OutreachDeliveryStatus.FAILED,
+              failedAt: eventTimestamp,
+              lastErrorCode: mappedCode,
+              safeLastErrorMessage: mappedMessage
+            }
+          });
+          transitionSucceeded = updateResult.count > 0;
+        } else {
+          await this.prisma.outreachDelivery.update({
+            where: { id: delivery.id },
+            data: {
+              status: OutreachDeliveryStatus.FAILED,
+              failedAt: eventTimestamp,
+              lastErrorCode: mappedCode,
+              safeLastErrorMessage: mappedMessage
+            }
+          });
+        }
+
+        if (transitionSucceeded) {
+          newStatus = OutreachDeliveryStatus.FAILED;
+          shouldAudit = true;
+          auditAction = 'lead.outreach_failed';
+          auditMetadata = {
+            leadId: delivery.leadId,
+            draftId: delivery.draftId,
+            channel: delivery.channel,
             status: OutreachDeliveryStatus.FAILED,
-            failedAt: eventTimestamp,
-            lastErrorCode: mappedCode,
-            safeLastErrorMessage: mappedMessage
-          }
-        });
-        shouldAudit = true;
-        auditAction = 'lead.outreach_failed';
-        auditMetadata = {
-          leadId: delivery.leadId,
-          draftId: delivery.draftId,
-          channel: delivery.channel,
-          status: OutreachDeliveryStatus.FAILED,
-          reason: 'WEBHOOK_FAILURE',
-          errorCode: mappedCode
-        };
+            reason: 'WEBHOOK_FAILURE',
+            errorCode: mappedCode
+          };
+        }
       } else {
         // Late or reordered event: delivery is already DELIVERED, FAILED, or CANCELLED
         // Do not regress or alter state
       }
     }
 
-    // 4. Record Webhook Event Record
-    try {
-      await this.prisma.outreachWebhookEvent.create({
+    // 4. Record or Update Webhook Event Record
+    if (existingEvent) {
+      await this.prisma.outreachWebhookEvent.update({
+        where: { id: existingEvent.id },
         data: {
           organizationId: delivery.organizationId,
-          providerName: event.providerName,
-          eventId: event.eventId,
           providerMessageId: event.providerMessageId,
           eventType: event.eventType,
-          receivedAt: now,
-          processedAt: now,
-          processingStatus: 'PROCESSED'
+          processedAt: processedAtDate,
+          processingStatus: finalProcessingStatus,
+          safeErrorMessage: safeStatusErrorMessage
         }
       });
-    } catch {
-      // Replay collision guard
+    } else {
+      try {
+        await this.prisma.outreachWebhookEvent.create({
+          data: {
+            organizationId: delivery.organizationId,
+            providerName: event.providerName,
+            eventId: event.eventId,
+            providerMessageId: event.providerMessageId,
+            eventType: event.eventType,
+            receivedAt: now,
+            processedAt: processedAtDate,
+            processingStatus: finalProcessingStatus,
+            safeErrorMessage: safeStatusErrorMessage
+          }
+        });
+      } catch {
+        // Replay collision guard
+      }
     }
 
     // 5. Emit Authoritative Audit Event (if state transitioned)
@@ -218,7 +340,9 @@ export class OutreachWebhookEventProcessor {
       deliveryId: delivery.id,
       previousStatus,
       newStatus,
-      safeMessage: 'Webhook event processed successfully'
+      safeMessage: isPreTerminal
+        ? 'Delivery not yet SENT; event deferred'
+        : 'Webhook event processed successfully'
     };
   }
 }

@@ -10,8 +10,8 @@
 - **Step 4 (Outreach Service + Idempotent Request/Queue Creation + Suppression Guard):** COMPLETE (`f08bdf0`)
 - **Step 5 (Outreach REST API + RBAC + Audit Logging):** COMPLETE (`2958517`)
 - **Step 6 (Lead Detail Delivery UI + Explicit Confirmation Modal):** COMPLETE (`76343f9`)
-- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** IMPLEMENTED / READY FOR REVIEW
-- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** NOT STARTED
+- **Step 7 (Worker Execution + Retry + Cancellation + Webhook Framework):** COMPLETE (`657ff84fd755a4d9d2e32d1c3fe8f65b71e10671`)
+- **Step 8 (E2E + Security + Race/Replay/Idempotency Hardening):** IMPLEMENTED / AWAITING REVIEW
 - **Step 9 (Live Provider Adapter Integration):** NOT STARTED
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
@@ -175,6 +175,34 @@
   - Targeted Step 7 unit & integration tests: **35 passed (35 total)** across 4 test suites (`worker-delivery-executor.spec.ts`, `webhook-event-processor.spec.ts`, `outreach-cancellation.spec.ts`, `outreach-cancellation-and-webhook.spec.ts`).
   - Full repository test suite: **1,602 passed (1,602 total)** across **77 test files** (0 failures).
   - TypeScript typecheck: clean across all 11 monorepo workspaces.
+
+### M6 Step 8 — E2E + Security + Race/Replay/Idempotency Hardening (Implemented / Awaiting Review)
+- **Files Created:**
+  - `apps/api/src/tests/outreach-step8-security.spec.ts` (13 comprehensive E2E integration & security hardening tests)
+  - `packages/core/src/tests/outreach-step8-race-hardening.spec.ts` (17 domain race, replay, and concurrency hardening tests)
+  - `apps/worker/src/tests/outreach-step8-worker.spec.ts` (5 worker adapter integrity & fault injection tests)
+- **Files Modified:**
+  - `packages/core/src/outreach/webhook-event-processor.ts` (hardened atomic conditional updateMany on terminal DELIVERED and FAILED transitions)
+  - `docs/progress.md`
+- **Scope & Hardening Validated:**
+  - **Full E2E Delivery Harness (WhatsApp & Email):** Validated complete flow: approved draft -> POST delivery request with `Idempotency-Key` -> `REQUESTED` -> `QUEUED` -> worker atomic claim -> `PROCESSING` -> mock provider dispatch -> `SENT` with `providerMessageId` -> normalized webhook event -> `DELIVERED` -> authoritative audit trail. Validated explicit email contact and `primaryEmail` fallback on 0-contact leads.
+  - **Idempotency Lifecycle & Concurrency (P2002 Race):** Sequential identical requests return the same logical delivery without queue or audit duplication. Concurrent identical requests resolve safely via P2002 race recovery to a single DB row and single physical send. Same-key/different-payload returns HTTP 409 `OUTREACH_IDEMPOTENCY_KEY_REUSED`. Idempotency keys are strictly tenant-isolated (`@@unique([organizationId, idempotencyKey])`).
+  - **Queue Downtime Recovery & Worker Races:** Enqueue failure leaves delivery in `REQUESTED` with safe 500 `OUTREACH_DELIVERY_FAILED`; replay after queue recovery reuses record and enqueues safely. `REQUESTED` worker race delays job via BullMQ `moveToDelayed` with `DelayedError` without consuming retry budget, executing cleanly once `QUEUED`. Duplicate worker runs resolve via atomic `QUEUED -> PROCESSING` claim where losing runs safe no-op (`provider.send` = 1).
+  - **Ambiguity & Failure Retries:** Pre-existing `PROCESSING` with known `providerMessageId` never physically resends (at-most-once safety). Retryable errors (`PROVIDER_TIMEOUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_RATE_LIMITED`) transition back to `QUEUED` within retry budget (3 attempts) and throw to BullMQ backoff; exhausting 3 attempts marks terminal `FAILED`. Non-retryable errors (`RECIPIENT_REJECTED`, `CONTENT_REJECTED`, `INVALID_PROVIDER_RESPONSE`) fail immediately on first attempt. Transient error codes are cleared on eventual success.
+  - **Suppression Defense:** Gate A blocks at API boundary with HTTP 422 `OUTREACH_RECIPIENT_SUPPRESSED` (0 rows, 0 jobs). Gate B blocks at worker pre-send if suppressed while queued (0 provider calls, attemptCount unchanged). Expired entries permit dispatch.
+  - **Contact Provenance & Immutability:** Enforces absolute invariant `PHONE != WHATSAPP` (rejects plain phone with 422 `OUTREACH_RECIPIENT_INVALID`). Rejects untrusted WhatsApp contacts missing `VERIFIED`, `PUBLICLY_LISTED`, or `CONFIRMED`. Destination and draft changes in CRM do not mutate persisted delivery snapshot. Snapshot SHA-256 hash tampering fails closed (`OUTREACH_CONTENT_REJECTED`, 0 provider calls).
+  - **Cancellation Races:** Cancel before claim transitions to `CANCELLED`; stale worker execution safely no-ops. Claim before cancel fails closed with 409 `OUTREACH_DELIVERY_IN_FLIGHT` without rolling back `PROCESSING`. Concurrent cancellations resolve to a single transition and audit entry. Redis `removeJob` error leaves database `CANCELLED` state intact.
+  - **Webhook Safety, Replay & Out-of-Order Hardening:**
+    - Replays of `(providerName, eventId)` are deduplicated when already `PROCESSED` without re-auditing or altering state.
+    - Ambiguous correlation `(providerName, providerMessageId)` with >1 matching deliveries fails closed without mutating ANY delivery or selecting an arbitrary tenant, storing event safely as `UNMATCHED` with `organizationId = null` and safe error message "Ambiguous provider message correlation". Step 9 remains responsible for defining live provider/account correlation scoping.
+    - Out-of-order terminal webhook events arriving while delivery is in a pre-terminal state (`REQUESTED`, `QUEUED`, `PROCESSING`) are deferred as `UNRESOLVED` (`processedAt: null`) rather than finalized, preserving delivery state without illegal transition (`PROCESSING -> DELIVERED` prohibited). Replay of the same event after delivery reaches `SENT` authoritatively reconciles `SENT -> DELIVERED` or `SENT -> FAILED` with exactly one audit log, finalizing the event as `PROCESSED`. Subsequent replays are duplicate no-ops.
+    - Concurrent `DELIVERED` vs `FAILED` races for the same `SENT` delivery yield exactly one winning terminal transition via atomic `updateMany` with zero state oscillation.
+    - Terminal delivery states (`DELIVERED`, `FAILED`, `CANCELLED`) remain strictly forward-only and immutable. Late events never reopen or alter terminal state.
+    - Unknown message IDs are persisted safely as `UNMATCHED` with null org and zero delivery mutations. Normalized events contain zero raw bodies, headers, signatures, or credentials.
+  - **Security Boundaries, RBAC & IDOR:** Delivery summaries strictly exclude internal fields (`recipientNormalized`, `requestFingerprint`, `idempotencyKey`, snapshot hashes/content, secrets). Canonical error envelope `{ error: { code, message, details, requestId } }` without stack traces or SQL. Cross-tenant reads and cancellations return 404 (never 403 revealing existence). Cross-lead access returns 404. Sales Executives restricted to assigned leads. Cancellations restricted to `OUTREACH_MANAGE` (`SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`). Unauthenticated requests return 401 requiring `leadmate_session` cookie. Strict body schema rejects injected properties; header validates 8-128 chars.
+  - **Worker Fault Injection:** Malformed job payload or non-UUID deliveryId fails safely. Unknown deliveryId marks skipped failure without leakage. Cross-tenant relational corruption (mismatched lead, draft, or user org) fails closed with zero provider calls.
+  - **Invariant Verification:** `attemptCount` strictly equals actual `provider.send` invocations across all success, retry, exhaustion, and suppression paths. Timestamps are mutually exclusive and consistent (`failedAt` only on `FAILED`, `sentAt` only on `SENT+`, `deliveredAt` only on `DELIVERED`, `cancelledAt` only on `CANCELLED`).
+  - **Zero Frontend Changes:** `apps/web` remains 100% untouched. No live external network or providers configured.
 
 ### M5 Step 1 — Contracts + Guardrails (Completed)
 - **Files:** `packages/shared/src/enums.ts`, `packages/shared/src/schemas/sales-assistant.ts`, `packages/shared/src/tests/sales-assistant-schemas.spec.ts`, `packages/shared/src/index.ts`.
