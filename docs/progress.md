@@ -6,8 +6,8 @@
 - **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
 - **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
 - **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
-- **Step 3 (Team Management UI):** IMPLEMENTED / AWAITING REVIEW
-- **Step 4 (Sales Analytics Domain Engine):** NOT STARTED
+- **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
+- **Step 4 (Sales Analytics Domain Engine):** IMPLEMENTED / AWAITING REVIEW
 - **Step 5 (Sales Dashboard REST API & Scoping):** NOT STARTED
 - **Step 6 (Sales Dashboard UI Core):** NOT STARTED
 - **Step 7 (Team Workload & Outreach Analytics UI):** NOT STARTED
@@ -19,6 +19,50 @@
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
+
+### M7 Step 4 — Sales Analytics Domain Engine (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `c01a51163f39a5128ebabc8c4ab352e0de655a47` (`feat(m7): add team management ui`)
+- **Files Created:**
+  - `packages/db/prisma/migrations/20261008160000_add_m7_analytics_indexes/migration.sql`
+  - `apps/api/src/lib/analytics-range.ts`
+  - `apps/api/src/services/analytics.service.ts`
+  - `apps/api/src/tests/analytics-range.spec.ts`
+  - `apps/api/src/tests/analytics-service.spec.ts`
+- **Files Modified:**
+  - `packages/db/prisma/schema.prisma`
+  - `docs/progress.md`
+- **Scope & Implementation Delivered:**
+  - **Analytics Domain Service (`apps/api/src/services/analytics.service.ts`):**
+    - `getSummary(actor, query, now)`: computes KPI cards for lead acquisition cohort (`totalCohort`, `cohortWon`, `cohortConversionRate`), operational follow-ups (`dueToday`, `overdue`, `completed`), and outreach send cohorts (`sent`, `delivered`, `failed`, `awaitingDelivery`, `resolvedDeliverySuccessRate`).
+    - `getFunnel(actor, query)`: computes Current Pipeline Distribution across all 7 canonical stages (`NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`). Defined as a current point-in-time state snapshot decoupled from creation date filters.
+    - `getSources(actor, query, now)`: computes period cohort distribution by acquisition source from `Lead.primarySource`, sorted descending, with empty/null strings safely normalized to `UNKNOWN`. Supports optional source filtering.
+    - `getOutreach(actor, query, now)`: computes send-cohort outreach analytics for `totals` and per-channel breakdown (`WHATSAPP`, `EMAIL`) evaluating single send cohort determined by `sentAt BETWEEN from AND to`.
+    - `getTeamPerformance(actor, query, now)`: computes per-sales-rep analytics for sales assignees (`SALES_MANAGER`, `SALES_EXECUTIVE`) combining `currentWorkload` (`activeLeads`, `pendingFollowUps`, `overdueFollowUps`) and `periodPerformance` (`leadsCreated`, `cohortWon`, `cohortConversionRate`, `outreachSent`, `outreachDelivered`, `outreachFailed`, `awaitingDelivery`, `resolvedDeliverySuccessRate`). Deterministic ordering by `name ASC, id ASC`.
+  - **Pure Analytics Range & Timezone Engine (`apps/api/src/lib/analytics-range.ts`):**
+    - `resolveDashboardRange`: resolves presets (`7d`, `30d`, `90d`) and `custom` ranges into deterministic UTC `from` and `to` timestamps with injectable reference `now`.
+    - `getCalendarDayUtcBounds`: derives exact UTC start of day (`00:00:00.000`) and next day start (`00:00:00.000`) for the organization's authoritative IANA timezone (`Organization.timezone`, default `Asia/Dhaka`). DST-aware and leap-year safe without external runtime dependencies.
+    - `calculateRate`: deterministic finite rate calculation rounded to 2 decimal places (`Math.round(rate * 100) / 100`), safely returning `0` on zero denominator or non-finite inputs.
+  - **RBAC & SALES_EXECUTIVE Security Enforcements:**
+    - `SALES_EXECUTIVE` callers are unconditionally scoped to `assignedUserId = actor.actorId`. Client-supplied `assigneeId` is strictly ignored/overridden to prevent scope expansion.
+    - `SALES_EXECUTIVE` callers are strictly forbidden from viewing team performance reporting (fails closed with 403 `ForbiddenError`).
+    - For non-executive roles (`SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `VIEWER`), optional `assigneeId` is verified to belong to the caller's tenant; cross-tenant or non-existent IDs fail closed with 404 `NotFoundError` with zero cross-tenant existence leaks.
+  - **Database Index Optimization (Migration `20261008160000_add_m7_analytics_indexes`):**
+    - `Lead`: added `@@index([organizationId, createdAt])`, `@@index([organizationId, assignedUserId, createdAt])`, `@@index([organizationId, primarySource])`.
+    - `FollowUpTask`: added `@@index([organizationId, status, completedAt])`.
+    - `OutreachDelivery`: added `@@index([organizationId, sentAt])`.
+    - All migrations non-destructive (`CREATE INDEX` only).
+  - **Query Batching & Zero N+1 Confirmation:**
+    - `getSummary`: executes 6 independent aggregate queries in parallel via `Promise.all`.
+    - `getFunnel`: executes 1 single `groupBy` query on `crmStage`.
+    - `getSources`: executes 1 single `groupBy` query on `primarySource`.
+    - `getOutreach`: executes 1 single `groupBy` query on `['channel', 'status']`.
+    - `getTeamPerformance`: executes 1 user lookup and 5 batched aggregates in `Promise.all` regardless of team size. Zero N+1 query loops.
+  - **Zero Out-of-Scope Changes:**
+    - Zero dashboard HTTP routes or controllers created (`dashboard.controller.ts`, `dashboard.routes.ts` not started).
+    - Zero frontend workspace (`apps/web`) modifications.
+    - Team feature untouched.
+    - StoreMate completely untouched.
 
 ### M7 Step 3 — Team Management UI (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW

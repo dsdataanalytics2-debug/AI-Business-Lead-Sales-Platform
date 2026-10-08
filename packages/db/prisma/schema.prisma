@@ -433,6 +433,9 @@ model Lead {
   @@index([organizationId, crmStage])
   @@index([organizationId, assignedUserId])
   @@index([organizationId, assignedUserId, crmStage])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, assignedUserId, createdAt])
+  @@index([organizationId, primarySource])
   @@map("leads")
 }
 
@@ -582,6 +585,7 @@ model FollowUpTask {
   @@index([organizationId, leadId, dueAt])
   @@index([organizationId, assignedUserId, status, dueAt], map: "follow_up_tasks_organization_id_assigned_user_id_status_due__id")
   @@index([organizationId, status, dueAt])
+  @@index([organizationId, status, completedAt])
   @@map("follow_up_tasks")
 }
 
@@ -691,6 +695,7 @@ model OutreachDelivery {
   @@index([organizationId, leadId, createdAt])
   @@index([organizationId, status, createdAt])
   @@index([organizationId, channel, status])
+  @@index([organizationId, sentAt])
   @@index([providerName, providerMessageId])
   @@index([draftId])
   @@index([requestedByUserId])
