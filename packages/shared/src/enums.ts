@@ -515,3 +515,35 @@ export enum OutreachErrorCode {
   OUTREACH_PROVIDER_BAD_GATEWAY = 'OUTREACH_PROVIDER_BAD_GATEWAY',
   OUTREACH_DELIVERY_FAILED = 'OUTREACH_DELIVERY_FAILED'
 }
+
+/**
+ * Public team management error codes returned by the API.
+ */
+export enum TeamErrorCode {
+  TEAM_MEMBER_NOT_FOUND = 'TEAM_MEMBER_NOT_FOUND',
+  TEAM_MEMBER_EMAIL_EXISTS = 'TEAM_MEMBER_EMAIL_EXISTS',
+  TEAM_ROLE_FORBIDDEN = 'TEAM_ROLE_FORBIDDEN',
+  TEAM_SELF_ROLE_CHANGE_FORBIDDEN = 'TEAM_SELF_ROLE_CHANGE_FORBIDDEN',
+  TEAM_SELF_DEACTIVATION_FORBIDDEN = 'TEAM_SELF_DEACTIVATION_FORBIDDEN',
+  LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED = 'LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED',
+  TEAM_MEMBER_INACTIVE = 'TEAM_MEMBER_INACTIVE'
+}
+
+/**
+ * Supported date range presets for sales analytics dashboard.
+ */
+export enum DashboardDatePreset {
+  DAYS_7 = '7d',
+  DAYS_30 = '30d',
+  DAYS_90 = '90d',
+  CUSTOM = 'custom'
+}
+
+/**
+ * Whitelisted sort fields for team members list.
+ */
+export enum TeamSortBy {
+  NAME = 'name',
+  CREATED_AT = 'createdAt',
+  ROLE = 'role'
+}

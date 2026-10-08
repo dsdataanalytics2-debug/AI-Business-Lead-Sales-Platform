@@ -4,7 +4,7 @@
 - **Status:** IN PROGRESS
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
 - **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
-- **Step 1 (Shared Contracts & RBAC Permissions):** NOT STARTED
+- **Step 1 (Shared Contracts & RBAC Permissions):** IMPLEMENTED / AWAITING REVIEW
 - **Step 2 (Team Management Domain Service, DB Indexes & API):** NOT STARTED
 - **Step 3 (Team Management UI):** NOT STARTED
 - **Step 4 (Sales Analytics Domain Engine):** NOT STARTED
@@ -19,6 +19,51 @@
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
+
+### M7 Step 1 — Shared Contracts & RBAC Permissions (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
+- **Files Created:**
+  - `packages/shared/src/schemas/team.ts`
+  - `packages/shared/src/schemas/analytics.ts`
+  - `packages/shared/src/tests/team-schemas.spec.ts`
+  - `packages/shared/src/tests/analytics-schemas.spec.ts`
+- **Files Modified:**
+  - `packages/shared/src/enums.ts`
+  - `packages/shared/src/permissions.ts`
+  - `packages/shared/src/index.ts`
+  - `docs/progress.md`
+- **Scope & Implementation Delivered:**
+  - **RBAC Permissions & Matrix:**
+    - Added `Permissions.USERS_READ` (`users:read`).
+    - Matrix:
+      - `SUPER_ADMIN`: `USERS_READ: true`, `USERS_MANAGE: true`, `REPORTS_READ: true`.
+      - `ADMIN`: `USERS_READ: true`, `USERS_MANAGE: true`, `REPORTS_READ: true`.
+      - `SALES_MANAGER`: `USERS_READ: true`, `REPORTS_READ: true`, `USERS_MANAGE: false` (preserves frozen read-only rule).
+      - `SALES_EXECUTIVE`: `USERS_READ: false`, `USERS_MANAGE: false`, `REPORTS_READ: true` (intentionally receives `REPORTS_READ` for self-scoped dashboard analytics).
+      - `VIEWER`: `USERS_READ: false`, `USERS_MANAGE: false`, `REPORTS_READ: true`.
+    - Unrelated permissions preserved for all roles without regression.
+  - **Team Management Shared Contracts (`packages/shared/src/schemas/team.ts`):**
+    - `teamMemberListQuerySchema`: defaults `page: 1`, `limit: 20` (max 100), `sortBy: createdAt` (whitelisted to `name`, `createdAt`, `role`), `sortOrder: desc`. Trims `search` (max 100) and transforms empty string to `undefined`. Normalizes boolean `isActive`. Strictly rejects unknown query keys and forbidden sort fields.
+    - `createTeamMemberRequestSchema`: validates `name` (min 2, max 100, trimmed), `email` (valid, trimmed, lowercased, max 255), `role` (valid `Role` enum), and `temporaryPassword` (min 10, max 128 chars conforming to password policy). Strictly rejects injected `organizationId`, `tenantId`, `passwordHash`, `permissions`, `createdByUserId`, or `isActive`.
+    - `updateTeamMemberRequestSchema`: strict PATCH schema accepting only `name` and/or `role`. Requires at least one field. Email modification is strictly rejected (immutable in M7). Strictly rejects injection and unknown keys.
+    - `teamMemberUserIdParamSchema`: validates UUID route param for `/team/members/:userId`.
+    - Response DTOs (`teamMemberSummarySchema`, `teamMemberDetailSchema`, `teamMemberListResponseSchema`, `teamMemberActionResponseSchema`): safe DTO projections that strictly reject credentials (`passwordHash`, `temporaryPassword`), session/token fields, and validate non-negative workload counters.
+    - Team Error Codes (`TeamErrorCode` enum): `TEAM_MEMBER_NOT_FOUND`, `TEAM_MEMBER_EMAIL_EXISTS`, `TEAM_ROLE_FORBIDDEN`, `TEAM_SELF_ROLE_CHANGE_FORBIDDEN`, `TEAM_SELF_DEACTIVATION_FORBIDDEN`, `LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED`, `TEAM_MEMBER_INACTIVE`.
+  - **Sales Analytics Shared Contracts (`packages/shared/src/schemas/analytics.ts`):**
+    - `isValidDateRange`: pure helper verifying date ranges, ordering (`from <= to`), and maximum 365-day window.
+    - `dashboardFilterQuerySchema`: default preset `30d`. Valid presets: `7d`, `30d`, `90d`, `custom`. Preset semantics deterministically frozen: `preset !== 'custom'` rejects `from`/`to` if supplied; `preset === 'custom'` requires both `from` and `to` within a 365-day window. Validates optional `assigneeId` (UUID) and `source` (trimmed, max 100, empty transformed to `undefined`).
+    - `dashboardSummaryResponseSchema`: validated summary KPIs with non-negative integer counts and finite rates (0–100%).
+    - `dashboardFunnelResponseSchema`: Current Pipeline Distribution by canonical `CrmStage` values.
+    - `dashboardSourcesResponseSchema`: lead source distribution with non-empty source names and non-negative counts.
+    - `dashboardOutreachResponseSchema`: send-cohort outreach analytics for `totals` and per-channel items (`WHATSAPP`, `EMAIL`) with identical metric shapes.
+    - `dashboardTeamPerformanceResponseSchema`: explicit split between `currentWorkload` and `periodPerformance`; strictly rejects gamification/leaderboard fields (`rank`, `score`, `aiScore`, `leaderboardPosition`).
+  - **Zero Out-of-Scope Changes:**
+    - Zero changes to Prisma schema or migrations (`packages/db`).
+    - Zero API production controllers, services, or routes touched.
+    - Zero frontend workspace (`apps/web`) touched.
+    - Zero StoreMate modifications.
+    - No Step 2 implementation started.
 
 ### M7 Step 0 — Architecture & Scope Freeze (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW

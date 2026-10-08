@@ -12,3 +12,5 @@ export * from './schemas/follow-up.js';
 export * from './schemas/demo-website.js';
 export * from './schemas/sales-assistant.js';
 export * from './schemas/outreach.js';
+export * from './schemas/team.js';
+export * from './schemas/analytics.js';

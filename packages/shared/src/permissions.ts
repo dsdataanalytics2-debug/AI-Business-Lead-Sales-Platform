@@ -12,6 +12,7 @@ export const Permissions = {
   DATASOURCES_MANAGE: 'datasources:manage',
   SCORING_MANAGE: 'scoring:manage',
   COSTS_READ: 'costs:read',
+  USERS_READ: 'users:read',
   USERS_MANAGE: 'users:manage',
   INTEGRATIONS_MANAGE: 'integrations:manage',
   REPORTS_READ: 'reports:read',
@@ -44,7 +45,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     Permissions.OUTREACH_MANAGE,
     Permissions.SUPPRESSION_MANAGE,
     Permissions.REPORTS_READ,
-    Permissions.COSTS_READ
+    Permissions.COSTS_READ,
+    Permissions.USERS_READ
   ],
   [Role.SALES_EXECUTIVE]: [
     Permissions.LEADS_READ,
@@ -52,7 +54,8 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     Permissions.DEMOS_GENERATE,
     Permissions.SALES_ASSISTANT_GENERATE,
     Permissions.OUTREACH_READ,
-    Permissions.OUTREACH_SEND
+    Permissions.OUTREACH_SEND,
+    Permissions.REPORTS_READ
   ],
   [Role.VIEWER]: [
     Permissions.LEADS_READ,
