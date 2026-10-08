@@ -8,8 +8,8 @@
 - **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
 - **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
 - **Step 4 (Sales Analytics Domain Engine):** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
-- **Step 5 (Sales Dashboard REST API & Scoping):** IMPLEMENTED / AWAITING REVIEW
-- **Step 6 (Sales Dashboard UI Core):** NOT STARTED
+- **Step 5 (Sales Dashboard REST API & Scoping):** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
+- **Step 6 (Sales Dashboard UI Core):** IMPLEMENTED / AWAITING REVIEW
 - **Step 7 (Team Workload & Outreach Analytics UI):** NOT STARTED
 - **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** NOT STARTED
 - **Step 9 (E2E Integration & Full Workspace Regression):** NOT STARTED
@@ -20,8 +20,47 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 5 — Sales Dashboard REST API & Scoping (Implemented / Awaiting Review)
+### M7 Step 6 — Sales Dashboard UI Core (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `7474ae313b2766ad7ae189c1e743d23f8f1501e1` (`feat(m7): expose dashboard analytics api`)
+- **Files Created:**
+  - `apps/web/src/components/dashboard/dashboard-filter-bar.tsx`
+  - `apps/web/src/components/dashboard/kpi-summary-cards.tsx`
+  - `apps/web/src/components/dashboard/current-pipeline-card.tsx`
+  - `apps/web/src/components/dashboard/lead-sources-card.tsx`
+  - `apps/web/src/components/dashboard/outreach-performance-card.tsx`
+  - `apps/web/src/components/dashboard/team-performance-table.tsx`
+  - `apps/web/src/lib/dashboard/dashboard-display.ts`
+  - `apps/web/src/tests/dashboard-ui.spec.tsx`
+- **Files Modified:**
+  - `apps/web/src/app/dashboard/page.tsx`
+  - `apps/web/src/lib/api-client.ts`
+  - `docs/progress.md`
+- **Features & Implementation Delivered:**
+  - **Canonical Route (`/dashboard`):** Fully upgraded M0 placeholder to dynamic, dark-mode, production sales dashboard.
+  - **Access & Permissions:** Protected by `Permissions.REPORTS_READ`; unauthorized access displays clear access-denied state with zero data fetching.
+  - **RBAC & Assignee Derivation (VIEWER RBAC Correction):**
+    - Completely removed dashboard dependency on `GET /api/v1/team/members` (`apiClient.team.listMembers`), preserving the `Permissions.USERS_READ` boundary for `VIEWER` (who possesses `REPORTS_READ` only).
+    - Assignee filter options are derived directly from `GET /api/v1/dashboard/team-performance` for all non-executive roles (`SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `VIEWER`).
+    - Eliminates the previous 100-member pagination cap of `team.listMembers({ limit: 100 })`.
+    - Eligible assignees strictly match sales members represented by `team-performance` (`SALES_MANAGER`, `SALES_EXECUTIVE`).
+    - Inactive members are clearly labeled with ` — Inactive` suffix and preserved for historical attribution filtering.
+    - Full assignee options list is stably maintained across subsequent filtered queries to permit switching members without reset.
+  - **Filter Bar & Source Option Stability:**
+    - Date presets (`7d`, `30d`, `90d`, `custom`), custom date From/To inputs with client validation, optional assignee dropdown, lead source filter, and manual refresh button.
+    - Discovered sources are stably cached across subsequent queries, enabling direct switching from Source A to Source B without dropdown truncation or filter resets.
+  - **Role-Aware UX & SALES_EXECUTIVE Self-Scoping:**
+    - `SALES_EXECUTIVE`: Self-scoped header badge; assignee selector completely hidden; `/team-performance` endpoint is never requested; team performance table is completely hidden.
+    - Tenant-wide roles (`SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `VIEWER`): Assignee selector available with same-tenant sales members; team performance table rendered.
+  - **KPI Summary Cards:** Cohort leads acquired, won leads, cohort conversion rate (%), operational follow-ups (due today in tenant timezone, overdue, completed in period), outreach cohort metrics (sent, delivered, failed, resolved success rate).
+  - **Current Pipeline Visualization:** Displays point-in-time lead distribution across all 7 canonical stages (`NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`) with proportion bars, preserving zero stages.
+  - **Lead Sources Breakdown:** Sources list with count and proportion bar; maps `'UNKNOWN'` to `'Unknown'`; clean empty state.
+  - **Outreach Performance:** Aggregate sent/delivered/failed/awaiting metrics and side-by-side WhatsApp vs Email channel cards.
+  - **Team Performance Table:** Workload and period metrics per sales representative, clearly flagging inactive users, without arbitrary ranking or gamification.
+  - **Resilience & Security:** Bounded parallel `Promise.all` fetching; query race and stale response protection using monotonic generation counter and `AbortController`; friendly error handling; zero customer PII exposed.
+
+### M7 Step 5 — Sales Dashboard REST API & Scoping (Complete)
+- **Status:** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
 - **Base Checkpoint:** `4cf79317434fb24e1097d50331fba48a0856f502` (`feat(m7): add sales analytics engine`)
 - **Files Created:**
   - `apps/api/src/controllers/dashboard.controller.ts`

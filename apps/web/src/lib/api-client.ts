@@ -30,7 +30,13 @@ import {
   type TeamMemberDetail,
   type TeamMemberActionResponse,
   type CreateTeamMemberRequest,
-  type UpdateTeamMemberRequest
+  type UpdateTeamMemberRequest,
+  type DashboardFilterQuery,
+  type DashboardSummaryResponse,
+  type DashboardFunnelResponse,
+  type DashboardSourcesResponse,
+  type DashboardOutreachResponse,
+  type DashboardTeamPerformanceResponse
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -492,5 +498,108 @@ export const apiClient = {
         method: 'POST',
         body: JSON.stringify({})
       })
-  }
+  },
+  dashboard: {
+    getSummary: (
+      query: Partial<DashboardFilterQuery> = {},
+      options: RequestInit = {}
+    ): Promise<DashboardSummaryResponse> =>
+      request<DashboardSummaryResponse>(`/dashboard/summary${buildDashboardSearchParams(query)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    getFunnel: (
+      query: Partial<DashboardFilterQuery> = {},
+      options: RequestInit = {}
+    ): Promise<DashboardFunnelResponse> =>
+      request<DashboardFunnelResponse>(`/dashboard/funnel${buildDashboardSearchParams(query)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    getSources: (
+      query: Partial<DashboardFilterQuery> = {},
+      options: RequestInit = {}
+    ): Promise<DashboardSourcesResponse> =>
+      request<DashboardSourcesResponse>(`/dashboard/sources${buildDashboardSearchParams(query)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    getOutreach: (
+      query: Partial<DashboardFilterQuery> = {},
+      options: RequestInit = {}
+    ): Promise<DashboardOutreachResponse> =>
+      request<DashboardOutreachResponse>(`/dashboard/outreach${buildDashboardSearchParams(query)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    getTeamPerformance: (
+      query: Partial<DashboardFilterQuery> = {},
+      options: RequestInit = {}
+    ): Promise<DashboardTeamPerformanceResponse> =>
+      request<DashboardTeamPerformanceResponse>(`/dashboard/team-performance${buildDashboardSearchParams(query)}`, {
+        ...options,
+        method: 'GET'
+      })
+  },
+  getDashboardSummary: (
+    query: Partial<DashboardFilterQuery> = {},
+    options: RequestInit = {}
+  ): Promise<DashboardSummaryResponse> =>
+    request<DashboardSummaryResponse>(`/dashboard/summary${buildDashboardSearchParams(query)}`, {
+      ...options,
+      method: 'GET'
+    }),
+  getDashboardFunnel: (
+    query: Partial<DashboardFilterQuery> = {},
+    options: RequestInit = {}
+  ): Promise<DashboardFunnelResponse> =>
+    request<DashboardFunnelResponse>(`/dashboard/funnel${buildDashboardSearchParams(query)}`, {
+      ...options,
+      method: 'GET'
+    }),
+  getDashboardSources: (
+    query: Partial<DashboardFilterQuery> = {},
+    options: RequestInit = {}
+  ): Promise<DashboardSourcesResponse> =>
+    request<DashboardSourcesResponse>(`/dashboard/sources${buildDashboardSearchParams(query)}`, {
+      ...options,
+      method: 'GET'
+    }),
+  getDashboardOutreach: (
+    query: Partial<DashboardFilterQuery> = {},
+    options: RequestInit = {}
+  ): Promise<DashboardOutreachResponse> =>
+    request<DashboardOutreachResponse>(`/dashboard/outreach${buildDashboardSearchParams(query)}`, {
+      ...options,
+      method: 'GET'
+    }),
+  getDashboardTeamPerformance: (
+    query: Partial<DashboardFilterQuery> = {},
+    options: RequestInit = {}
+  ): Promise<DashboardTeamPerformanceResponse> =>
+    request<DashboardTeamPerformanceResponse>(`/dashboard/team-performance${buildDashboardSearchParams(query)}`, {
+      ...options,
+      method: 'GET'
+    })
 };
+
+function buildDashboardSearchParams(query: Partial<DashboardFilterQuery> = {}): string {
+  const params = new URLSearchParams();
+  if (query.preset) {
+    params.set('preset', query.preset);
+  }
+  if (query.from) {
+    params.set('from', query.from);
+  }
+  if (query.to) {
+    params.set('to', query.to);
+  }
+  if (query.assigneeId) {
+    params.set('assigneeId', query.assigneeId);
+  }
+  if (query.source) {
+    params.set('source', query.source);
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
