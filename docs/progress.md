@@ -7,8 +7,8 @@
 - **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
 - **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
 - **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
-- **Step 4 (Sales Analytics Domain Engine):** IMPLEMENTED / AWAITING REVIEW
-- **Step 5 (Sales Dashboard REST API & Scoping):** NOT STARTED
+- **Step 4 (Sales Analytics Domain Engine):** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
+- **Step 5 (Sales Dashboard REST API & Scoping):** IMPLEMENTED / AWAITING REVIEW
 - **Step 6 (Sales Dashboard UI Core):** NOT STARTED
 - **Step 7 (Team Workload & Outreach Analytics UI):** NOT STARTED
 - **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** NOT STARTED
@@ -20,8 +20,33 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 4 — Sales Analytics Domain Engine (Implemented / Awaiting Review)
+### M7 Step 5 — Sales Dashboard REST API & Scoping (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `4cf79317434fb24e1097d50331fba48a0856f502` (`feat(m7): add sales analytics engine`)
+- **Files Created:**
+  - `apps/api/src/controllers/dashboard.controller.ts`
+  - `apps/api/src/routes/dashboard.routes.ts`
+  - `apps/api/src/tests/dashboard-api.spec.ts`
+- **Files Modified:**
+  - `apps/api/src/app.ts`
+  - `docs/progress.md`
+- **Endpoints Delivered:**
+  - `GET /api/v1/dashboard/summary` — Period cohort metrics, follow-ups, outreach totals
+  - `GET /api/v1/dashboard/funnel` — Point-in-time pipeline stage distribution across 7 stages
+  - `GET /api/v1/dashboard/sources` — Lead primary source breakdown
+  - `GET /api/v1/dashboard/outreach` — Outreach delivery send cohort & channel breakdown
+  - `GET /api/v1/dashboard/team-performance` — Per-sales-rep workload & performance (forbidden to SALES_EXECUTIVE)
+- **Security & Scoping Model:**
+  - Authenticated session cookie required on all endpoints (401 UNAUTHENTICATED).
+  - RBAC guarded by `Permissions.REPORTS_READ`.
+  - `AnalyticsActorContext` strictly derived from session (`actorId`, `organizationId`, `role`); client cannot inject `organizationId`.
+  - Strict query validation via `dashboardFilterQuerySchema.strict()`: client `organizationId`, `tenantId`, `timezone`, and arbitrary parameters rejected with 422 `VALIDATION_ERROR`.
+  - `SALES_EXECUTIVE` callers unconditionally self-scoped (`assignedUserId = actor.actorId`); client `assigneeId` is overridden; calling `/team-performance` returns 403 `FORBIDDEN`.
+  - Tenant-wide roles (`SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`, `VIEWER`): optional `assigneeId` validated in tenant; cross-tenant/non-existent IDs fail closed with safe 404 `NOT_FOUND`.
+  - Zero DB schema or migration changes; zero frontend modifications; StoreMate & Team untouched.
+
+### M7 Step 4 — Sales Analytics Domain Engine (Complete)
+- **Status:** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
 - **Base Checkpoint:** `c01a51163f39a5128ebabc8c4ab352e0de655a47` (`feat(m7): add team management ui`)
 - **Files Created:**
   - `packages/db/prisma/migrations/20261008160000_add_m7_analytics_indexes/migration.sql`
