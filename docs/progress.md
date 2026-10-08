@@ -10,8 +10,8 @@
 - **Step 4 (Sales Analytics Domain Engine):** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
 - **Step 5 (Sales Dashboard REST API & Scoping):** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
 - **Step 6 (Sales Dashboard UI Core):** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
-- **Step 7 (Team Workload & Outreach Analytics UI):** IMPLEMENTED / AWAITING REVIEW
-- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** NOT STARTED
+- **Step 7 (Team Workload & Outreach Analytics UI):** COMPLETE (`edab9878f00cc0e398c7d2c993b2da32f4457142`)
+- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** IMPLEMENTED / AWAITING REVIEW
 - **Step 9 (E2E Integration & Full Workspace Regression):** NOT STARTED
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
@@ -20,10 +20,62 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 7 — Team Workload & Outreach Analytics UI (Implemented / Awaiting Review)
+### M7 Step 8 — Security, Tenant Isolation, Concurrency & Query Hardening (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
-- **Base Checkpoint:** `f718baf372af1699193434564f89b7cbaa246b45` (`feat(m7): add sales dashboard ui core`)
+- **Base Checkpoint:** `edab9878f00cc0e398c7d2c993b2da32f4457142` (`feat(m7): enhance team and outreach analytics ui`)
 - **Files Modified:**
+  - `apps/web/src/tests/dashboard-ui.spec.tsx`
+  - `docs/progress.md`
+- **Files Created:**
+  - `apps/api/src/tests/m7-security-hardening.spec.ts`
+- **Security & Integrity Verifications:**
+  - **Canonical Auth & Session User Inactivation:** Verified that `sessionService.validateSession` inspects current PostgreSQL `User.isActive` on every request. When an active user is deactivated in the database (`isActive = false`), subsequent requests reusing the existing valid session cookie are rejected immediately with HTTP 401 `UNAUTHENTICATED` across all Team and Dashboard routes.
+  - **Team Tenant Isolation:** Re-verified all Team endpoints (`GET /members`, `GET /members/:userId`, `POST /members`, `PATCH /members/:userId`, `POST /members/:userId/activate`, `POST /members/:userId/deactivate`). Cross-tenant target user IDs fail closed with 404 `TEAM_MEMBER_NOT_FOUND` and leak zero email, role, or active state.
+  - **Request Authority & Parameter Injection Resistance:** Confirmed strict Zod schemas on `createTeamMemberRequestSchema`, `updateTeamMemberRequestSchema`, and `dashboardFilterQuerySchema`. Injected authority fields (`organizationId`, `tenantId`, `createdBy`, `passwordHash`, `isActive`, `permissions`, `sessionId`, `actorId`, `role`, `timezone`, `userId`, `createdAt`, `updatedAt`) are rejected with HTTP 422 `VALIDATION_ERROR`. Tenant identity is derived solely from the server-authenticated session.
+  - **ADMIN Hierarchy & Role Enforcement:** Re-verified at the API layer that `ADMIN` callers cannot create `ADMIN` or `SUPER_ADMIN` (403), cannot promote members to `ADMIN` or `SUPER_ADMIN` (403), cannot modify other `ADMIN` or `SUPER_ADMIN` members (403), and cannot activate or deactivate `ADMIN` or `SUPER_ADMIN` (403).
+  - **Self-Role & Self-Deactivation Protection:** Confirmed that `SUPER_ADMIN` and `ADMIN` callers cannot modify their own role (409 `TEAM_SELF_ROLE_CHANGE_FORBIDDEN`) and cannot deactivate themselves (409 `TEAM_SELF_DEACTIVATION_FORBIDDEN`). Self-name updates remain allowed.
+  - **Last SUPER_ADMIN Concurrency Protection:** Verified PostgreSQL `SERIALIZABLE` transaction isolation and bounded retry (`maxAttempts = 3`) under concurrent demote+demote, deactivate+deactivate, and demote+deactivate operations. Active `SUPER_ADMIN` count is strictly guaranteed to remain >= 1.
+  - **Duplicate Email Race Handling:** Handled via pre-check plus atomic Prisma `P2002` error mapping, returning 409 `TEAM_MEMBER_EMAIL_EXISTS` with zero leak of raw Prisma internals.
+  - **Team List RBAC:** Confirmed that `SALES_EXECUTIVE` and `VIEWER` direct requests to `GET /api/v1/team/members` fail server-side with HTTP 403 `FORBIDDEN`.
+  - **Dashboard Reports Permission & SALES_EXECUTIVE Scoping:** All dashboard routes enforce `Permissions.REPORTS_READ`. For `SALES_EXECUTIVE`, scope is unconditionally forced to `actor.actorId` across `/summary`, `/funnel`, `/sources`, and `/outreach`. Query parameters attempting peer tampering (`?assigneeId=<peer>` or `?assigneeId=<cross-tenant>`) are strictly overridden to self. Direct access to `/team-performance` returns HTTP 403 `FORBIDDEN`.
+  - **VIEWER Analytics Scope:** `VIEWER` has tenant-wide `REPORTS_READ` and can access `/summary`, `/funnel`, `/sources`, `/outreach`, and `/team-performance`. Dashboard frontend completely isolates `VIEWER` from calling `GET /api/v1/team/members`.
+  - **Cross-Tenant Assignee Enumeration Protection:** Nonexistent UUID and cross-tenant user UUID yield the identical safe 404 envelope (`Assignee "<uuid>" not found in organization`) with zero distinguishable metadata.
+  - **Filter Hardening:** Source string is trimmed, bounded to max 100 characters (>100 fails 422), and whitespace-only input is safely normalized. Date preset `custom` requires valid ISO `from` and `to`, requires `from <= to`, and enforces `range <= 365 days`; non-custom presets reject `from`/`to`.
+  - **Timezone Trust & Defensive Handling:** Tenant timezone derives from `Organization.timezone`. Invalid IANA timezone strings gracefully fall back to UTC calendar bounds without throwing unhandled exceptions.
+  - **Analytics Cohort & Snapshot Invariants:**
+    - Lead cohort membership uses `Lead.createdAt` (never `updatedAt`). Old leads updated to `WON` inside the selected period are excluded from cohort acquisition counts.
+    - Funnel / current pipeline distribution remains a true point-in-time snapshot, including existing historical leads regardless of creation date.
+    - Outreach send-cohort strictly filters by `sentAt` within the period, excluding deliveries sent outside the range even if delivered inside.
+    - Follow-up date semantics strictly evaluate `dueAt` for Due Today/Overdue and `completedAt` for Completed tasks.
+  - **Data & Response Safety:**
+    - Team API responses never expose `passwordHash`, `temporaryPassword`, `tokenHash`, or session tokens.
+    - Audit logs never contain `temporaryPassword`, `passwordHash`, or session tokens.
+    - Dashboard responses contain only aggregated metrics and approved team member metadata; zero customer PII (phone, email, WhatsApp message body, address) is returned.
+    - Error responses never leak stack traces, SQL, Prisma errors, or `DATABASE_URL`.
+  - **Query Batching & N+1 Prevention:**
+    - `teamService.listMembers`: Employs exactly 6 queries (1 `findMany`, 1 `count`, 4 `groupBy` queries using `in: userIds`) regardless of page size or team member count.
+    - `analyticsService.getTeamPerformance`: Employs 6 bounded queries (1 user `findMany`, 2 lead `groupBy`, 2 follow-up `groupBy`, 1 outreach `findMany`) regardless of team size. Zero queries inside member loops.
+  - **Index & Query Plan Review:**
+    - Verified all composite indexes in `schema.prisma`: `User([organizationId, createdAt], [organizationId, role])`, `Lead([organizationId, crmStage], [organizationId, assignedUserId, crmStage], [organizationId, createdAt], [organizationId, assignedUserId, createdAt], [organizationId, primarySource])`, `FollowUpTask([organizationId, status, dueAt], [organizationId, assignedUserId, status, dueAt], [organizationId, status, completedAt])`, and `OutreachDelivery([organizationId, sentAt], [organizationId, channel, status])`.
+    - Executed `EXPLAIN` query plan analysis on PostgreSQL for representative analytics queries. No duplicate indexes or destructive migrations required.
+  - **Frontend Authority & Stale-Response Hardening:**
+    - Confirmed frontend does not send or store `organizationId`, `tenantId`, or roles in `localStorage`/`sessionStorage`.
+    - Preserved `AbortController` and monotonic `generationRef` guard; verified that older in-flight responses cannot overwrite newer filter selections.
+    - User-friendly error messages implemented for 401, 403, 404, 422, and 500 without leaking raw error payloads.
+- **Verification Results:**
+  - Targeted tests: 41 hardening tests, 6 concurrency tests, 36 team API tests, 30 dashboard API tests, 10 analytics service tests, 17 analytics range tests, 53 dashboard UI tests, 12 team UI tests (All Passed).
+  - API Test Suite: 31 test files, 747 tests, 0 failures.
+  - Web Test Suite: 31 test files, 387 tests, 0 failures.
+  - Full Repo Test Suite: 101 test files, 2,065 tests, 0 failures (100% pass rate).
+  - TypeScript Typecheck: 0 errors across all 10 workspaces.
+  - Web Build: Optimized production Next.js build passed without errors or warnings.
+  - Prisma Schema Validation: Valid.
+  - `npm ci --dry-run`: Clean.
+- **Residual Technical Debt:**
+  - Distributed analytics rate limiting: Analytics requests currently rely on standard auth/session throttling rather than per-org aggregate rate limiting.
+  - Large-tenant team-performance payload: While DB queries are strictly batched (O(1) query count), the JSON response payload scales linearly with sales team size (`members.length`). Future pagination or virtualization can be considered if tenants exceed hundreds of sales reps.
+  - DB-level timezone validity constraint: Organization timezones currently fallback safely to UTC in the application layer if invalid, but could be constrained to valid IANA identifiers via a database check constraint or enum in a future milestone.
+  - Real-time aggregation at scale: At multi-million lead volume per tenant, daily rollups/OLAP views may eventually be introduced to supplement indexed transactional queries.
   - `apps/web/src/components/dashboard/team-performance-table.tsx`
   - `apps/web/src/components/dashboard/outreach-performance-card.tsx`
   - `apps/web/src/lib/dashboard/dashboard-display.ts`

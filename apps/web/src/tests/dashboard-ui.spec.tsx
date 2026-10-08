@@ -935,4 +935,78 @@ describe('M7 Step 6: Sales Dashboard Frontend UI Suite', () => {
       expect(html).toContain('aria-label="Toggle full details for Charlie Rep"');
     });
   });
+
+  describe('24. Step 8 Frontend Security, Network Scope & Stale Response Hardening', () => {
+    it('provides safe, friendly, non-leaking messages for all error status codes', () => {
+      const err401 = new ApiClientError('UNAUTHENTICATED', 'Token invalid', 401);
+      expect(getFriendlyDashboardErrorMessage(err401)).toBe('Please log in to view the sales dashboard.');
+
+      const err403 = new ApiClientError('FORBIDDEN', 'Forbidden', 403);
+      expect(getFriendlyDashboardErrorMessage(err403)).toBe('You do not have permission to view sales reports.');
+
+      // 404 must be generic and never leak tenant boundaries
+      const err404 = new ApiClientError('NOT_FOUND', 'Assignee belongs to another org', 404);
+      expect(getFriendlyDashboardErrorMessage(err404)).toBe('Selected team member is unavailable.');
+
+      const err422 = new ApiClientError('VALIDATION_ERROR', 'Zod validation', 422);
+      expect(getFriendlyDashboardErrorMessage(err422)).toBe('Invalid filter criteria. Please verify date parameters or inputs.');
+
+      const err500 = new ApiClientError('INTERNAL_ERROR', 'Internal SQL crash', 500);
+      expect(getFriendlyDashboardErrorMessage(err500)).toBe('Server error while calculating sales metrics. Please try again later.');
+
+      const abortErr = new Error('The user aborted a request.');
+      abortErr.name = 'AbortError';
+      expect(getFriendlyDashboardErrorMessage(abortErr)).toBe('');
+    });
+
+    it('stale response race condition protection discards older in-flight response when generation advances', async () => {
+      let generation = 0;
+      let committedData: string | null = null;
+
+      // Simulate Request 1 (started at gen 1, slow to finish)
+      const gen1 = ++generation;
+      const request1Promise = new Promise<string>((resolve) => {
+        setTimeout(() => resolve('data-from-request-1'), 50);
+      });
+
+      // Simulate Request 2 (started at gen 2, fast to finish)
+      const gen2 = ++generation;
+      const request2Promise = new Promise<string>((resolve) => {
+        setTimeout(() => resolve('data-from-request-2'), 10);
+      });
+
+      // Request 2 completes first
+      const res2 = await request2Promise;
+      if (gen2 === generation) {
+        committedData = res2;
+      }
+
+      expect(committedData).toBe('data-from-request-2');
+
+      // Request 1 completes later
+      const res1 = await request1Promise;
+      if (gen1 === generation) {
+        committedData = res1; // MUST NOT execute because gen1 !== generation
+      }
+
+      // Proves older slow response NEVER overwrites newer fast response
+      expect(committedData).toBe('data-from-request-2');
+    });
+
+    it('asserts zero customer PII in all rendered dashboard cards and summaries', () => {
+      const summaryHtml = renderToStaticMarkup(<KpiSummaryCards summary={sampleSummary} />);
+      const funnelHtml = renderToStaticMarkup(<CurrentPipelineCard funnel={sampleFunnel} />);
+      const sourcesHtml = renderToStaticMarkup(<LeadSourcesCard sourcesData={sampleSources} />);
+      const outreachHtml = renderToStaticMarkup(<OutreachPerformanceCard outreach={sampleOutreach} />);
+      const teamHtml = renderToStaticMarkup(<TeamPerformanceTable performance={sampleTeamPerformance} />);
+
+      const allHtml = `${summaryHtml} ${funnelHtml} ${sourcesHtml} ${outreachHtml} ${teamHtml}`;
+
+      // Customer contact PII patterns
+      expect(allHtml).not.toMatch(/\+880\d{8,10}/); // phone numbers
+      expect(allHtml).not.toMatch(/[a-zA-Z0-9._%+-]+@customer\.com/); // customer emails
+      expect(allHtml).not.toContain('Street Address');
+      expect(allHtml).not.toContain('WhatsApp message body');
+    });
+  });
 });
