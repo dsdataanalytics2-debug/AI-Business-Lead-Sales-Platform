@@ -138,7 +138,25 @@ export function errorHandler(
     return;
   }
 
-  // 5. Handle Custom App Errors
+  // 5. Handle Team Service Domain Errors
+  if (
+    err &&
+    typeof err === 'object' &&
+    ('name' in err && (err as Error).name === 'TeamServiceError' || 'code' in err && typeof (err as any).code === 'string' && (err as any).code.startsWith('TEAM_') || (err as any).code === 'LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED')
+  ) {
+    const teamErr = err as any;
+    res.status(teamErr.statusCode || 400).json({
+      error: {
+        code: teamErr.code,
+        message: teamErr.message,
+        details: teamErr.details,
+        requestId
+      }
+    });
+    return;
+  }
+
+  // 6. Handle Custom App Errors
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: {

@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { userRouter } from './routes/user.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { businessSearchRouter } from './routes/business-search.routes.js';
+import { teamRouter } from './routes/team.routes.js';
 import { leadRouter } from './routes/lead.routes.js';
 import { metaWhatsAppWebhookRouter } from './routes/meta-webhook.routes.js';
 import { resendEmailWebhookRouter } from './routes/resend-webhook.routes.js';
@@ -44,6 +45,7 @@ export function createApp(): Express {
   // API v1 module routes
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', userRouter);
+  app.use('/api/v1/team', teamRouter);
   app.use('/api/v1/business-search', businessSearchRouter);
   app.use('/api/v1/leads', leadRouter);
 

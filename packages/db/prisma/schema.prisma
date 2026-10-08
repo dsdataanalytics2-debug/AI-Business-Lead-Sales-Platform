@@ -256,6 +256,8 @@ model User {
 
   @@unique([id, organizationId])
   @@index([organizationId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, role])
   @@index([email])
   @@map("users")
 }
@@ -430,6 +432,7 @@ model Lead {
   @@index([organizationId, category])
   @@index([organizationId, crmStage])
   @@index([organizationId, assignedUserId])
+  @@index([organizationId, assignedUserId, crmStage])
   @@map("leads")
 }
 

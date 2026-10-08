@@ -4,8 +4,8 @@
 - **Status:** IN PROGRESS
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
 - **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
-- **Step 1 (Shared Contracts & RBAC Permissions):** IMPLEMENTED / AWAITING REVIEW
-- **Step 2 (Team Management Domain Service, DB Indexes & API):** NOT STARTED
+- **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
+- **Step 2 (Team Management Domain Service, DB Indexes & API):** IMPLEMENTED / AWAITING REVIEW
 - **Step 3 (Team Management UI):** NOT STARTED
 - **Step 4 (Sales Analytics Domain Engine):** NOT STARTED
 - **Step 5 (Sales Dashboard REST API & Scoping):** NOT STARTED
@@ -20,7 +20,58 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 1 — Shared Contracts & RBAC Permissions (Implemented / Awaiting Review)
+### M7 Step 2 — Team Management Domain Service, DB Indexes & API (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `3eb411c914725001f71fa4a1e4373eb8e4bbcf3a` (`feat(m7): add team and analytics shared contracts`)
+- **Files Created:**
+  - `packages/db/prisma/migrations/20261008123000_add_m7_team_indexes/migration.sql`
+  - `apps/api/src/services/team.service.ts`
+  - `apps/api/src/controllers/team.controller.ts`
+  - `apps/api/src/routes/team.routes.ts`
+  - `apps/api/src/tests/team-api.spec.ts`
+  - `apps/api/src/tests/team-service.spec.ts`
+  - `apps/api/src/tests/team-concurrency.spec.ts`
+- **Files Modified:**
+  - `packages/db/prisma/schema.prisma`
+  - `apps/api/src/app.ts`
+  - `apps/api/src/middleware/error-handler.ts`
+  - `docs/progress.md`
+- **Scope & Implementation Delivered:**
+  - **Canonical Team Routes Mounted at `/api/v1/team`:**
+    - `GET /api/v1/team/members`: lists tenant members with search, role, isActive filters, whitelisted sorting (`createdAt`, `name`, `role`), bounded pagination, and batched workload aggregation.
+    - `GET /api/v1/team/members/:userId`: fetches safe member detail with computed workload counts.
+    - `POST /api/v1/team/members`: creates new team member with Argon2id temporary password, role hierarchy guards, email uniqueness check, and atomic audit logging. Ordinary atomic transaction is used because user creation increases or preserves member count.
+    - `PATCH /api/v1/team/members/:userId`: updates member name and/or role with self-role demotion guards, role hierarchy guards, and last active SUPER_ADMIN protection. Email remains immutable. Runs in `Serializable` transaction isolation with bounded retry.
+    - `POST /api/v1/team/members/:userId/activate`: idempotently activates inactive members and emits audit log. Ordinary transaction is used because activation increases active count. Role hierarchy and tenant checks run before returning idempotent response.
+    - `POST /api/v1/team/members/:userId/deactivate`: deactivates members (never hard deletes), enforces self-deactivation protection, preserves historical lead and follow-up assignments, and revokes subsequent session authorization. Runs in `Serializable` transaction isolation with bounded retry. Role hierarchy and tenant checks run before returning idempotent response.
+  - **Role Hierarchy & Self-Modification Security Guards:**
+    - `SUPER_ADMIN` can manage all tenant roles subject to last active SUPER_ADMIN protection.
+    - `ADMIN` can create/update/activate/deactivate only `SALES_MANAGER`, `SALES_EXECUTIVE`, `VIEWER`. Cannot create, promote, modify, or deactivate `ADMIN` or `SUPER_ADMIN` (fails closed with 403 `TEAM_ROLE_FORBIDDEN`).
+    - Users cannot modify their own role (fails closed with 409 `TEAM_SELF_ROLE_CHANGE_FORBIDDEN`).
+    - Users cannot deactivate themselves (fails closed with 409 `TEAM_SELF_DEACTIVATION_FORBIDDEN` checked before transaction).
+  - **Last Active SUPER_ADMIN Concurrency Protection:**
+    - Operations that can remove an active SUPER_ADMIN run in a PostgreSQL SERIALIZABLE Prisma transaction (`isolationLevel: Prisma.TransactionIsolationLevel.Serializable`).
+    - Inside the transaction: tenant-scoped target lookup, actor/target role hierarchy validation, tenant active `SUPER_ADMIN` count check (`where: { organizationId, role: SUPER_ADMIN, isActive: true }`). If target is active `SUPER_ADMIN` and mutation removes active `SUPER_ADMIN` status and count <= 1, throws `LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED` (409).
+    - Serialization conflicts are retried with a bounded retry policy (max 3 attempts, retrying only Prisma `P2034` / PostgreSQL `40001` serialization failures), ensuring concurrent demote/deactivate operations cannot race and both remove the final active SUPER_ADMIN.
+    - Business and permission errors (`LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED`, `TEAM_ROLE_FORBIDDEN`, `TEAM_SELF_*`, 404) are never retried.
+    - Tested with real concurrent PostgreSQL execution (`Promise.allSettled`) across concurrent demotions, concurrent deactivations, and mixed demote/deactivate operations, verifying active `SUPER_ADMIN` count >= 1 invariant.
+  - **Workload Aggregation (No N+1):**
+    - List query executes exactly 4 bounded Prisma `groupBy` aggregates for retrieved member IDs (`assignedLeadsCount`, `activeLeadsCount`, `pendingFollowUpsCount`, `overdueFollowUpsCount`) running concurrently via `Promise.all` regardless of page size.
+    - Workload aggregation runs outside serializable mutation transactions to keep critical sections ultra-short and eliminate lock contention.
+  - **Shared Contract Status:**
+    - `TEAM_MEMBER_INACTIVE` is defined in shared contracts and mapped to 400, but is not actively triggered in Step 2 production paths as listing/details permit inactive viewing and activate/deactivate are idempotent; preserved as frozen shared contract for future use.
+  - **Audit Logging:**
+    - Atomic transactional emission of `team.member_created`, `team.member_updated`, `team.member_role_changed`, `team.member_activated`, `team.member_deactivated`. Zero password, credential, or secret leakage.
+  - **Database Index Optimization (Migration `20261008123000_add_m7_team_indexes`):**
+    - `User`: added `@@index([organizationId, createdAt])` and `@@index([organizationId, role])`.
+    - `Lead`: added `@@index([organizationId, assignedUserId, crmStage])`.
+    - `FollowUpTask`: verified existing index `[organizationId, assignedUserId, status, dueAt]` covers pending and overdue counts without index additions.
+  - **Zero Out-of-Scope Changes:**
+    - No frontend or UI work started.
+    - Sales dashboard analytics service and routes not started.
+    - StoreMate package completely untouched.
+
+### M7 Step 1 — Shared Contracts & RBAC Permissions (Complete)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
 - **Files Created:**
