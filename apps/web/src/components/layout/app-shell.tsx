@@ -36,7 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Campaigns', href: '/campaigns', icon: Megaphone, isPlaceholder: true, permission: Permissions.CAMPAIGNS_MANAGE },
   { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, isPlaceholder: true, permission: Permissions.LEADS_READ },
   { label: 'StoreMate Demos', href: '/demos', icon: Globe, isPlaceholder: true, permission: Permissions.DEMOS_GENERATE },
-  { label: 'Team', href: '/team', icon: UserCheck, isPlaceholder: true, permission: Permissions.USERS_MANAGE },
+  { label: 'Team', href: '/team', icon: UserCheck, permission: Permissions.USERS_READ },
   { label: 'Settings', href: '/settings', icon: Settings, isPlaceholder: true, permission: Permissions.USERS_MANAGE }
 ];
 

@@ -5,8 +5,8 @@
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
 - **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
 - **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
-- **Step 2 (Team Management Domain Service, DB Indexes & API):** IMPLEMENTED / AWAITING REVIEW
-- **Step 3 (Team Management UI):** NOT STARTED
+- **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
+- **Step 3 (Team Management UI):** IMPLEMENTED / AWAITING REVIEW
 - **Step 4 (Sales Analytics Domain Engine):** NOT STARTED
 - **Step 5 (Sales Dashboard REST API & Scoping):** NOT STARTED
 - **Step 6 (Sales Dashboard UI Core):** NOT STARTED
@@ -19,6 +19,68 @@
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
+
+### M7 Step 3 — Team Management UI (Implemented / Awaiting Review)
+- **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `40d9a2679ff454a337e61c3c88b10030fc129e59` (`feat(m7): add team management domain service db indexes and api`)
+- **Files Created:**
+  - `apps/web/src/app/team/page.tsx`
+  - `apps/web/src/components/team/team-filter-bar.tsx`
+  - `apps/web/src/components/team/team-member-table.tsx`
+  - `apps/web/src/components/team/create-member-modal.tsx`
+  - `apps/web/src/components/team/edit-member-modal.tsx`
+  - `apps/web/src/components/team/member-detail-modal.tsx`
+  - `apps/web/src/components/team/deactivate-confirm-modal.tsx`
+  - `apps/web/src/lib/team/team-display.ts`
+  - `apps/web/src/tests/app-shell-team.spec.tsx`
+  - `apps/web/src/tests/team-display.spec.ts`
+  - `apps/web/src/tests/team-ui.spec.tsx`
+  - `apps/web/src/tests/team-flow.spec.ts`
+- **Files Modified:**
+  - `apps/web/src/components/layout/app-shell.tsx`
+  - `apps/web/src/lib/api-client.ts`
+  - `docs/progress.md`
+- **Scope & Implementation Delivered:**
+  - **Canonical Route `/team`:**
+    - Mounted in Next.js app router at `apps/web/src/app/team/page.tsx`.
+    - Protected by `Permissions.USERS_READ`: unauthorized actors without `USERS_READ` receive an inline Access Denied state, preventing any backend data calls.
+  - **Sidebar & Navigation Visibility:**
+    - AppShell updated to wire the `Team` navigation item to `/team` with requirement `Permissions.USERS_READ`.
+    - Visible to `SUPER_ADMIN`, `ADMIN`, and `SALES_MANAGER`. Hidden from `SALES_EXECUTIVE` and `VIEWER`.
+  - **Typed API Client Methods (`apiClient.team`):**
+    - `listMembers(query, options)`: GET `/api/v1/team/members` with querystring mapping.
+    - `getMember(userId, options)`: GET `/api/v1/team/members/:userId`.
+    - `createMember(input, options)`: POST `/api/v1/team/members`.
+    - `updateMember(userId, input, options)`: PATCH `/api/v1/team/members/:userId`.
+    - `activateMember(userId, options)`: POST `/api/v1/team/members/:userId/activate`.
+    - `deactivateMember(userId, options)`: POST `/api/v1/team/members/:userId/deactivate`.
+  - **List, Filter, Search, Sort & Pagination:**
+    - Filter bar with search (debounced 350ms, trimmed, resets page to 1), role filter, active/inactive filter, sort field (`createdAt`, `name`, `role`), and sort direction (`desc`, `asc`).
+    - Reset Filters button restores defaults.
+    - Server-side pagination controls (Previous, Next, page indicator, total count).
+    - Query race prevention via `AbortController` and monotonic request generation tracking.
+  - **Team Table & Workload Metrics:**
+    - Desktop 9-column responsive table (`overflow-x-auto`, `min-w-[900px]`): Member (name, email, "You" indicator), Role badge, Status badge, Assigned Leads, Active Leads, Pending Follow-ups, Overdue Follow-ups, Created date, Actions.
+    - Mobile card view (`md:hidden`) with clean wrapping and full action support.
+  - **Role-Based Mutation & Invariant Guards:**
+    - `USERS_MANAGE` permission required for Add Member CTA, Edit, Activate, Deactivate controls.
+    - `SALES_MANAGER` can view member list and details, but sees no mutation controls.
+    - `ADMIN` actor: Create modal offers only `SALES_MANAGER`, `SALES_EXECUTIVE`, `VIEWER` (never `ADMIN` or `SUPER_ADMIN`). Cannot edit or deactivate other `ADMIN` or `SUPER_ADMIN` members.
+    - `SUPER_ADMIN` actor: Full mutation authority.
+    - Self-protection: Current user cannot deactivate self (Deactivate button not rendered for self). Current user cannot change own role (role selector replaced by locked badge). Self-name editing remains permitted.
+  - **Modals & Dialogs:**
+    - `CreateMemberModal`: Name, Email, Role (actor-restricted), Temporary Password (`type="password"`, min 10, max 128, never persisted or logged).
+    - `EditMemberModal`: Name (editable), Email (read-only/immutable), Role (actor-restricted dropdown, locked for self).
+    - `MemberDetailModal`: Displays member information and 4 sales workload metric cards.
+    - `DeactivateConfirmModal`: Explains login revocation, preserved historical assignments, and that leads are not unassigned/reassigned.
+  - **Friendly Error Handling:**
+    - Maps backend domain error codes to user-friendly messages: `TEAM_MEMBER_EMAIL_EXISTS`, `TEAM_ROLE_FORBIDDEN`, `TEAM_SELF_ROLE_CHANGE_FORBIDDEN`, `TEAM_SELF_DEACTIVATION_FORBIDDEN`, `LAST_SUPER_ADMIN_CANNOT_BE_MODIFIED`, `TEAM_MEMBER_NOT_FOUND`.
+    - No raw Prisma codes, SQL constraints, or stack traces exposed.
+  - **Non-Regression & Scope Boundaries:**
+    - Zero changes to Prisma schema or DB migrations.
+    - Zero changes to backend API controllers/services.
+    - StoreMate untouched.
+    - Dashboard analytics untouched.
 
 ### M7 Step 2 — Team Management Domain Service, DB Indexes & API (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW

@@ -24,7 +24,13 @@ import {
   type GenerateSalesAssistantDraftRequest,
   type SalesAssistantDraftSummary,
   type SendOutreachDeliveryRequest,
-  type OutreachDeliverySummary
+  type OutreachDeliverySummary,
+  type TeamMemberListQuery,
+  type TeamMemberListResponse,
+  type TeamMemberDetail,
+  type TeamMemberActionResponse,
+  type CreateTeamMemberRequest,
+  type UpdateTeamMemberRequest
 } from '@leadmate/shared';
 
 function getApiBaseUrl(): string {
@@ -421,5 +427,70 @@ export const apiClient = {
           method: 'GET'
         }
       )
+  },
+  team: {
+    listMembers: (
+      query: Partial<TeamMemberListQuery> = {},
+      options: RequestInit = {}
+    ): Promise<TeamMemberListResponse> => {
+      const searchParams = new URLSearchParams();
+      if (query.page !== undefined) searchParams.set('page', String(query.page));
+      if (query.limit !== undefined) searchParams.set('limit', String(query.limit));
+      if (query.sortBy) searchParams.set('sortBy', query.sortBy);
+      if (query.sortOrder) searchParams.set('sortOrder', query.sortOrder);
+      if (query.search) searchParams.set('search', query.search);
+      if (query.role) searchParams.set('role', query.role);
+      if (query.isActive !== undefined) searchParams.set('isActive', String(query.isActive));
+      const qs = searchParams.toString();
+      return request<TeamMemberListResponse>(`/team/members${qs ? `?${qs}` : ''}`, {
+        ...options,
+        method: 'GET'
+      });
+    },
+    getMember: (
+      userId: string,
+      options: RequestInit = {}
+    ): Promise<TeamMemberDetail> =>
+      request<TeamMemberDetail>(`/team/members/${encodeURIComponent(userId)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    createMember: (
+      input: CreateTeamMemberRequest,
+      options: RequestInit = {}
+    ): Promise<TeamMemberDetail> =>
+      request<TeamMemberDetail>('/team/members', {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input)
+      }),
+    updateMember: (
+      userId: string,
+      input: UpdateTeamMemberRequest,
+      options: RequestInit = {}
+    ): Promise<TeamMemberDetail> =>
+      request<TeamMemberDetail>(`/team/members/${encodeURIComponent(userId)}`, {
+        ...options,
+        method: 'PATCH',
+        body: JSON.stringify(input)
+      }),
+    activateMember: (
+      userId: string,
+      options: RequestInit = {}
+    ): Promise<TeamMemberActionResponse> =>
+      request<TeamMemberActionResponse>(`/team/members/${encodeURIComponent(userId)}/activate`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify({})
+      }),
+    deactivateMember: (
+      userId: string,
+      options: RequestInit = {}
+    ): Promise<TeamMemberActionResponse> =>
+      request<TeamMemberActionResponse>(`/team/members/${encodeURIComponent(userId)}/deactivate`, {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify({})
+      })
   }
 };
