@@ -11,8 +11,8 @@
 - **Step 5 (Sales Dashboard REST API & Scoping):** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
 - **Step 6 (Sales Dashboard UI Core):** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
 - **Step 7 (Team Workload & Outreach Analytics UI):** COMPLETE (`edab9878f00cc0e398c7d2c993b2da32f4457142`)
-- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** IMPLEMENTED / AWAITING REVIEW
-- **Step 9 (E2E Integration & Full Workspace Regression):** NOT STARTED
+- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** COMPLETE (`70b46f97fe2c96a6adea4e03aafbdfa09f654d8a`)
+- **Step 9 (E2E Integration & Full Workspace Regression):** IMPLEMENTED / AWAITING REVIEW
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
 
 ## Completed Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
@@ -20,8 +20,58 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 8 — Security, Tenant Isolation, Concurrency & Query Hardening (Implemented / Awaiting Review)
+### M7 Step 9 — Full E2E / Integration Regression & Release Readiness (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `70b46f97fe2c96a6adea4e03aafbdfa09f654d8a` (`test(m7): harden tenant security and analytics queries`)
+- **Files Created:**
+  - `apps/api/src/tests/m7-e2e.spec.ts`
+- **Files Modified:**
+  - `docs/progress.md`
+- **Full E2E & Release Readiness Verifications:**
+  - **E2E Role Matrix Verification:**
+    - `SUPER_ADMIN`: Has unrestricted Team Management (list, create, update, activate, deactivate) and tenant-wide Dashboard analytics (summary, funnel, sources, outreach, team performance) with assignee filtering. Protected by Last active `SUPER_ADMIN` concurrency invariant.
+    - `ADMIN`: Has restricted Team Management (cannot create, promote, modify, activate, or deactivate `ADMIN` or `SUPER_ADMIN`; can manage `SALES_MANAGER`, `SALES_EXECUTIVE`, and `VIEWER`) and full tenant-wide Dashboard analytics.
+    - `SALES_MANAGER`: Has view-only Team Management (`USERS_READ`; mutation requests return HTTP 403 `TEAM_ROLE_FORBIDDEN`) and full tenant-wide Dashboard analytics.
+    - `SALES_EXECUTIVE`: Team Management denied (HTTP 403 `FORBIDDEN`; Team nav link hidden in UI). Dashboard is strictly self-scoped to `actor.actorId` across all endpoints (`/summary`, `/funnel`, `/sources`, `/outreach`); `?assigneeId=<peer>` tampering attempts are overridden to self; `/team-performance` returns HTTP 403 `FORBIDDEN` and is never requested by the frontend.
+    - `VIEWER`: Team Management denied (HTTP 403 `FORBIDDEN`; Team nav link hidden in UI). Full tenant-wide read-only Dashboard access (`REPORTS_READ`). Frontend isolates `VIEWER` completely from `GET /api/v1/team/members`, deriving assignee filter options strictly from `team-performance`.
+  - **Team Management E2E Workflows:**
+    - Full creation flow: name, email, role; temporary passwords are hashed using the existing canonical Argon2id hashPassword() flow, audited atomically, and returned in safe DTO.
+    - Duplicate email rejection: precheck + atomic Prisma `P2002` race handling safely returns 409 `TEAM_MEMBER_EMAIL_EXISTS`.
+    - Profile update flow: name and role transitions audited atomically; email is immutable; self-role modification is rejected (409); self-name updates permitted.
+    - Lifecycle activation / deactivation: idempotent transitions; self-deactivation strictly blocked (409); deactivation preserves historical leads and follow-up ownership.
+    - Immediate session revocation: deactivating a user immediately invalidates existing sessions, rejecting subsequent requests with HTTP 401 `UNAUTHENTICATED`.
+  - **Sales Dashboard & Analytics Engine Verification:**
+    - Filter controls: deterministic presets (`7d`, `30d`, `90d`) and custom ranges verified; strict backend validation enforces ISO format, `from <= to`, and window $\le 365$ days.
+    - Summary metrics: verified exact conversion rates and resolved outreach delivery success rates matching server formulas without client drift.
+    - Current pipeline: point-in-time state distribution across all 7 canonical stages (`NEW`, `CONTACTED`, `QUALIFIED`, `PROPOSAL_SENT`, `NEGOTIATION`, `WON`, `LOST`); historical leads outside period remain accounted for.
+    - Lead sources: period cohort breakdown by `primarySource`, unknown sources normalized cleanly.
+    - Outreach channel analytics: send-cohort membership strictly governed by `sentAt` within period; deliveries sent outside range excluded even if delivered inside.
+    - Team performance: per-sales-rep workload (active leads, pending follow-ups, overdue follow-ups) vs period performance (leads created, won, conversion rate, outreach sent, delivered, success rate) verified. Zero gamification / leaderboard scoring.
+  - **Cross-Tenant Isolation & Security Boundary:**
+    - Multi-tenant test with Organization Alpha and Organization Beta: zero data or metrics leakage across Team and Dashboard APIs.
+    - Cross-tenant read, update, activate, and deactivate attempts fail closed with 404 `TEAM_MEMBER_NOT_FOUND`.
+    - Cross-tenant assignee queries yield safe, non-revealing 404 envelopes.
+  - **Query Batching & N+1 Verification:**
+    - `teamService.listMembers`: exactly 6 batched queries ($O(1)$ query count).
+    - `analyticsService.getTeamPerformance`: exactly 6 batched queries ($O(1)$ query count).
+    - Zero queries in per-member loops.
+  - **Frontend Authority & Stale-Response Guarding:**
+    - Zero client-side tenant authority, token storage, or role override in frontend code or storage (`localStorage`/`sessionStorage`).
+    - Monotonic `generationRef` and `AbortController` cancel and discard slower out-of-order responses.
+    - Friendly error UX implemented across 401, 403, 404, 422, and 500 without dumping raw server errors.
+  - **Release Readiness & Verification Results:**
+    - Prisma migrations: 11 migrations found; database migration state is up to date.
+    - Production build: `npm run build -w apps/web` passed with static optimization for `/team` and `/dashboard`.
+    - TypeScript typecheck: 0 errors across all 10 workspaces.
+    - Targeted M7 test suite: 10 test files, 232 tests, 0 failures.
+    - API suite: 32 test files, 765 tests, 0 failures.
+    - Web suite: 31 test files, 387 tests, 0 failures.
+    - Full repository test suite: 102 test files, 2,083 tests, 0 failures (100% pass rate).
+    - Dependency graph: `npm ci --dry-run --ignore-scripts` passed cleanly.
+    - Residual technical debt: documented (distributed analytics rate limiting, large-tenant payload scalability, DB-level IANA timezone constraint, future scale OLAP rollups). Zero release-blocking defects.
+
+### M7 Step 8 — Security, Tenant Isolation, Concurrency & Query Hardening (Complete)
+- **Status:** COMPLETE (`70b46f97fe2c96a6adea4e03aafbdfa09f654d8a`)
 - **Base Checkpoint:** `edab9878f00cc0e398c7d2c993b2da32f4457142` (`feat(m7): enhance team and outreach analytics ui`)
 - **Files Modified:**
   - `apps/web/src/tests/dashboard-ui.spec.tsx`
