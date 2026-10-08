@@ -1,9 +1,9 @@
 # LeadMate Progress Tracking
 
-## Current Milestone: M7 — Team Management + Sales Dashboard + Analytics 🔄 IN PROGRESS
-- **Status:** IN PROGRESS
+## Completed Milestone: M7 — Team Management + Sales Dashboard + Analytics ✅ CLOSED
+- **Status:** CLOSED
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
-- **Step 0 (Architecture & Scope Freeze):** IMPLEMENTED / AWAITING REVIEW
+- **Step 0 (Architecture & Scope Freeze):** COMPLETE (`3052e21bb7399e661c1eb23cf4dbb1270308ac78`)
 - **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
 - **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
 - **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
@@ -12,16 +12,63 @@
 - **Step 6 (Sales Dashboard UI Core):** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
 - **Step 7 (Team Workload & Outreach Analytics UI):** COMPLETE (`edab9878f00cc0e398c7d2c993b2da32f4457142`)
 - **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** COMPLETE (`70b46f97fe2c96a6adea4e03aafbdfa09f654d8a`)
-- **Step 9 (E2E Integration & Full Workspace Regression):** IMPLEMENTED / AWAITING REVIEW
-- **Step 10 (Milestone Review & Closure):** NOT STARTED
+- **Step 9 (E2E Integration & Full Workspace Regression):** COMPLETE (`02d9b46e865549c21c4fd36b08b7f6617fe3d5c2`)
+- **Step 10 (Milestone Review & Closure):** COMPLETE (pending final commit)
 
 ## Completed Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 9 — Full E2E / Integration Regression & Release Readiness (Implemented / Awaiting Review)
-- **Status:** IMPLEMENTED / AWAITING REVIEW
+### M7 Step 10 — Final M7 Review, Documentation & Milestone Closure (Complete)
+- **Status:** COMPLETE (Pending final closure commit)
+- **Base Checkpoint:** `02d9b46e865549c21c4fd36b08b7f6617fe3d5c2` (`test(m7): validate end-to-end release readiness`)
+- **Files Modified:**
+  - `docs/progress.md`
+- **Milestone Scope & Deliverables Review:**
+  - **Team Management:** Enterprise multi-tenant team management domain service, transactional repository layer, and REST API. Provides team roster listing, member creation with initial workload counters, name and role editing, idempotent activation/deactivation, last active `SUPER_ADMIN` concurrency protection (`SERIALIZABLE` isolation with bounded retry), duplicate email race safety (`P2002` mapping), and immediate session revocation for deactivated users. Fully responsive frontend at `/team` with client-side name/role search, status tabs (`All`, `Active`, `Inactive`), neutral multi-field sorting, accessible detail expansion panels, and modal workflows.
+  - **Sales Dashboard Core:** REST API and performant web dashboard at `/dashboard` providing real-time KPI summary cards (Lead Volume, Qualified Leads, Converted Leads, Outreach Deliveries, Resolved Success Rate), point-in-time CRM pipeline stage distribution, period acquisition cohort breakdown by primary lead source, outreach delivery and channel performance analytics, and team workload summary.
+  - **Operational Team Workload & Outreach Analytics UI:** Neutral operational inspection of active leads, pending follow-ups, and overdue follow-ups alongside period cohort performance (leads created, won, conversion rate, outreach sent, delivered, resolved success rate). Zero gamification, leaderboards, composite scoring, or competitive ranking.
+  - **Role-Aware Scoping Matrix:**
+    - `SUPER_ADMIN`: Unrestricted Team read/write; tenant-wide analytics with multi-assignee filter.
+    - `ADMIN`: Restricted Team hierarchy (cannot manage/escalate to `ADMIN` or `SUPER_ADMIN`; manages `SALES_MANAGER`, `SALES_EXECUTIVE`, `VIEWER`); tenant-wide analytics with multi-assignee filter.
+    - `SALES_MANAGER`: View-only Team roster (`USERS_READ`); mutation endpoints return HTTP 403 `TEAM_ROLE_FORBIDDEN`; tenant-wide analytics with multi-assignee filter.
+    - `SALES_EXECUTIVE`: Team Management denied (HTTP 403 `FORBIDDEN`; nav link hidden); dashboard unconditionally forced to self-scope (`actor.actorId`) across summary, funnel, sources, and outreach; peer tampering attempts overridden to self; `/team-performance` returns HTTP 403 `FORBIDDEN`.
+    - `VIEWER`: Team Management denied (HTTP 403 `FORBIDDEN`; nav link hidden); tenant-wide read-only dashboard (`REPORTS_READ`); assignee filter options derived cleanly from `/team-performance` with complete frontend decoupling from `GET /api/v1/team/members`.
+- **Security & Data Safety Closure:**
+  - Strict PostgreSQL session authentication via `leadmate_session` cookie; zero JWT/Bearer tokens.
+  - Active status verified on every request; deactivated users immediately rejected (HTTP 401 `UNAUTHENTICATED`).
+  - Strict tenant boundary enforced server-side; cross-tenant target UUIDs fail closed with HTTP 404 envelopes indistinguishable from non-existent resources.
+  - Authority injection (`organizationId`, `tenantId`, `role`, `permissions`, `passwordHash`) strictly stripped/rejected by Zod schemas.
+  - Sensitive authentication secrets (`passwordHash`, `temporaryPassword`, `tokenHash`, session tokens) never exposed in Team response DTOs, audit metadata, or client state.
+  - Zero customer PII (phone number, customer email, customer address, WhatsApp message text) returned in analytics payloads.
+  - Safe error contracts across 401, 403, 404, 422, and 500 without leaking SQL, Prisma details, stack traces, or `DATABASE_URL`.
+- **Query Batching & Performance Posture:**
+  - `teamService.listMembers`: exactly 6 batched queries ($O(1)$ query count) regardless of team size.
+  - `analyticsService.getTeamPerformance`: exactly 6 batched queries ($O(1)$ query count) regardless of team size.
+  - Zero queries inside per-member iteration loops ($O(1)$ query complexity).
+  - Existing composite indexes in PostgreSQL schema verified sufficient via query plan inspection; zero index bloat or redundant migrations.
+- **Database Migration State:**
+  - 11 migrations found; database migration state is up to date.
+- **Verification Results:**
+  - M7 E2E Suite (`m7-e2e.spec.ts`): 18 tests passed, 0 failures.
+  - API Test Suite: 32 test files, 765 tests passed, 0 failures.
+  - Web Test Suite: 31 test files, 387 tests passed, 0 failures.
+  - Full Repository Test Suite: 102 test files, 2,083 tests passed, 0 failures (100% pass rate).
+  - TypeScript Typecheck: 0 errors across all 10 workspaces.
+  - Web Production Build: Passed (Next.js 15.2.1 optimized static generation for all 9 routes).
+  - Prisma Schema Validation: Valid (`schema.prisma` is valid).
+  - Clean Dependency Graph: `npm ci --dry-run --ignore-scripts` up to date.
+- **StoreMate Deferred Note:**
+  - Live external StoreMate integration remains intentionally DEFERRED pending real external StoreMate API specifications, auth mechanisms, and sandbox environment. Mock adapter and shared contracts remain stable.
+- **Residual Technical Debt:**
+  - **M3 (CRM):** Distributed Redis-backed rate limiting, optimistic concurrency/versioning, cursor pagination for large lead datasets, and deeper follow-up task UI workflows.
+  - **M4 (Demo Sites):** Live external StoreMate adapter, distributed rate limiting, polling/webhook lifecycle sync, automated expiration scheduler, and version history.
+  - **M6 (Outreach):** Provider timeout ambiguity resolution, provider correlation token scoping, distributed outreach rate limiting, bulk campaigns, and operational credential rotation runbooks.
+  - **M7 (Team & Analytics):** Distributed Redis-backed analytics rate limiting, very large team-performance payload pagination for tenants with hundreds of sales reps, database-level IANA timezone validity check constraint, future OLAP/daily rollups at multi-million lead scale, and query latency observability metrics.
+
+### M7 Step 9 — Full E2E / Integration Regression & Release Readiness (Complete)
+- **Status:** COMPLETE (`02d9b46e865549c21c4fd36b08b7f6617fe3d5c2`)
 - **Base Checkpoint:** `70b46f97fe2c96a6adea4e03aafbdfa09f654d8a` (`test(m7): harden tenant security and analytics queries`)
 - **Files Created:**
   - `apps/api/src/tests/m7-e2e.spec.ts`
@@ -416,10 +463,11 @@
     - Zero StoreMate modifications.
     - No Step 2 implementation started.
 
-### M7 Step 0 — Architecture & Scope Freeze (Implemented / Awaiting Review)
-- **Status:** IMPLEMENTED / AWAITING REVIEW
+### M7 Step 0 — Architecture & Scope Freeze (Complete)
+- **Status:** COMPLETE (`3052e21bb7399e661c1eb23cf4dbb1270308ac78`)
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
-- **Primary Goals & Scoped Modules:**
+- **Scope & Frozen Decisions:**
+  - Architecture, role model, analytics semantics, API boundaries, and milestone scope frozen.
   - A. **Team Management:** Organization user management, role assignments, profile edits, activation/deactivation, and workload visibility.
   - B. **Sales Dashboard:** Real-time pipeline KPI cards, funnel metrics, follow-up workload, and outreach performance.
   - C. **Analytics Engine:** Indexed real-time database aggregates for lead lifecycle, sales executive performance, outreach delivery, and lead sources.
