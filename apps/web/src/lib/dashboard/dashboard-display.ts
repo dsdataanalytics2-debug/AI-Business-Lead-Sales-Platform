@@ -1,4 +1,4 @@
-import { Role } from '@leadmate/shared';
+import { Role, type SalesTeamPerformanceMember } from '@leadmate/shared';
 import { ApiClientError } from '../api-client';
 
 export interface DashboardAssigneeOption {
@@ -6,6 +6,123 @@ export interface DashboardAssigneeOption {
   name: string;
   role: Role;
   isActive: boolean;
+}
+
+export type TeamPerformanceSortField =
+  | 'name'
+  | 'activeLeads'
+  | 'pendingFollowUps'
+  | 'overdueFollowUps'
+  | 'leadsCreated'
+  | 'cohortWon'
+  | 'cohortConversionRate'
+  | 'outreachSent'
+  | 'resolvedDeliverySuccessRate';
+
+export type SortDirection = 'asc' | 'desc';
+
+export type TeamStatusFilter = 'all' | 'active' | 'inactive';
+
+export interface TeamWorkloadSummary {
+  totalActiveLeads: number;
+  totalPendingFollowUps: number;
+  totalOverdueFollowUps: number;
+}
+
+export function calculateTeamCurrentWorkload(
+  members: SalesTeamPerformanceMember[]
+): TeamWorkloadSummary {
+  let totalActiveLeads = 0;
+  let totalPendingFollowUps = 0;
+  let totalOverdueFollowUps = 0;
+
+  for (const member of members) {
+    totalActiveLeads += member.currentWorkload.activeLeads;
+    totalPendingFollowUps += member.currentWorkload.pendingFollowUps;
+    totalOverdueFollowUps += member.currentWorkload.overdueFollowUps;
+  }
+
+  return {
+    totalActiveLeads,
+    totalPendingFollowUps,
+    totalOverdueFollowUps
+  };
+}
+
+export function filterTeamMembers(
+  members: SalesTeamPerformanceMember[],
+  searchQuery: string,
+  statusFilter: TeamStatusFilter
+): SalesTeamPerformanceMember[] {
+  const query = searchQuery.trim().toLowerCase();
+
+  return members.filter((member) => {
+    // Status filter
+    if (statusFilter === 'active' && !member.isActive) return false;
+    if (statusFilter === 'inactive' && member.isActive) return false;
+
+    // Search query over name and role
+    if (query) {
+      const nameMatch = member.name.toLowerCase().includes(query);
+      const roleMatch = member.role.toLowerCase().includes(query);
+      if (!nameMatch && !roleMatch) return false;
+    }
+
+    return true;
+  });
+}
+
+export function sortTeamMembers(
+  members: SalesTeamPerformanceMember[],
+  field: TeamPerformanceSortField = 'name',
+  direction: SortDirection = 'asc'
+): SalesTeamPerformanceMember[] {
+  const sorted = [...members];
+
+  sorted.sort((a, b) => {
+    let comparison = 0;
+
+    switch (field) {
+      case 'name':
+        comparison = a.name.localeCompare(b.name);
+        break;
+      case 'activeLeads':
+        comparison = a.currentWorkload.activeLeads - b.currentWorkload.activeLeads;
+        break;
+      case 'pendingFollowUps':
+        comparison = a.currentWorkload.pendingFollowUps - b.currentWorkload.pendingFollowUps;
+        break;
+      case 'overdueFollowUps':
+        comparison = a.currentWorkload.overdueFollowUps - b.currentWorkload.overdueFollowUps;
+        break;
+      case 'leadsCreated':
+        comparison = a.periodPerformance.leadsCreated - b.periodPerformance.leadsCreated;
+        break;
+      case 'cohortWon':
+        comparison = a.periodPerformance.cohortWon - b.periodPerformance.cohortWon;
+        break;
+      case 'cohortConversionRate':
+        comparison = a.periodPerformance.cohortConversionRate - b.periodPerformance.cohortConversionRate;
+        break;
+      case 'outreachSent':
+        comparison = a.periodPerformance.outreachSent - b.periodPerformance.outreachSent;
+        break;
+      case 'resolvedDeliverySuccessRate':
+        comparison = a.periodPerformance.resolvedDeliverySuccessRate - b.periodPerformance.resolvedDeliverySuccessRate;
+        break;
+      default:
+        comparison = a.name.localeCompare(b.name);
+    }
+
+    // Tie-breaker: neutral alphabetical order by name
+    if (comparison === 0 && field !== 'name') {
+      comparison = a.name.localeCompare(b.name);
+    }
+
+    return direction === 'asc' ? comparison : -comparison;
+  });
+
+  return sorted;
 }
 
 export function deriveAssigneeOptions(

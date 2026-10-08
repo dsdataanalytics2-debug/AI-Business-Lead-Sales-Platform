@@ -27,6 +27,9 @@ import {
   deriveAssigneeOptions,
   formatAssigneeLabel,
   mergeAvailableSources,
+  calculateTeamCurrentWorkload,
+  filterTeamMembers,
+  sortTeamMembers,
   type DashboardAssigneeOption
 } from '../lib/dashboard/dashboard-display.js';
 import DashboardPage from '../app/dashboard/page.js';
@@ -727,6 +730,209 @@ describe('M7 Step 6: Sales Dashboard Frontend UI Suite', () => {
       getOutreachSpy.mockRestore();
       getTeamPerformanceSpy.mockRestore();
       listMembersSpy.mockRestore();
+    });
+  });
+
+  describe('17. Step 7 Team Workload Summary Strip & Pure Count Aggregation', () => {
+    it('calculates aggregate workload counts summing only integers without rate averaging', () => {
+      const summary = calculateTeamCurrentWorkload(sampleTeamPerformance.members);
+
+      // Charlie Rep: active 8, pending 3, overdue 1
+      // Dave Inactive: active 2, pending 0, overdue 0
+      expect(summary.totalActiveLeads).toBe(10);
+      expect(summary.totalPendingFollowUps).toBe(3);
+      expect(summary.totalOverdueFollowUps).toBe(1);
+
+      // Verify no rates or composite averages are produced
+      expect((summary as any).averageConversionRate).toBeUndefined();
+      expect((summary as any).averageDeliverySuccessRate).toBeUndefined();
+      expect((summary as any).performanceScore).toBeUndefined();
+    });
+
+    it('renders Team Current Workload summary strip in TeamPerformanceTable', () => {
+      const html = renderToStaticMarkup(<TeamPerformanceTable performance={sampleTeamPerformance} />);
+
+      expect(html).toContain('Team Current Workload');
+      expect(html).toContain('Active Leads');
+      expect(html).toContain('Pending Follow-ups');
+      expect(html).toContain('Overdue Follow-ups');
+      expect(html).toContain('10'); // totalActiveLeads
+      expect(html).toContain('3');  // totalPendingFollowUps
+      expect(html).toContain('1');  // totalOverdueFollowUps
+      expect(html).toContain('Requires Attention'); // Overdue > 0 attention badge
+    });
+  });
+
+  describe('18. Step 7 Local Search, Status Filtering, and Neutral Table Sorting', () => {
+    it('filters team members by search query over name and role', () => {
+      const searchCharlie = filterTeamMembers(sampleTeamPerformance.members, 'Charlie', 'all');
+      expect(searchCharlie).toHaveLength(1);
+      expect(searchCharlie[0].name).toBe('Charlie Rep');
+
+      const searchRole = filterTeamMembers(sampleTeamPerformance.members, 'SALES_EXECUTIVE', 'all');
+      expect(searchRole).toHaveLength(2);
+
+      const noMatch = filterTeamMembers(sampleTeamPerformance.members, 'NonExistent', 'all');
+      expect(noMatch).toHaveLength(0);
+    });
+
+    it('filters team members by active / inactive status', () => {
+      const activeOnly = filterTeamMembers(sampleTeamPerformance.members, '', 'active');
+      expect(activeOnly).toHaveLength(1);
+      expect(activeOnly[0].name).toBe('Charlie Rep');
+
+      const inactiveOnly = filterTeamMembers(sampleTeamPerformance.members, '', 'inactive');
+      expect(inactiveOnly).toHaveLength(1);
+      expect(inactiveOnly[0].name).toBe('Dave Inactive');
+    });
+
+    it('defaults to neutral alphabetical sorting by name ASC and supports neutral metric sorts', () => {
+      // Default name ASC
+      const defaultSort = sortTeamMembers(sampleTeamPerformance.members, 'name', 'asc');
+      expect(defaultSort[0].name).toBe('Charlie Rep');
+      expect(defaultSort[1].name).toBe('Dave Inactive');
+
+      // Sort by active leads DESC
+      const byActiveLeadsDesc = sortTeamMembers(sampleTeamPerformance.members, 'activeLeads', 'desc');
+      expect(byActiveLeadsDesc[0].name).toBe('Charlie Rep'); // 8 vs 2
+
+      // Sort by overdue follow-ups DESC
+      const byOverdueDesc = sortTeamMembers(sampleTeamPerformance.members, 'overdueFollowUps', 'desc');
+      expect(byOverdueDesc[0].name).toBe('Charlie Rep'); // 1 vs 0
+    });
+  });
+
+  describe('19. Step 7 Operational Workload Urgency & Attention State', () => {
+    it('visually highlights overdue follow-ups when greater than zero without judgmental labels', () => {
+      const html = renderToStaticMarkup(<TeamPerformanceTable performance={sampleTeamPerformance} />);
+
+      // Has overdue count 1 for Charlie Rep
+      expect(html).toContain('Overdue Follow-ups');
+      expect(html).toContain('text-rose-400'); // Urgency color
+      expect(html).toContain('Requires Attention');
+
+      // Must NOT contain judgmental language
+      expect(html).not.toContain('poor');
+      expect(html).not.toContain('underperforming');
+      expect(html).not.toContain('bad performer');
+      expect(html).not.toContain('low performer');
+    });
+  });
+
+  describe('20. Step 7 Advanced Outreach Analytics: Delivery Meters & Channel Separation', () => {
+    it('renders segmented progress meters with accessible labels and separate awaiting delivery', () => {
+      const html = renderToStaticMarkup(<OutreachPerformanceCard outreach={sampleOutreach} />);
+
+      expect(html).toContain('Outreach Channel Performance');
+      expect(html).toContain('Delivered');
+      expect(html).toContain('Failed');
+      expect(html).toContain('Awaiting Delivery');
+      expect(html).toContain('Awaiting In-Flight');
+      expect(html).toContain('Resolved Delivery Success Rate');
+
+      // WhatsApp channel card
+      expect(html).toContain('WhatsApp');
+      expect(html).toContain('25'); // sent
+      expect(html).toContain('21'); // delivered
+      expect(html).toContain('91.3%');
+
+      // Email channel card
+      expect(html).toContain('Email');
+      expect(html).toContain('15'); // sent
+      expect(html).toContain('11'); // delivered
+      expect(html).toContain('84.6%');
+
+      // Accessible progressbar role
+      expect(html).toContain('role="progressbar"');
+    });
+
+    it('renders resilient finite zero states for channels with 0 sent without NaN or hidden cards', () => {
+      const zeroOutreach: DashboardOutreachResponse = {
+        totals: {
+          sent: 0,
+          delivered: 0,
+          failed: 0,
+          awaitingDelivery: 0,
+          resolvedDeliverySuccessRate: 0
+        },
+        channels: []
+      };
+
+      const html = renderToStaticMarkup(<OutreachPerformanceCard outreach={zeroOutreach} />);
+
+      expect(html).toContain('No outreach was sent in this period.');
+      expect(html).toContain('WhatsApp');
+      expect(html).toContain('Email');
+      expect(html).toContain('0 sent');
+      expect(html).toContain('0.0%');
+      expect(html).not.toContain('NaN');
+      expect(html).not.toContain('Infinity');
+    });
+  });
+
+  describe('21. Step 7 Strict Server Formula & Rate Display Integrity', () => {
+    it('displays server-computed conversion and success rates directly without client recalculation', () => {
+      const customPerformance: DashboardTeamPerformanceResponse = {
+        members: [
+          {
+            userId: 'user-rate-1',
+            name: 'Exact Rate Rep',
+            role: Role.SALES_EXECUTIVE,
+            isActive: true,
+            currentWorkload: { activeLeads: 5, pendingFollowUps: 2, overdueFollowUps: 0 },
+            periodPerformance: {
+              leadsCreated: 10,
+              cohortWon: 3,
+              cohortConversionRate: 37.25,
+              outreachSent: 50,
+              outreachDelivered: 45,
+              outreachFailed: 3,
+              awaitingDelivery: 2,
+              resolvedDeliverySuccessRate: 93.75
+            }
+          }
+        ],
+        total: 1
+      };
+
+      const html = renderToStaticMarkup(<TeamPerformanceTable performance={customPerformance} />);
+
+      // Exactly formats server rate to 1 decimal place: 37.3% and 93.8%
+      expect(html).toContain('37.3%');
+      expect(html).toContain('93.8%');
+      expect(html).toContain('Exact Rate Rep');
+    });
+  });
+
+  describe('22. Step 7 Anti-Gamification Verification', () => {
+    it('verifies that no competitive ranking, score, or trophy badges exist in rendered team UI', () => {
+      const html = renderToStaticMarkup(<TeamPerformanceTable performance={sampleTeamPerformance} />);
+
+      expect(html).not.toContain('Leaderboard');
+      expect(html).not.toContain('Rank');
+      expect(html).not.toContain('#1');
+      expect(html).not.toContain('Top Performer');
+      expect(html).not.toContain('Best Rep');
+      expect(html).not.toContain('Worst Rep');
+      expect(html).not.toContain('Sales Score');
+      expect(html).not.toContain('Performance Score');
+      expect(html).not.toContain('AI Score');
+      expect(html).not.toContain('trophy');
+    });
+  });
+
+  describe('23. Step 7 Mobile & Responsive Component Rendering', () => {
+    it('renders both desktop structured table and mobile card layout with accessible toggle buttons', () => {
+      const html = renderToStaticMarkup(<TeamPerformanceTable performance={sampleTeamPerformance} />);
+
+      // Desktop table wrapper
+      expect(html).toContain('hidden md:block');
+      // Mobile cards wrapper
+      expect(html).toContain('md:hidden');
+      // Accessible buttons for expanding details
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).toContain('aria-label="Toggle details for Charlie Rep"');
+      expect(html).toContain('aria-label="Toggle full details for Charlie Rep"');
     });
   });
 });

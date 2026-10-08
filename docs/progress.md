@@ -9,8 +9,8 @@
 - **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
 - **Step 4 (Sales Analytics Domain Engine):** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
 - **Step 5 (Sales Dashboard REST API & Scoping):** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
-- **Step 6 (Sales Dashboard UI Core):** IMPLEMENTED / AWAITING REVIEW
-- **Step 7 (Team Workload & Outreach Analytics UI):** NOT STARTED
+- **Step 6 (Sales Dashboard UI Core):** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
+- **Step 7 (Team Workload & Outreach Analytics UI):** IMPLEMENTED / AWAITING REVIEW
 - **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** NOT STARTED
 - **Step 9 (E2E Integration & Full Workspace Regression):** NOT STARTED
 - **Step 10 (Milestone Review & Closure):** NOT STARTED
@@ -20,8 +20,36 @@
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
 
-### M7 Step 6 — Sales Dashboard UI Core (Implemented / Awaiting Review)
+### M7 Step 7 — Team Workload & Outreach Analytics UI (Implemented / Awaiting Review)
 - **Status:** IMPLEMENTED / AWAITING REVIEW
+- **Base Checkpoint:** `f718baf372af1699193434564f89b7cbaa246b45` (`feat(m7): add sales dashboard ui core`)
+- **Files Modified:**
+  - `apps/web/src/components/dashboard/team-performance-table.tsx`
+  - `apps/web/src/components/dashboard/outreach-performance-card.tsx`
+  - `apps/web/src/lib/dashboard/dashboard-display.ts`
+  - `apps/web/src/tests/dashboard-ui.spec.tsx`
+  - `docs/progress.md`
+- **Features & Enhancements Delivered:**
+  - **Team Workload & Performance Table Enhancements (`apps/web/src/components/dashboard/team-performance-table.tsx`):**
+    - **Current Workload vs Period Performance Clarity:** Strict architectural and visual separation between point-in-time operational workload counts (`activeLeads`, `pendingFollowUps`, `overdueFollowUps`) and historical period cohort conversions (`leadsCreated`, `cohortWon`, `cohortConversionRate`, `outreachSent`, `outreachDelivered`, `outreachFailed`, `awaitingDelivery`, `resolvedDeliverySuccessRate`).
+    - **Team Current Workload Summary Strip:** Pure client-side summation of operational count metrics (`totalActiveLeads`, `totalPendingFollowUps`, `totalOverdueFollowUps`) without any averaging of percentage rates or composite scoring. Overdue tasks > 0 clearly flagged with neutral "Requires Attention" badge.
+    - **Local Search & Status Filter:** Real-time client-side search over member name and role; status filter tabs for `All`, `Active`, and `Inactive` members with clear empty-filter reset controls.
+    - **Neutral Multi-Field Sorting:** Default neutral alphabetical sort (`name ASC`); user can sort by any workload or performance metric (`activeLeads`, `pendingFollowUps`, `overdueFollowUps`, `leadsCreated`, `cohortWon`, `cohortConversionRate`, `outreachSent`, `resolvedDeliverySuccessRate`) with ascending/descending toggle and tie-breaking by name.
+    - **Expandable Member Detail Panels:** Accessible row expansion (`aria-expanded`, `aria-controls`) revealing dedicated Current Workload and Period Performance cards powered strictly by existing member DTOs (zero N+1 frontend fetches).
+    - **Responsive Mobile Layout:** Compact stacked cards for screens `< md` preventing 13-column table overflow, complete with expandable breakdown and touch-friendly controls.
+    - **Anti-Gamification Guarantee:** Zero leaderboard rankings, badges, `#1`, score metrics, or competitive trophy icons.
+  - **Advanced Outreach Analytics Enhancements (`apps/web/src/components/dashboard/outreach-performance-card.tsx`):**
+    - **Segmented Visual Meters:** Multi-segment proportional delivery progress bars (`Delivered` in emerald, `Awaiting In-Flight` in amber, `Failed` in rose) for both overall cohort and individual channels.
+    - **Channel Parity & Resilient Zero Handling:** Guarantees both `WhatsApp` and `Email` are always visible even if zero sends occurred in the period (rendering finite `0.0%`, never `NaN` or `Infinity`).
+    - **Strict Rate Semantics:** Consistently labeled `Resolved Delivery Success Rate` without client re-computation or denominator distortion. In-flight messages (`Awaiting Delivery`) explicitly separated from failed deliveries.
+    - **Accessibility:** Screen-reader accessible progressbars (`role="progressbar"`) exposing comprehensive delivery counts and percentage breakdowns.
+  - **Role & RBAC Security:**
+    - `SALES_EXECUTIVE`: Excluded from team workload and performance sections; `/team-performance` endpoint is never requested; zero Team API dependency.
+    - `VIEWER`, `SUPER_ADMIN`, `ADMIN`, `SALES_MANAGER`: Full view of team workload and outreach analytics with zero mutation controls and zero calls to `GET /api/v1/team/members`.
+    - Zero customer PII or authority parameters injected.
+
+### M7 Step 6 — Sales Dashboard UI Core (Complete)
+- **Status:** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
 - **Base Checkpoint:** `7474ae313b2766ad7ae189c1e743d23f8f1501e1` (`feat(m7): expose dashboard analytics api`)
 - **Files Created:**
   - `apps/web/src/components/dashboard/dashboard-filter-bar.tsx`
