@@ -182,3 +182,19 @@ export const storemateOutboundPayloadSchema = z
   .strict();
 
 export type StoreMateOutboundPayload = z.infer<typeof storemateOutboundPayloadSchema>;
+
+export const demoCatalogItemSchema = z.object({
+  id: z.string().uuid(),
+  leadId: z.string().uuid(),
+  businessName: z.string(),
+  category: z.string().optional(),
+  city: z.string().optional(),
+  status: z.nativeEnum(DemoWebsiteStatus),
+  provider: z.nativeEnum(DemoWebsiteProvider),
+  demoUrl: z.string().nullable().optional(),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]),
+  expiresAt: z.union([z.date(), z.string()]).nullable().optional()
+});
+
+export type DemoCatalogItem = z.infer<typeof demoCatalogItemSchema>;

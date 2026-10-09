@@ -665,6 +665,45 @@ export class DemoWebsiteService {
 
     return mapToDemoWebsiteSummary(updated);
   }
+
+  /**
+   * Lists all generated demo websites for the organization.
+   */
+  async listDemoWebsites(
+    context: DemoWebsiteRequestContext
+  ): Promise<any[]> {
+    const { organizationId } = context;
+
+    const demos = await prisma.demoWebsite.findMany({
+      where: { organizationId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            category: true,
+            city: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    return demos.map((d) => ({
+      id: d.id,
+      leadId: d.leadId,
+      businessName: d.lead?.name || 'Unknown Business',
+      category: d.lead?.category,
+      city: d.lead?.city,
+      status: d.status,
+      provider: d.provider,
+      demoUrl: d.demoUrl,
+      createdAt: d.createdAt,
+      updatedAt: d.updatedAt,
+      expiresAt: d.expiresAt
+    }));
+  }
 }
 
 export const demoWebsiteService = new DemoWebsiteService();

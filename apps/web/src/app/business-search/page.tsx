@@ -78,7 +78,8 @@ export default function BusinessSearchPage() {
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('');
   const [limit, setLimit] = useState(50);
-  const [provider, setProvider] = useState('MOCK');
+  const [provider, setProvider] = useState('AUTO');
+
 
   // Search execution state
   const [isSearching, setIsSearching] = useState(false);
@@ -389,15 +390,23 @@ export default function BusinessSearchPage() {
 
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 self-start sm:self-auto">
             <Database className="w-4 h-4 text-indigo-400" />
-            <span>Active Datasource:</span>
-            <span className="font-semibold text-slate-200">Mock Provider (Standard)</span>
+            <span>Search Strategy:</span>
+            <span className="font-semibold text-slate-200">
+              {provider === 'AUTO'
+                ? 'Auto (Free First - OSM)'
+                : provider === 'OPENSTREETMAP'
+                ? 'OpenStreetMap (Free)'
+                : provider === 'GOOGLE_PLACES'
+                ? 'Google Places (API New)'
+                : 'Mock Fixtures'}
+            </span>
           </div>
         </div>
 
         {/* Search Form Card */}
         <div className="p-5 rounded-xl bg-slate-950/70 border border-slate-800/80 shadow-lg">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               {/* Keyword / Name Query */}
               <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
                 <label htmlFor="search-q" className="block text-xs font-medium text-slate-300">
@@ -452,6 +461,25 @@ export default function BusinessSearchPage() {
                 />
               </div>
 
+              {/* Provider Selector */}
+              <div className="space-y-1.5 sm:col-span-1">
+                <label htmlFor="search-provider" className="block text-xs font-medium text-slate-300">
+                  Data Provider
+                </label>
+                <select
+                  id="search-provider"
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  disabled={isSearching}
+                  className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                >
+                  <option value="AUTO">Auto (Free First - OSM)</option>
+                  <option value="OPENSTREETMAP">OpenStreetMap (Live Free)</option>
+                  <option value="GOOGLE_PLACES">Google Places (API New)</option>
+                  <option value="MOCK">Mock Provider (Offline)</option>
+                </select>
+              </div>
+
               {/* Limit */}
               <div className="space-y-1.5 sm:col-span-1">
                 <label htmlFor="search-limit" className="block text-xs font-medium text-slate-300">
@@ -472,6 +500,7 @@ export default function BusinessSearchPage() {
                 </select>
               </div>
             </div>
+
 
             {/* Form Actions */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">

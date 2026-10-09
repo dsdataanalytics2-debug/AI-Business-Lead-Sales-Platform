@@ -24,6 +24,10 @@ export type { BusinessSearchQuery, BusinessSearchResult, DiscoveredContact };
 export interface ProviderContext {
   /** Tenant organization ID if available */
   organizationId?: string;
+  /** Decrypted API key if required by provider */
+  apiKey?: string;
+  /** Custom endpoint URL if configured */
+  endpointUrl?: string;
   /** Request abort signal for timeout or cancellation */
   signal?: AbortSignal;
   /** Correlation identifier for request tracing */
@@ -31,13 +35,27 @@ export interface ProviderContext {
 }
 
 /**
+ * Standard provider capability and descriptive metadata.
+ */
+export interface ProviderMetadata {
+  key: string;
+  displayName: string;
+  description: string;
+  requiresCredential: boolean;
+  supportsBuyerSearch: boolean;
+  supportsContactEnrichment: boolean;
+  supportsConnectionTest: boolean;
+  costType: 'FREE' | 'PAID' | 'HYBRID';
+}
+
+/**
  * Standard pluggable datasource provider interface.
  *
- * Implemented by deterministic mock providers and future external API providers
- * (e.g. Google Places, authorized business directories).
+ * Implemented by deterministic mock providers and external API providers
+ * (e.g. OpenStreetMap, Google Places).
  */
 export interface DataSourceProvider {
-  /** Unique, stable provider identifier (e.g., 'MOCK', 'GOOGLE_PLACES') */
+  /** Unique, stable provider identifier (e.g., 'mock', 'openstreetmap', 'google-places') */
   readonly name: string;
 
   /**
@@ -63,4 +81,11 @@ export interface DataSourceProvider {
     externalId: string,
     context?: ProviderContext
   ): Promise<BusinessSearchResult | null>;
+
+  /**
+   * Tests provider connection and credentials without broad data scans.
+   */
+  testConnection?(
+    apiKey?: string
+  ): Promise<{ connected: boolean; message: string }>;
 }

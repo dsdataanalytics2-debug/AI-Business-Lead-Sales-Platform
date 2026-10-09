@@ -154,6 +154,26 @@ export class DemoWebsiteController {
       next(err);
     }
   }
+
+  /**
+   * GET /api/v1/demos
+   * List all generated demo websites for the organization.
+   */
+  async listAllDemos(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const demos = await demoWebsiteService.listDemoWebsites({
+        organizationId: req.user!.organizationId,
+        userId: req.user!.id,
+        correlationId: String(req.id || 'unknown')
+      });
+
+      res.status(200).json({
+        data: demos
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const demoWebsiteController = new DemoWebsiteController();

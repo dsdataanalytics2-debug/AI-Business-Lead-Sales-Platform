@@ -132,6 +132,10 @@ export class LeadService {
       };
     }
 
+    if (query.crmStage) {
+      where.crmStage = query.crmStage as any;
+    }
+
     // 2. Validate cursor security if provided
     if (cursor) {
       const cursorLead = await prisma.lead.findFirst({
@@ -175,9 +179,12 @@ export class LeadService {
       rating: l.rating,
       reviewCount: l.reviewCount,
       primarySource: l.primarySource,
+      crmStage: l.crmStage as any,
+      assignedUserId: l.assignedUserId,
       createdAt: l.createdAt,
       updatedAt: l.updatedAt
     }));
+
 
     return {
       data: mappedItems,

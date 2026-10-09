@@ -5,19 +5,27 @@
 - **Base Checkpoint:** `f4d6c5b1e749f5d07c1437654d868e2f3774cc27` (`docs(m7): close team and analytics milestone`)
 - **Step 0 (Architecture, Scope Freeze & Free-First Strategy):** COMPLETE
 - **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** COMPLETE
-- **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** IMPLEMENTED / PENDING REVIEW (Current)
-- **Step 3 (Pluggable Provider Registry & AES-256-GCM Credential Storage):** PENDING
-- **Step 4 (OpenStreetMap / Overpass Free Discovery Provider):** PENDING
-- **Step 5 (Contact Enrichment Provider Abstraction & Provenance):** PENDING
-- **Step 6 (Public Website Contact & WhatsApp wa.me Safe Inspection):** PENDING
-- **Step 7 (Buyer Need & Deterministic Intent Scoring Domain Service):** PENDING
-- **Step 8 (Customer Data & Opportunities Workspace UI /customers):** PENDING
-- **Step 9 (CRM Pipeline & Follow-Up Task Integration):** PENDING
-- **Step 10 (Campaign Orchestration & M5 AI Offer Integration):** PENDING
-- **Step 11 (Google Places Optional Provider & Dashboard Settings UI):** PENDING
-- **Step 12 (Tenant Isolation, Cost Quotas & Rate-Limiting Hardening):** PENDING
-- **Step 13 (Full E2E Integration Suite & Workspace Regression):** PENDING
-- **Step 14 (Final Milestone Review, Documentation & M8 Closure):** PENDING
+- **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** COMPLETE (Committed: `1afe81849ffade9eb6ab521e8a4f2e2975f4fd1e`)
+- **LeadAtlas Fast-Track Visible Product Batch:** COMPLETE
+  - CRM Pipeline Board (`/pipeline` across 7 canonical CrmStage values)
+  - StoreMate Demos Catalog (`/demos` with lead integration, preview & regenerate actions)
+  - Campaigns (`/campaigns` with metrics, creation modal, and `Approval != Dispatch` safeguard)
+  - Settings & Data Sources Management (`/settings`, `/settings/data-sources`)
+  - Provider Registry (`mock`, `csv`, `openstreetmap`, `google-places`)
+  - AES-256-GCM Credential Storage & Masking (`v1:<iv>:<ciphertext>:<authTag>`, strict 32-byte key validation, zero plaintext/master key exposure)
+  - OpenStreetMap / Overpass Live Discovery Provider (Free-First, bounded, fair-use)
+  - Google Places API (New) Live Discovery Provider & Safe Connection Test (Verified live)
+  - Business Search Provider Switching (`AUTO`, `OPENSTREETMAP`, `GOOGLE_PLACES`, `MOCK`)
+  - AUTO Free-First Strategy (OpenStreetMap prioritized first; Google fallback only when needed & configured)
+  - Complete Sidebar SOON Badge Removal (0 SOON badges remain; all primary navigation active)
+  - Core Invariants Preserved: `PHONE != WHATSAPP`, `Approval != Dispatch`, strict tenant isolation, zero secret leakage
+- **Remaining M8 Milestone Scope (Post Fast-Track):**
+  - Contact Enrichment Provider abstraction & provenance
+  - Public website contact inspection & SSRF-safe fetching
+  - Verified WhatsApp (`wa.me` inspection) and email extraction
+  - Buyer Need & Deterministic Intent scoring domain service
+  - Customer Data & Opportunities Workspace UI (`/customers`)
+  - Deeper CRM & outreach campaign integration for discovered buyers
 
 ### M8 Step 0 — Architecture, Scope Freeze & Free-First Strategy (Complete)
 - **Status:** COMPLETE
@@ -46,8 +54,8 @@
   - **Query Expansion Contract:** Added minimal `buyerDiscoverySearchTermSchema` (`query`, `language`, `sourceIntent`) supporting bilingual/localized query generation.
   - **Exports & Unit Tests:** Exported via canonical `packages/shared/src/index.ts`. Added 20 comprehensive unit tests in `packages/shared/src/tests/buyer-discovery-schemas.spec.ts` validating all constraints, limits, trim behaviors, invariants, and provider-neutral shapes.
 
-### M8 Step 2 — Database Schema Migration & Local Drift Reconciliation (Implemented / Pending Review)
-- **Status:** IMPLEMENTED / PENDING REVIEW
+### M8 Step 2 — Database Schema Migration & Local Drift Reconciliation (Complete)
+- **Status:** COMPLETE (Committed: `1afe81849ffade9eb6ab521e8a4f2e2975f4fd1e`)
 - **Base Checkpoint:** `fd2763ca6c750e7f0591c61897c785486cc36d51`
 - **Deliverables & Specifications:**
   - **Tenant-Scoped & Global DataSource Uniqueness:** Evolved `DataSourceConfig` to support tenant isolation with `organizationId` (`String?`), `provider` (`String`), credential storage attributes (`encryptedCredential`, `credentialMasked`, `credentialLastFour`), and `lastTestedAt` (`DateTime?`). Enforced dual uniqueness: tenant uniqueness via Prisma `@@unique([organizationId, name])` and global uniqueness via PostgreSQL partial unique index `data_source_configs_global_name_key` on `name WHERE organization_id IS NULL`. Maintained seed idempotency for system global datasources (`mock`, `csv`).

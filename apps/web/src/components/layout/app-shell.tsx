@@ -33,12 +33,13 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Leads', href: '/leads', icon: Users, permission: Permissions.LEADS_READ },
   { label: 'Business Search', href: '/business-search', icon: Search, permission: Permissions.LEADS_READ },
-  { label: 'Campaigns', href: '/campaigns', icon: Megaphone, isPlaceholder: true, permission: Permissions.CAMPAIGNS_MANAGE },
-  { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, isPlaceholder: true, permission: Permissions.LEADS_READ },
-  { label: 'StoreMate Demos', href: '/demos', icon: Globe, isPlaceholder: true, permission: Permissions.DEMOS_GENERATE },
+  { label: 'Campaigns', href: '/campaigns', icon: Megaphone, permission: Permissions.CAMPAIGNS_MANAGE },
+  { label: 'CRM Pipeline', href: '/pipeline', icon: Kanban, permission: Permissions.LEADS_READ },
+  { label: 'StoreMate Demos', href: '/demos', icon: Globe, permission: Permissions.DEMOS_GENERATE },
   { label: 'Team', href: '/team', icon: UserCheck, permission: Permissions.USERS_READ },
-  { label: 'Settings', href: '/settings', icon: Settings, isPlaceholder: true, permission: Permissions.USERS_MANAGE }
+  { label: 'Settings', href: '/settings', icon: Settings, permission: Permissions.USERS_MANAGE }
 ];
+
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, hasPermission, logout } = useAuth();

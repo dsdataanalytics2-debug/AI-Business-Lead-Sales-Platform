@@ -15,3 +15,5 @@ export * from './schemas/outreach.js';
 export * from './schemas/team.js';
 export * from './schemas/analytics.js';
 export * from './schemas/buyer-discovery.js';
+export * from './schemas/datasource-settings.js';
+export * from './schemas/campaign.js';

@@ -36,8 +36,14 @@ import {
   type DashboardFunnelResponse,
   type DashboardSourcesResponse,
   type DashboardOutreachResponse,
-  type DashboardTeamPerformanceResponse
+  type DashboardTeamPerformanceResponse,
+  type DataSourcesListResponse,
+  type DataSourceCardStatus,
+  type DemoCatalogItem,
+  type CampaignSummary,
+  type CreateCampaignRequest
 } from '@leadmate/shared';
+
 
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
@@ -580,8 +586,58 @@ export const apiClient = {
     request<DashboardTeamPerformanceResponse>(`/dashboard/team-performance${buildDashboardSearchParams(query)}`, {
       ...options,
       method: 'GET'
+    }),
+
+  // Data Sources Settings
+  getDataSources: (options: RequestInit = {}): Promise<DataSourcesListResponse> =>
+    request<DataSourcesListResponse>('/settings/data-sources', {
+      ...options,
+      method: 'GET'
+    }),
+  configureGooglePlaces: (apiKey: string): Promise<{ success: boolean; credentialMasked: string; credentialLastFour: string; status: DataSourceCardStatus }> =>
+    request('/settings/data-sources/google-places/configure', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    }),
+  testGooglePlaces: (apiKey?: string): Promise<{ connected: boolean; provider: string; message: string }> =>
+    request('/settings/data-sources/google-places/test', {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    }),
+  testProvider: (provider: string): Promise<{ connected: boolean; provider: string; message: string }> =>
+    request(`/settings/data-sources/${encodeURIComponent(provider)}/test`, {
+      method: 'POST'
+    }),
+  setActiveProvider: (provider: string): Promise<{ success: boolean; activeProvider: string }> =>
+    request(`/settings/data-sources/${encodeURIComponent(provider)}/set-active`, {
+      method: 'POST'
+    }),
+  toggleProviderEnabled: (provider: string, enabled: boolean): Promise<{ success: boolean; isEnabled: boolean }> =>
+    request(`/settings/data-sources/${encodeURIComponent(provider)}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    }),
+
+  // Demos Catalog
+  getDemos: (options: RequestInit = {}): Promise<{ data: DemoCatalogItem[] }> =>
+    request<{ data: DemoCatalogItem[] }>('/demos', {
+      ...options,
+      method: 'GET'
+    }),
+
+  // Campaigns
+  getCampaigns: (options: RequestInit = {}): Promise<{ data: CampaignSummary[] }> =>
+    request<{ data: CampaignSummary[] }>('/campaigns', {
+      ...options,
+      method: 'GET'
+    }),
+  createCampaign: (payload: CreateCampaignRequest): Promise<{ data: CampaignSummary }> =>
+    request<{ data: CampaignSummary }>('/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(payload)
     })
 };
+
 
 function buildDashboardSearchParams(query: Partial<DashboardFilterQuery> = {}): string {
   const params = new URLSearchParams();

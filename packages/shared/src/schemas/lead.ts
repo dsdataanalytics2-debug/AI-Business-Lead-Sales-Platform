@@ -99,6 +99,8 @@ export const leadSummarySchema = z.object({
   rating: z.number().nullable().optional(),
   reviewCount: z.number().int().nullable().optional(),
   primarySource: z.string().min(1).max(100),
+  crmStage: z.nativeEnum(CrmStage).optional(),
+  assignedUserId: z.string().uuid().nullable().optional(),
   createdAt: z.union([z.date(), z.string()]),
   updatedAt: z.union([z.date(), z.string()])
 });
@@ -129,6 +131,7 @@ export const leadListQuerySchema = cursorPaginationSchema.extend({
   search: z.string().trim().optional(),
   city: z.string().trim().optional(),
   category: z.string().trim().optional(),
+  crmStage: z.nativeEnum(CrmStage).optional(),
   websiteStatus: z.nativeEnum(WebsiteStatus).optional(),
   onlinePresence: z.nativeEnum(OnlinePresenceType).optional(),
   hasPhone: booleanQueryParamSchema,
@@ -137,6 +140,7 @@ export const leadListQuerySchema = cursorPaginationSchema.extend({
 });
 
 export type LeadListQuery = z.infer<typeof leadListQuerySchema>;
+
 
 /**
  * LeadUpdateRequest

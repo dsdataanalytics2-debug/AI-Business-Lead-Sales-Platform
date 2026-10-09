@@ -17,10 +17,17 @@ export const businessSearchQuerySchema = cursorPaginationSchema.extend({
     .string()
     .trim()
     .max(100, 'Category cannot exceed 100 characters')
+    .optional(),
+  provider: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
     .optional()
 });
 
 export type BusinessSearchQuery = z.infer<typeof businessSearchQuerySchema>;
+
 
 export const discoveredContactSchema = z.object({
   type: z.nativeEnum(ContactType),

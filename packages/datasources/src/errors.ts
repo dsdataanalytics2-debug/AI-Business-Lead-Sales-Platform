@@ -42,3 +42,42 @@ export class InvalidQueryError extends DataSourceError {
     this.name = 'InvalidQueryError';
   }
 }
+
+export class ProviderAuthError extends DataSourceError {
+  public readonly providerName: string;
+
+  constructor(providerName: string, reason?: string) {
+    super(
+      `Datasource provider "${providerName}" authorization failed${reason ? `: ${reason}` : ''}`,
+      'PROVIDER_AUTH_ERROR'
+    );
+    this.name = 'ProviderAuthError';
+    this.providerName = providerName;
+  }
+}
+
+export class ProviderRateLimitError extends DataSourceError {
+  public readonly providerName: string;
+
+  constructor(providerName: string, reason?: string) {
+    super(
+      `Datasource provider "${providerName}" rate limit or quota exceeded${reason ? `: ${reason}` : ''}`,
+      'PROVIDER_RATE_LIMIT'
+    );
+    this.name = 'ProviderRateLimitError';
+    this.providerName = providerName;
+  }
+}
+
+export class ProviderTimeoutError extends DataSourceError {
+  public readonly providerName: string;
+
+  constructor(providerName: string, reason?: string) {
+    super(
+      `Datasource provider "${providerName}" request timed out${reason ? `: ${reason}` : ''}`,
+      'PROVIDER_TIMEOUT'
+    );
+    this.name = 'ProviderTimeoutError';
+    this.providerName = providerName;
+  }
+}

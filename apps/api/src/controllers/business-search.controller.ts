@@ -13,11 +13,6 @@ import {
 } from '@leadmate/shared';
 import { businessSearchService } from '../services/business-search.service.js';
 
-// Extend business search query schema with optional provider parameter
-const businessSearchApiQuerySchema = businessSearchQuerySchema.extend({
-  provider: z.string().trim().min(1).max(100).optional()
-});
-
 export class BusinessSearchController {
   /**
    * GET /api/v1/business-search
@@ -27,7 +22,8 @@ export class BusinessSearchController {
    */
   async search(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const query = businessSearchApiQuerySchema.parse(req.query);
+      const query = businessSearchQuerySchema.parse(req.query);
+
 
       const results = await businessSearchService.search(query, {
         organizationId: req.user!.organizationId,
@@ -39,7 +35,7 @@ export class BusinessSearchController {
         data: results,
         meta: {
           count: results.length,
-          provider: query.provider || 'MOCK',
+          provider: query.provider || (process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO'),
           q: query.q,
           location: query.location
         }

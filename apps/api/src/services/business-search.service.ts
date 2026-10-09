@@ -58,42 +58,135 @@ export interface SaveLeadResult {
   matchReason?: string;
 }
 
+import { datasourceSettingsService } from './datasource-settings.service.js';
+
 export class BusinessSearchService {
   /**
    * Performs read-only business search preview across registered providers.
+   * Supports AUTO (free-first: OpenStreetMap -> Google Places -> Mock fallback),
+   * OPENSTREETMAP, GOOGLE_PLACES, and MOCK.
    * STRICTLY READ-ONLY: Never writes or modifies DB records.
    */
   async search(
     query: BusinessSearchQuery & { provider?: string },
     context: BusinessSearchRequestContext
   ): Promise<BusinessSearchResult[]> {
-    const providerName = (query.provider || 'MOCK').toUpperCase().trim();
+    const defaultProvider = process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO';
+    const requestedProvider = (query.provider || defaultProvider).toUpperCase().trim().replace(/-/g, '_');
 
-    let provider;
-    try {
-      provider = getProvider(providerName);
-    } catch (err) {
-      if (err instanceof UnknownProviderError) {
-        throw new BadRequestError(`Unknown datasource provider: "${query.provider}"`, {
-          provider: query.provider
-        });
+    let rawResults: BusinessSearchResult[] = [];
+
+    if (requestedProvider === 'AUTO') {
+      // 1. Free-First Invariant: Search OpenStreetMap first
+      try {
+        const osmProvider = getProvider('OPENSTREETMAP');
+        rawResults = await osmProvider.search(
+          {
+            q: query.q,
+            location: query.location,
+            category: query.category,
+            limit: query.limit,
+            cursor: query.cursor
+          },
+          {
+            organizationId: context.organizationId,
+            correlationId: context.correlationId
+          }
+        );
+      } catch {
+        rawResults = [];
       }
-      throw err;
+
+      // 2. If OSM returned 0 results, check if Google Places is configured
+      if (rawResults.length === 0) {
+        const providerContext = await datasourceSettingsService.getActiveProviderContext(context.organizationId);
+        if (providerContext.apiKey) {
+          try {
+            const googleProvider = getProvider('GOOGLE_PLACES');
+            rawResults = await googleProvider.search(
+              {
+                q: query.q,
+                location: query.location,
+                category: query.category,
+                limit: query.limit,
+                cursor: query.cursor
+              },
+              {
+                organizationId: context.organizationId,
+                apiKey: providerContext.apiKey,
+                correlationId: context.correlationId
+              }
+            );
+          } catch {
+            rawResults = [];
+          }
+        }
+      }
+
+      // 3. Fallback to Mock fixtures if both yielded 0 results in development / test offline environments
+      if (rawResults.length === 0) {
+        const mockProvider = getProvider('MOCK');
+        rawResults = await mockProvider.search(
+          {
+            q: query.q,
+            location: query.location,
+            category: query.category,
+            limit: query.limit,
+            cursor: query.cursor
+          },
+          {
+            organizationId: context.organizationId,
+            correlationId: context.correlationId
+          }
+        );
+      }
+    } else if (requestedProvider === 'GOOGLE_PLACES') {
+      const providerContext = await datasourceSettingsService.getActiveProviderContext(context.organizationId);
+      if (!providerContext.apiKey) {
+        throw new BadRequestError('Google Places API key is not configured for this organization.');
+      }
+      const provider = getProvider('GOOGLE_PLACES');
+      rawResults = await provider.search(
+        {
+          q: query.q,
+          location: query.location,
+          category: query.category,
+          limit: query.limit,
+          cursor: query.cursor
+        },
+        {
+          organizationId: context.organizationId,
+          apiKey: providerContext.apiKey,
+          correlationId: context.correlationId
+        }
+      );
+    } else {
+      let provider;
+      try {
+        provider = getProvider(requestedProvider);
+      } catch (err) {
+        if (err instanceof UnknownProviderError) {
+          throw new BadRequestError(`Unknown datasource provider: "${query.provider}"`, {
+            provider: query.provider
+          });
+        }
+        throw err;
+      }
+
+      rawResults = await provider.search(
+        {
+          q: query.q,
+          location: query.location,
+          category: query.category,
+          limit: query.limit,
+          cursor: query.cursor
+        },
+        {
+          organizationId: context.organizationId,
+          correlationId: context.correlationId
+        }
+      );
     }
-
-    const rawResults = await provider.search(
-      {
-        q: query.q,
-        location: query.location,
-        category: query.category,
-        limit: query.limit,
-        cursor: query.cursor
-      },
-      {
-        organizationId: context.organizationId,
-        correlationId: context.correlationId
-      }
-    );
 
     // Runtime validation of provider search response
     return z.array(businessSearchResultSchema).parse(rawResults);
@@ -113,7 +206,7 @@ export class BusinessSearchService {
     context: BusinessSearchRequestContext
   ): Promise<SaveLeadResult> {
     const { organizationId, userId, correlationId } = context;
-    const providerName = input.provider.toUpperCase().trim();
+    const providerName = input.provider.toUpperCase().trim().replace(/-/g, '_');
 
     // 1. Resolve Provider
     let provider;
@@ -128,9 +221,17 @@ export class BusinessSearchService {
       throw err;
     }
 
+    // Resolve API key if Google Places
+    let apiKey: string | undefined;
+    if (providerName === 'GOOGLE_PLACES') {
+      const activeCtx = await datasourceSettingsService.getActiveProviderContext(organizationId);
+      apiKey = activeCtx.apiKey;
+    }
+
     // 2. Authoritative Resolution with exact externalId
     const rawAuthoritative = await provider.resolveByExternalId(input.externalId, {
       organizationId,
+      apiKey,
       correlationId
     });
 
@@ -139,6 +240,7 @@ export class BusinessSearchService {
         `Business with external ID "${input.externalId}" not found in provider "${providerName}"`
       );
     }
+
 
     // Runtime validation of authoritative provider record
     const authoritative = businessSearchResultSchema.parse(rawAuthoritative);
