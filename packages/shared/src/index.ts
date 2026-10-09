@@ -14,3 +14,4 @@ export * from './schemas/sales-assistant.js';
 export * from './schemas/outreach.js';
 export * from './schemas/team.js';
 export * from './schemas/analytics.js';
+export * from './schemas/buyer-discovery.js';

@@ -547,3 +547,29 @@ export enum TeamSortBy {
   CREATED_AT = 'createdAt',
   ROLE = 'role'
 }
+
+/* =========================================================
+ * M8: Buyer Discovery Enums
+ * ========================================================= */
+
+export enum BuyerType {
+  RETAILER = 'RETAILER',
+  WHOLESALER = 'WHOLESALER',
+  DISTRIBUTOR = 'DISTRIBUTOR',
+  ECOMMERCE_SELLER = 'ECOMMERCE_SELLER',
+  CORPORATE_BUYER = 'CORPORATE_BUYER',
+  UNKNOWN = 'UNKNOWN'
+}
+
+export const BUYER_TYPE_LABELS: Record<BuyerType, string> = {
+  [BuyerType.RETAILER]: 'Retailer',
+  [BuyerType.WHOLESALER]: 'Wholesaler',
+  [BuyerType.DISTRIBUTOR]: 'Distributor',
+  [BuyerType.ECOMMERCE_SELLER]: 'E-commerce Seller',
+  [BuyerType.CORPORATE_BUYER]: 'Corporate Buyer',
+  [BuyerType.UNKNOWN]: 'Unknown'
+} as const;
+
+export function getBuyerTypeLabel(type: BuyerType): string {
+  return BUYER_TYPE_LABELS[type] ?? type;
+}

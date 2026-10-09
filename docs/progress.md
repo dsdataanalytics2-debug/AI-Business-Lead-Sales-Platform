@@ -3,8 +3,8 @@
 ## Active Milestone: M8 — Buyer Discovery + Contact Enrichment + Dashboard Providers ⏳ IN PROGRESS
 - **Status:** IN PROGRESS
 - **Base Checkpoint:** `f4d6c5b1e749f5d07c1437654d868e2f3774cc27` (`docs(m7): close team and analytics milestone`)
-- **Step 0 (Architecture, Scope Freeze & Free-First Strategy):** COMPLETE (Current)
-- **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** PENDING
+- **Step 0 (Architecture, Scope Freeze & Free-First Strategy):** COMPLETE
+- **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** IMPLEMENTED / PENDING REVIEW (Current)
 - **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** PENDING
 - **Step 3 (Pluggable Provider Registry & AES-256-GCM Credential Storage):** PENDING
 - **Step 4 (OpenStreetMap / Overpass Free Discovery Provider):** PENDING
@@ -34,6 +34,18 @@
   - Enforced ethical privacy boundary: zero claims of personal search query identification (commercial public entities and public buying notices only).
   - Reused existing models: `Lead`, `LeadContact`, `ContactEvidence`, `LeadSource`, `SalesAssistantDraft`, `OutreachDelivery`, `CrmActivity`, `CrmNote`, `FollowUpTask`.
   - Verified frozen RBAC model: `Permissions.DATASOURCES_MANAGE` handles credential management (`SUPER_ADMIN`, `ADMIN`); zero changes to frozen RBAC.
+
+### M8 Step 1 — Shared Contracts, Enums & Buyer Discovery Schemas (Implemented / Pending Review)
+- **Status:** IMPLEMENTED / PENDING REVIEW
+- **Base Checkpoint:** `d1e88130d0dcfadb7af30a3d46a1f30c8a46d1a6`
+- **Deliverables & Specifications:**
+  - **BuyerType Enum:** Added shared enum values `RETAILER`, `WHOLESALER`, `DISTRIBUTOR`, `ECOMMERCE_SELLER`, `CORPORATE_BUYER`, `UNKNOWN`, with label map and helper `getBuyerTypeLabel` in `packages/shared/src/enums.ts`.
+  - **BuyerSearchQuery Schema:** Created `buyerSearchQuerySchema` with required trimmed and bounded `productOrService` (1-200 chars) and `location` (1-200 chars), `buyerType` enum (defaulting to `UNKNOWN`), optional trimmed `category` (max 100 chars), and strictly bounded `limit` (min 1, max 50, default 10).
+  - **BuyerSearchResult Schema:** Created `buyerSearchResultSchema` representing an ephemeral, read-only discovery candidate (NOT a persisted lead/customer/opportunity). Contains `provider`, `providerExternalId`, `businessName`, with optional/null attributes (`category`, `buyerType`, `address`, `city`, `country`, `latitude`, `longitude`, `website`, `phone`, `sourceUrl`).
+  - **Safety Invariant Enforcement:** Discovered `phone` is treated strictly as PHONE. Zero automatic conversion to WhatsApp. Zero fabricated need/intent fields in discovery previews. Missing source attributes strictly remain null/undefined.
+  - **Query Expansion Contract:** Added minimal `buyerDiscoverySearchTermSchema` (`query`, `language`, `sourceIntent`) supporting bilingual/localized query generation.
+  - **Exports & Unit Tests:** Exported via canonical `packages/shared/src/index.ts`. Added 20 comprehensive unit tests in `packages/shared/src/tests/buyer-discovery-schemas.spec.ts` validating all constraints, limits, trim behaviors, invariants, and provider-neutral shapes.
+
 
 ## Completed Milestone: M7 — Team Management + Sales Dashboard + Analytics ✅ CLOSED
 - **Status:** CLOSED
