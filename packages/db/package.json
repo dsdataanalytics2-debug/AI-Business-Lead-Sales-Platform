@@ -21,10 +21,10 @@
     "db:validate": "npx prisma validate",
     "db:generate": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev --name init_m0_foundation",
-    "db:seed": "npx tsx prisma/seed.ts"
+    "db:seed": "node ../../node_modules/tsx/dist/cli.mjs prisma/seed.ts"
   },
   "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "node ../../node_modules/tsx/dist/cli.mjs prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.4.1",
