@@ -1,24 +1,50 @@
 # LeadMate Progress Tracking
 
+## Active Milestone: M8 — Buyer Discovery + Contact Enrichment + Dashboard Providers ⏳ IN PROGRESS
+- **Status:** IN PROGRESS
+- **Base Checkpoint:** `f4d6c5b1e749f5d07c1437654d868e2f3774cc27` (`docs(m7): close team and analytics milestone`)
+- **Step 0 (Architecture, Scope Freeze & Free-First Strategy):** COMPLETE (Current)
+- **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** PENDING
+- **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** PENDING
+- **Step 3 (Pluggable Provider Registry & AES-256-GCM Credential Storage):** PENDING
+- **Step 4 (OpenStreetMap / Overpass Free Discovery Provider):** PENDING
+- **Step 5 (Contact Enrichment Provider Abstraction & Provenance):** PENDING
+- **Step 6 (Public Website Contact & WhatsApp wa.me Safe Inspection):** PENDING
+- **Step 7 (Buyer Need & Deterministic Intent Scoring Domain Service):** PENDING
+- **Step 8 (Customer Data & Opportunities Workspace UI /customers):** PENDING
+- **Step 9 (CRM Pipeline & Follow-Up Task Integration):** PENDING
+- **Step 10 (Campaign Orchestration & M5 AI Offer Integration):** PENDING
+- **Step 11 (Google Places Optional Provider & Dashboard Settings UI):** PENDING
+- **Step 12 (Tenant Isolation, Cost Quotas & Rate-Limiting Hardening):** PENDING
+- **Step 13 (Full E2E Integration Suite & Workspace Regression):** PENDING
+- **Step 14 (Final Milestone Review, Documentation & M8 Closure):** PENDING
+
+### M8 Step 0 — Architecture, Scope Freeze & Free-First Strategy (Complete)
+- **Status:** COMPLETE
+- **Base Checkpoint:** `f4d6c5b1e749f5d07c1437654d868e2f3774cc27`
+- **Deliverables & Specifications:**
+  - Published comprehensive M8 Architecture Specification: `docs/m8-buyer-discovery-architecture.md`.
+  - Added architectural decision record to `docs/decisions.md`.
+  - Defined end-to-end value stream: Product/Service Spec -> Targeted Buyer Search -> Customer Discovery -> Contact Enrichment -> Need & Intent Analysis -> Customer Data Page (`/customers`) -> AI Offer Draft (M5) -> Human Approval -> Campaign Dispatch (M6) -> Follow-Up (M3) -> Opportunity -> Confirmed Order.
+  - Frozen **Free-First Provider Strategy** prioritizing OpenStreetMap/Overpass, SSRF-safe official website inspection, public procurement/tender portals (e-GP), and allowed public trade directories before invoking paid APIs.
+  - Defined optional Google Places API (New) integration with strict cost controls (field masks, bounded pagination, 2-stage enrichment, per-org daily quotas).
+  - Designed dashboard-managed credential architecture with authenticated server-side AES-256-GCM encryption at rest, masked key DTOs (`AIza••••••••••••••9x2A`), zero secret leakage in logs/AuditLogs/API responses, and password-style inputs.
+  - Frozen **Contact Safety Invariants**: strict `PHONE != WHATSAPP`, zero WhatsApp inference from mobile numbers, zero email/address guessing, and mandatory provenance metadata.
+  - Defined **Need** field semantics (buyer requirement backed by verifiable signal evidence) and **Intent Scoring** (0–100 deterministic scoring).
+  - Enforced ethical privacy boundary: zero claims of personal search query identification (commercial public entities and public buying notices only).
+  - Reused existing models: `Lead`, `LeadContact`, `ContactEvidence`, `LeadSource`, `SalesAssistantDraft`, `OutreachDelivery`, `CrmActivity`, `CrmNote`, `FollowUpTask`.
+  - Verified frozen RBAC model: `Permissions.DATASOURCES_MANAGE` handles credential management (`SUPER_ADMIN`, `ADMIN`); zero changes to frozen RBAC.
+
 ## Completed Milestone: M7 — Team Management + Sales Dashboard + Analytics ✅ CLOSED
 - **Status:** CLOSED
 - **Base Checkpoint:** `1a3160834c6c4eb1208640917204e38f898fcd24` (`docs(m6): close automated outreach milestone`)
-- **Step 0 (Architecture & Scope Freeze):** COMPLETE (`3052e21bb7399e661c1eb23cf4dbb1270308ac78`)
-- **Step 1 (Shared Contracts & RBAC Permissions):** COMPLETE (`3eb411c914725001f71fa4a1e4373eb8e4bbcf3a`)
-- **Step 2 (Team Management Domain Service, DB Indexes & API):** COMPLETE (`40d9a2679ff454a337e61c3c88b10030fc129e59`)
-- **Step 3 (Team Management UI):** COMPLETE (`c01a51163f39a5128ebabc8c4ab352e0de655a47`)
-- **Step 4 (Sales Analytics Domain Engine):** COMPLETE (`4cf79317434fb24e1097d50331fba48a0856f502`)
-- **Step 5 (Sales Dashboard REST API & Scoping):** COMPLETE (`7474ae313b2766ad7ae189c1e743d23f8f1501e1`)
-- **Step 6 (Sales Dashboard UI Core):** COMPLETE (`f718baf372af1699193434564f89b7cbaa246b45`)
-- **Step 7 (Team Workload & Outreach Analytics UI):** COMPLETE (`edab9878f00cc0e398c7d2c993b2da32f4457142`)
-- **Step 8 (Security, Tenant Isolation & Query Optimization Hardening):** COMPLETE (`70b46f97fe2c96a6adea4e03aafbdfa09f654d8a`)
-- **Step 9 (E2E Integration & Full Workspace Regression):** COMPLETE (`02d9b46e865549c21c4fd36b08b7f6617fe3d5c2`)
-- **Step 10 (Milestone Review & Closure):** COMPLETE (pending final commit)
+- **Step 0 through Step 10:** COMPLETE (`f4d6c5b1e749f5d07c1437654d868e2f3774cc27`)
 
 ## Completed Milestone: M6 — Automated Outreach & Delivery ✅ COMPLETE
 - **Status:** COMPLETE
 - **Base Checkpoint:** `e498542377882c4e1a46590f794bb49ef1196ecd` (`feat(m6): add resend email live provider`)
 - **Step 0 through Step 10:** COMPLETE (`1a3160834c6c4eb1208640917204e38f898fcd24`)
+
 
 ### M7 Step 10 — Final M7 Review, Documentation & Milestone Closure (Complete)
 - **Status:** COMPLETE (Pending final closure commit)
