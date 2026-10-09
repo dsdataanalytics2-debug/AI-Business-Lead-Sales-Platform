@@ -200,6 +200,39 @@ enum OutreachDeliveryStatus {
   CANCELLED
 }
 
+enum SignalConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum OpportunityStatus {
+  OPEN
+  WON
+  LOST
+  ABANDONED
+}
+
+enum BuyerIntentSignalType {
+  PUBLIC_PROCUREMENT
+  CATALOG_GAP
+  TRADE_CLASSIFICATION
+  HIRING_EXPANSION
+  PROMOTIONAL_ACTIVITY
+  MANUAL_VERIFIED
+  OTHER
+}
+
+enum BuyerType {
+  RETAILER
+  WHOLESALER
+  DISTRIBUTOR
+  ECOMMERCE_SELLER
+  CORPORATE_BUYER
+  UNKNOWN
+}
+
+
 model Organization {
   id          String   @id @default(uuid())
   name        String
@@ -224,8 +257,12 @@ model Organization {
   salesAssistantDrafts   SalesAssistantDraft[]
   outreachDeliveries     OutreachDelivery[]
   outreachWebhookEvents  OutreachWebhookEvent[]
+  dataSourceConfigs      DataSourceConfig[]
+  opportunities          Opportunity[]
+  buyerIntentSignals     BuyerIntentSignal[]
 
   @@map("organizations")
+
 }
 
 model User {
@@ -319,23 +356,36 @@ model Notification {
 }
 
 model DataSourceConfig {
-  id                String           @id @default(uuid())
-  name              String           @unique
-  role              DataSourceRole   @default(BOTH)
-  status            DataSourceStatus @default(PENDING)
-  isEnabled         Boolean          @default(false) @map("is_enabled")
-  termsUrl          String?          @map("terms_url")
-  termsVerifiedAt   DateTime?        @map("terms_verified_at")
-  termsVerifiedBy   String?          @map("terms_verified_by")
-  persistencePolicy Json             @default("{}") @map("persistence_policy")
-  refreshPolicy     Json             @default("{}") @map("refresh_policy")
-  rateLimitConfig   Json             @default("{}") @map("rate_limit_config")
-  pricing           Json             @default("{}")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
+  id                  String           @id @default(uuid())
+  organizationId      String?          @map("organization_id")
+  provider            String           @default("mock")
+  name                String
+  role                DataSourceRole   @default(BOTH)
+  status              DataSourceStatus @default(PENDING)
+  isEnabled           Boolean          @default(false) @map("is_enabled")
+  encryptedCredential String?          @map("encrypted_credential")
+  credentialMasked    String?          @map("credential_masked")
+  credentialLastFour  String?          @map("credential_last_four")
+  lastTestedAt        DateTime?        @map("last_tested_at")
+  termsUrl            String?          @map("terms_url")
+  termsVerifiedAt     DateTime?        @map("terms_verified_at")
+  termsVerifiedBy     String?          @map("terms_verified_by")
+  persistencePolicy   Json             @default("{}") @map("persistence_policy")
+  refreshPolicy       Json             @default("{}") @map("refresh_policy")
+  rateLimitConfig     Json             @default("{}") @map("rate_limit_config")
+  pricing             Json             @default("{}")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
 
+  organization        Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([organizationId, provider])
+  @@index([organizationId, isEnabled])
   @@map("data_source_configs")
 }
+
 
 model SuppressionList {
   id              String            @id @default(uuid())
@@ -422,6 +472,8 @@ model Lead {
   demoWebsite            DemoWebsite?
   salesAssistantDrafts   SalesAssistantDraft[]
   outreachDeliveries     OutreachDelivery[]
+  opportunities          Opportunity[]
+  buyerIntentSignals     BuyerIntentSignal[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -449,6 +501,7 @@ model LeadContact {
   status          ContactStatus  @default(FOUND)
   whatsappStatus  WhatsAppStatus @default(UNKNOWN) @map("whatsapp_status")
   isPrimary       Boolean        @default(false) @map("is_primary")
+  lastCheckedAt   DateTime?      @map("last_checked_at")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
@@ -462,13 +515,15 @@ model LeadContact {
 }
 
 model ContactEvidence {
-  id           String       @id @default(uuid())
-  contactId    String       @map("contact_id")
-  sourceName   String       @map("source_name")
-  sourceUrl    String?      @map("source_url")
-  evidenceType EvidenceType @map("evidence_type")
+  id           String           @id @default(uuid())
+  contactId    String           @map("contact_id")
+  sourceName   String           @map("source_name")
+  sourceUrl    String?          @map("source_url")
+  evidenceType EvidenceType     @map("evidence_type")
+  confidence   SignalConfidence @default(MEDIUM)
   snippet      String?
-  discoveredAt DateTime     @default(now()) @map("discovered_at")
+  discoveredAt DateTime         @default(now()) @map("discovered_at")
+
 
   contact LeadContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
@@ -722,4 +777,55 @@ model OutreachWebhookEvent {
   @@index([providerName, providerMessageId])
   @@index([organizationId, createdAt])
   @@map("outreach_webhook_events")
+}
+
+model Opportunity {
+  id              String            @id @default(uuid())
+  organizationId  String            @map("organization_id")
+  leadId          String            @map("lead_id")
+  productInterest String            @map("product_interest")
+  buyerType       BuyerType         @default(UNKNOWN) @map("buyer_type")
+  need            String?
+  intentScore     Int               @default(0) @map("intent_score")
+  strongestSignal String?           @map("strongest_signal")
+  stage           CrmStage          @default(QUALIFIED)
+  status          OpportunityStatus @default(OPEN)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead            Lead              @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  signals         BuyerIntentSignal[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, leadId])
+  @@index([organizationId, stage])
+  @@index([organizationId, buyerType])
+  @@index([organizationId, intentScore])
+  @@map("opportunities")
+}
+
+model BuyerIntentSignal {
+  id                String                @id @default(uuid())
+  organizationId    String                @map("organization_id")
+  leadId            String?               @map("lead_id")
+  opportunityId     String?               @map("opportunity_id")
+  sourceName        String                @map("source_name")
+  sourceUrl         String?               @map("source_url")
+  signalType        BuyerIntentSignalType @map("signal_type")
+  description       String?
+  confidence        SignalConfidence      @default(MEDIUM)
+  scoreContribution Int                   @default(0) @map("score_contribution")
+  discoveredAt      DateTime              @default(now()) @map("discovered_at")
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead              Lead?                 @relation(fields: [leadId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  opportunity       Opportunity?          @relation(fields: [opportunityId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, leadId])
+  @@index([organizationId, opportunityId])
+  @@index([organizationId, signalType])
+  @@map("buyer_intent_signals")
 }

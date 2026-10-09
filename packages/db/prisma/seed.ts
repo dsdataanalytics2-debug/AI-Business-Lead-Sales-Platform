@@ -60,43 +60,64 @@ async function main() {
   });
 
   // 4. Upsert Default DataSourceConfigs (Mock & CSV)
-  await prisma.dataSourceConfig.upsert({
-    where: { name: 'mock' },
-    update: {
-      role: DataSourceRole.BOTH,
-      status: DataSourceStatus.APPROVED,
-      isEnabled: true
-    },
-    create: {
-      name: 'mock',
-      role: DataSourceRole.BOTH,
-      status: DataSourceStatus.APPROVED,
-      isEnabled: true,
-      persistencePolicy: { persistFields: ['all'] },
-      refreshPolicy: { refreshAfterDays: 30 },
-      rateLimitConfig: { perSecond: 10, perDay: 1000 },
-      pricing: { unitCostMinor: 0, currency: 'BDT' }
-    }
+  const existingMock = await prisma.dataSourceConfig.findFirst({
+    where: { name: 'mock', organizationId: null }
   });
+  if (existingMock) {
+    await prisma.dataSourceConfig.update({
+      where: { id: existingMock.id },
+      data: {
+        provider: 'mock',
+        role: DataSourceRole.BOTH,
+        status: DataSourceStatus.APPROVED,
+        isEnabled: true
+      }
+    });
+  } else {
+    await prisma.dataSourceConfig.create({
+      data: {
+        name: 'mock',
+        provider: 'mock',
+        role: DataSourceRole.BOTH,
+        status: DataSourceStatus.APPROVED,
+        isEnabled: true,
+        persistencePolicy: { persistFields: ['all'] },
+        refreshPolicy: { refreshAfterDays: 30 },
+        rateLimitConfig: { perSecond: 10, perDay: 1000 },
+        pricing: { unitCostMinor: 0, currency: 'BDT' }
+      }
+    });
+  }
 
-  await prisma.dataSourceConfig.upsert({
-    where: { name: 'csv' },
-    update: {
-      role: DataSourceRole.DISCOVERY,
-      status: DataSourceStatus.APPROVED,
-      isEnabled: true
-    },
-    create: {
-      name: 'csv',
-      role: DataSourceRole.DISCOVERY,
-      status: DataSourceStatus.APPROVED,
-      isEnabled: true,
-      persistencePolicy: { persistFields: ['all'] },
-      refreshPolicy: {},
-      rateLimitConfig: {},
-      pricing: { unitCostMinor: 0, currency: 'BDT' }
-    }
+  const existingCsv = await prisma.dataSourceConfig.findFirst({
+    where: { name: 'csv', organizationId: null }
   });
+  if (existingCsv) {
+    await prisma.dataSourceConfig.update({
+      where: { id: existingCsv.id },
+      data: {
+        provider: 'csv',
+        role: DataSourceRole.DISCOVERY,
+        status: DataSourceStatus.APPROVED,
+        isEnabled: true
+      }
+    });
+  } else {
+    await prisma.dataSourceConfig.create({
+      data: {
+        name: 'csv',
+        provider: 'csv',
+        role: DataSourceRole.DISCOVERY,
+        status: DataSourceStatus.APPROVED,
+        isEnabled: true,
+        persistencePolicy: { persistFields: ['all'] },
+        refreshPolicy: {},
+        rateLimitConfig: {},
+        pricing: { unitCostMinor: 0, currency: 'BDT' }
+      }
+    });
+  }
+
 
   console.log(`✓ Seed completed successfully: Organization "${defaultOrg.name}" and Super Admin (${superAdmin.email}) are configured.`);
 }

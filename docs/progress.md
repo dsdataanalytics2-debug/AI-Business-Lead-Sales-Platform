@@ -4,8 +4,8 @@
 - **Status:** IN PROGRESS
 - **Base Checkpoint:** `f4d6c5b1e749f5d07c1437654d868e2f3774cc27` (`docs(m7): close team and analytics milestone`)
 - **Step 0 (Architecture, Scope Freeze & Free-First Strategy):** COMPLETE
-- **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** IMPLEMENTED / PENDING REVIEW (Current)
-- **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** PENDING
+- **Step 1 (Shared Contracts, Enums & Buyer Discovery Schemas):** COMPLETE
+- **Step 2 (Database Schema Migration: DataSourceConfig, Opportunity, BuyerIntentSignal):** IMPLEMENTED / PENDING REVIEW (Current)
 - **Step 3 (Pluggable Provider Registry & AES-256-GCM Credential Storage):** PENDING
 - **Step 4 (OpenStreetMap / Overpass Free Discovery Provider):** PENDING
 - **Step 5 (Contact Enrichment Provider Abstraction & Provenance):** PENDING
@@ -35,9 +35,9 @@
   - Reused existing models: `Lead`, `LeadContact`, `ContactEvidence`, `LeadSource`, `SalesAssistantDraft`, `OutreachDelivery`, `CrmActivity`, `CrmNote`, `FollowUpTask`.
   - Verified frozen RBAC model: `Permissions.DATASOURCES_MANAGE` handles credential management (`SUPER_ADMIN`, `ADMIN`); zero changes to frozen RBAC.
 
-### M8 Step 1 — Shared Contracts, Enums & Buyer Discovery Schemas (Implemented / Pending Review)
-- **Status:** IMPLEMENTED / PENDING REVIEW
-- **Base Checkpoint:** `d1e88130d0dcfadb7af30a3d46a1f30c8a46d1a6`
+### M8 Step 1 — Shared Contracts, Enums & Buyer Discovery Schemas (Complete)
+- **Status:** COMPLETE
+- **Base Checkpoint:** `fd2763ca6c750e7f0591c61897c785486cc36d51`
 - **Deliverables & Specifications:**
   - **BuyerType Enum:** Added shared enum values `RETAILER`, `WHOLESALER`, `DISTRIBUTOR`, `ECOMMERCE_SELLER`, `CORPORATE_BUYER`, `UNKNOWN`, with label map and helper `getBuyerTypeLabel` in `packages/shared/src/enums.ts`.
   - **BuyerSearchQuery Schema:** Created `buyerSearchQuerySchema` with required trimmed and bounded `productOrService` (1-200 chars) and `location` (1-200 chars), `buyerType` enum (defaulting to `UNKNOWN`), optional trimmed `category` (max 100 chars), and strictly bounded `limit` (min 1, max 50, default 10).
@@ -45,6 +45,19 @@
   - **Safety Invariant Enforcement:** Discovered `phone` is treated strictly as PHONE. Zero automatic conversion to WhatsApp. Zero fabricated need/intent fields in discovery previews. Missing source attributes strictly remain null/undefined.
   - **Query Expansion Contract:** Added minimal `buyerDiscoverySearchTermSchema` (`query`, `language`, `sourceIntent`) supporting bilingual/localized query generation.
   - **Exports & Unit Tests:** Exported via canonical `packages/shared/src/index.ts`. Added 20 comprehensive unit tests in `packages/shared/src/tests/buyer-discovery-schemas.spec.ts` validating all constraints, limits, trim behaviors, invariants, and provider-neutral shapes.
+
+### M8 Step 2 — Database Schema Migration & Local Drift Reconciliation (Implemented / Pending Review)
+- **Status:** IMPLEMENTED / PENDING REVIEW
+- **Base Checkpoint:** `fd2763ca6c750e7f0591c61897c785486cc36d51`
+- **Deliverables & Specifications:**
+  - **Tenant-Scoped & Global DataSource Uniqueness:** Evolved `DataSourceConfig` to support tenant isolation with `organizationId` (`String?`), `provider` (`String`), credential storage attributes (`encryptedCredential`, `credentialMasked`, `credentialLastFour`), and `lastTestedAt` (`DateTime?`). Enforced dual uniqueness: tenant uniqueness via Prisma `@@unique([organizationId, name])` and global uniqueness via PostgreSQL partial unique index `data_source_configs_global_name_key` on `name WHERE organization_id IS NULL`. Maintained seed idempotency for system global datasources (`mock`, `csv`).
+  - **Contact Provenance & Freshness:** Added `confidence SignalConfidence @default(MEDIUM)` to `ContactEvidence` to record evidence strength without breaking legacy data. Added `lastCheckedAt DateTime?` to `LeadContact` for contact verification recency.
+  - **Opportunity Model:** Created `Opportunity` entity with tenant ownership (`organizationId`), lead relation (`[leadId, organizationId]`), `productInterest`, `buyerType`, optional `need` statement, `intentScore`, `strongestSignal`, `stage` (`CrmStage`), and lifecycle `status` (`OpportunityStatus`).
+  - **BuyerIntentSignal Model:** Created `BuyerIntentSignal` entity storing verifiable buying/need evidence with tenant ownership (`organizationId`), optional `leadId` and `opportunityId` relations, `sourceName`, `sourceUrl`, `signalType` (`BuyerIntentSignalType`), `description`, `confidence` (`SignalConfidence`), `scoreContribution`, and `discoveredAt`.
+  - **Migration & Drift Reconciliation:** Generated clean canonical migration `20261009120000_add_m8_buyer_discovery_schema` with partial unique index. Reconciled pre-existing dev/test database drift without dropping columns or deleting data. Both development and test databases verified clean and synchronized (`prisma migrate status: 12 migrations applied, schema up to date`).
+  - **Database Unit Tests:** Added 10 unit tests in `packages/db/src/tests/m8-step2-schema.spec.ts` validating global null uniqueness, tenant scoping, unique constraints (`P2002`), cross-tenant composite foreign key isolation (`P2003`), and cascade deletes. All 128 tests in `@leadmate/db` pass with 0 failures.
+  - **Sidebar "Soon" Badge Audit:** Audited visible sidebar navigation items (`/campaigns`, `/pipeline`, `/demos`, `/settings`). Confirmed all 4 lack top-level routes in `apps/web/src/app` and must retain `isPlaceholder: true` ("Soon" badge, disabled click) to prevent 404 navigation failures, while preserving RBAC boundaries. Added 5 automated audit tests in `apps/web/src/tests/sidebar-navigation.spec.tsx`.
+
 
 
 ## Completed Milestone: M7 — Team Management + Sales Dashboard + Analytics ✅ CLOSED
