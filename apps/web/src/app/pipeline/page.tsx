@@ -83,9 +83,11 @@ export default function PipelinePage() {
       setIsLoading(true);
       setError(null);
       const res = await apiClient.leads.list({ limit: 100 });
-      setLeads(res.data);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      setLeads(list);
     } catch (err: any) {
       setError(err?.message || 'Failed to load pipeline leads');
+      setLeads([]);
     } finally {
       setIsLoading(false);
     }

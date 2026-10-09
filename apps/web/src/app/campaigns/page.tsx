@@ -86,9 +86,11 @@ export default function CampaignsPage() {
       setIsLoading(true);
       setError(null);
       const res = await apiClient.getCampaigns();
-      setCampaigns(res.data);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      setCampaigns(list);
     } catch (err: any) {
       setError(err?.message || 'Failed to load campaigns');
+      setCampaigns([]);
     } finally {
       setIsLoading(false);
     }
@@ -100,15 +102,15 @@ export default function CampaignsPage() {
     setSelectedLeadIds([]);
     try {
       const res = await apiClient.leads.list({ limit: 50 });
-      setAvailableLeads(res.data);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      setAvailableLeads(list);
       // Pre-select first 3 leads if available
-      if (res.data.length > 0) {
-        setSelectedLeadIds(res.data.slice(0, 3).map((l: LeadSummary) => l.id));
+      if (list.length > 0) {
+        setSelectedLeadIds(list.slice(0, 3).map((l: LeadSummary) => l.id));
       }
     } catch {
-      // Ignore
+      setAvailableLeads([]);
     }
-
   };
 
   const handleCreateCampaign = async (e: React.FormEvent) => {
@@ -249,7 +251,7 @@ export default function CampaignsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {campaigns.map((camp) => {
+                  {(campaigns || []).map((camp) => {
                     const statusBadge = STATUS_BADGES[camp.status] || STATUS_BADGES.DRAFT;
 
                     return (
@@ -412,12 +414,12 @@ export default function CampaignsPage() {
                   </div>
 
                   <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-slate-950 border border-slate-800 rounded-lg">
-                    {availableLeads.length === 0 ? (
+                    {(!availableLeads || availableLeads.length === 0) ? (
                       <p className="text-xs text-slate-500 text-center py-4">
                         No leads available. Save leads from Business Search first.
                       </p>
                     ) : (
-                      availableLeads.map((lead) => {
+                      (availableLeads || []).map((lead) => {
                         const isSelected = selectedLeadIds.includes(lead.id);
                         return (
                           <label

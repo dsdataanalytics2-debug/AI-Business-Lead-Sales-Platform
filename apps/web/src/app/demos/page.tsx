@@ -91,9 +91,11 @@ export default function DemosPage() {
       setIsLoading(true);
       setError(null);
       const res = await apiClient.getDemos();
-      setDemos(res.data);
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      setDemos(list);
     } catch (err: any) {
       setError(err?.message || 'Failed to load StoreMate demo websites');
+      setDemos([]);
     } finally {
       setIsLoading(false);
     }
@@ -127,7 +129,7 @@ export default function DemosPage() {
     }
   };
 
-  const filteredDemos = demos.filter((d) => {
+  const filteredDemos = (demos || []).filter((d) => {
     const matchesSearch =
       !searchTerm ||
       d.businessName.toLowerCase().includes(searchTerm.toLowerCase()) ||

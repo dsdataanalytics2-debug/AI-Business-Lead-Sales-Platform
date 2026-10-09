@@ -619,23 +619,29 @@ export const apiClient = {
     }),
 
   // Demos Catalog
-  getDemos: (options: RequestInit = {}): Promise<{ data: DemoCatalogItem[] }> =>
-    request<{ data: DemoCatalogItem[] }>('/demos', {
+  getDemos: async (options: RequestInit = {}): Promise<{ data: DemoCatalogItem[] }> => {
+    const res = await request<DemoCatalogItem[] | { data: DemoCatalogItem[] }>('/demos', {
       ...options,
       method: 'GET'
-    }),
+    });
+    return { data: Array.isArray(res) ? res : ((res as any)?.data || []) };
+  },
 
   // Campaigns
-  getCampaigns: (options: RequestInit = {}): Promise<{ data: CampaignSummary[] }> =>
-    request<{ data: CampaignSummary[] }>('/campaigns', {
+  getCampaigns: async (options: RequestInit = {}): Promise<{ data: CampaignSummary[] }> => {
+    const res = await request<CampaignSummary[] | { data: CampaignSummary[] }>('/campaigns', {
       ...options,
       method: 'GET'
-    }),
-  createCampaign: (payload: CreateCampaignRequest): Promise<{ data: CampaignSummary }> =>
-    request<{ data: CampaignSummary }>('/campaigns', {
+    });
+    return { data: Array.isArray(res) ? res : ((res as any)?.data || []) };
+  },
+  createCampaign: async (payload: CreateCampaignRequest): Promise<{ data: CampaignSummary }> => {
+    const res = await request<CampaignSummary | { data: CampaignSummary }>('/campaigns', {
       method: 'POST',
       body: JSON.stringify(payload)
-    })
+    });
+    return { data: (res as any)?.data ?? res };
+  }
 };
 
 
