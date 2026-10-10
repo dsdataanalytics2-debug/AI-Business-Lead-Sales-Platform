@@ -265,6 +265,24 @@ export default function DataSourcesSettingsPage() {
           </div>
         </div>
 
+        {/* Settings Sub-navigation Tabs */}
+        <div className="flex border-b border-slate-800 gap-2">
+          <a
+            href="/settings/data-sources"
+            className="px-4 py-2.5 text-sm font-medium border-b-2 border-indigo-500 text-indigo-400 flex items-center gap-2"
+          >
+            <Database className="w-4 h-4" />
+            Data Sources & Places
+          </a>
+          <a
+            href="/settings/ai-models"
+            className="px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-700 flex items-center gap-2 transition"
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            AI Models & Gemini
+          </a>
+        </div>
+
         {/* Security Invariant Banner */}
         <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 flex items-start gap-3">
           <Shield className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />

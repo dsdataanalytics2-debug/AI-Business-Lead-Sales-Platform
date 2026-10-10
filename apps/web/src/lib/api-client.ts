@@ -671,6 +671,54 @@ export const apiClient = {
       body: JSON.stringify(payload)
     });
     return { data: (res as any)?.data ?? res };
+  },
+
+  // AI Providers & Models Settings
+  getAiProviders: async (): Promise<{ providers: any[] }> => {
+    const res = await request<{ providers: any[] } | any[]>('/settings/ai-models', {
+      method: 'GET'
+    });
+    if (Array.isArray(res)) return { providers: res };
+    return { providers: (res as any)?.providers || [] };
+  },
+  configureAiProvider: (provider: string, data: { apiKey: string; model?: string }): Promise<{ success: boolean; config: any }> =>
+    request(`/settings/ai-models/${encodeURIComponent(provider)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+  testAiProvider: (provider: string, data: { apiKey?: string; model?: string } = {}): Promise<{ connected: boolean; message: string; model?: string; latencyMs?: number }> =>
+    request(`/settings/ai-models/${encodeURIComponent(provider)}/test`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  updateAiModel: (provider: string, model: string): Promise<{ success: boolean; model: string }> =>
+    request(`/settings/ai-models/${encodeURIComponent(provider)}/model`, {
+      method: 'POST',
+      body: JSON.stringify({ model })
+    }),
+  toggleAiProvider: (provider: string, enabled: boolean): Promise<{ success: boolean; isEnabled: boolean }> =>
+    request(`/settings/ai-models/${encodeURIComponent(provider)}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    }),
+
+  // AI Buyer Discovery
+  suggestBuyerTargets: async (data: { product: string; location?: string; count?: number; model?: string }): Promise<any> => {
+    return request('/ai/buyer-discovery/suggest-targets', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
+  },
+  explainBuyerFit: async (data: { businessName: string; category?: string; product?: string; query?: string; location?: string; signals?: string[]; model?: string }): Promise<any> => {
+    const payload = {
+      ...data,
+      product: data.product || data.query || 'General Business',
+      category: data.category || 'Retail Store'
+    };
+    return request('/ai/buyer-discovery/explain-fit', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
   }
 };
 

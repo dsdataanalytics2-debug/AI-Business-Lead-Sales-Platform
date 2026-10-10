@@ -116,6 +116,21 @@ export default function BusinessSearchPage() {
   const locationContainerRef = useRef<HTMLDivElement>(null);
   const locationAbortRef = useRef<AbortController | null>(null);
 
+  // AI Buyer Discovery state
+  const [isGeneratingAiTargets, setIsGeneratingAiTargets] = useState(false);
+  const [aiTargetCategories, setAiTargetCategories] = useState<Array<{ name: string; relevance: 'HIGH' | 'MEDIUM' | 'LOW'; rationale?: string; selected: boolean }>>([]);
+  const [aiTargetsError, setAiTargetsError] = useState<string | null>(null);
+
+  // Per-card AI Fit Explanation state tracked by `provider:externalId`
+  const [aiFitExplanations, setAiFitExplanations] = useState<Record<string, {
+    status: 'idle' | 'loading' | 'success' | 'error';
+    fitLevel?: 'HIGH' | 'MEDIUM' | 'LOW';
+    explanation?: string;
+    keyFactors?: string[];
+    isAiGenerated?: boolean;
+    error?: string;
+  }>>({});
+
   // Debounced location suggestion fetcher (350ms, >= 3 chars)
   useEffect(() => {
     const trimmed = location.trim();
@@ -314,6 +329,91 @@ export default function BusinessSearchPage() {
     setShowSuggestions(false);
     setLocationSuggestions([]);
     setHighlightedIndex(-1);
+    setAiTargetCategories([]);
+    setAiTargetsError(null);
+    setAiFitExplanations({});
+  };
+
+  const handleGenerateAiTargets = async () => {
+    const trimmedQ = query.trim();
+    if (!trimmedQ) {
+      setAiTargetsError('Please enter what you are selling first.');
+      return;
+    }
+
+    try {
+      setIsGeneratingAiTargets(true);
+      setAiTargetsError(null);
+
+      const res = await apiClient.suggestBuyerTargets({
+        product: trimmedQ,
+        location: location.trim() || undefined,
+        count: 6
+      });
+
+      if (res && res.categories && res.categories.length > 0) {
+        setAiTargetCategories(
+          res.categories.map((c: any) => ({
+            name: c.name,
+            relevance: c.relevance || 'HIGH',
+            rationale: c.rationale,
+            selected: true
+          }))
+        );
+      }
+    } catch (err: any) {
+      setAiTargetsError(err?.message || 'Could not generate AI buyer suggestions. Check AI settings.');
+    } finally {
+      setIsGeneratingAiTargets(false);
+    }
+  };
+
+  const handleToggleCategoryChip = (catName: string) => {
+    setAiTargetCategories((prev) =>
+      prev.map((c) => (c.name === catName ? { ...c, selected: !c.selected } : c))
+    );
+  };
+
+  const handleApplyCategoryAsOverride = (catName: string) => {
+    setCategory(catName);
+    setShowAdvancedCategory(true);
+  };
+
+  const handleExplainBuyerFit = async (item: BusinessSearchResult) => {
+    const key = `${item.provider}:${item.externalId}`;
+    setAiFitExplanations((prev) => ({
+      ...prev,
+      [key]: { status: 'loading' }
+    }));
+
+    try {
+      const res = await apiClient.explainBuyerFit({
+        businessName: item.name,
+        category: item.category,
+        query: query.trim() || 'General Business',
+        location: item.city || location.trim() || 'Dhaka',
+        signals: (item as any).signals
+      });
+
+      setAiFitExplanations((prev) => ({
+        ...prev,
+        [key]: {
+          status: 'success',
+          fitLevel: res.fitLevel,
+          explanation: res.explanation,
+          keyFactors: res.keyFactors,
+          isAiGenerated: true
+        }
+      }));
+    } catch (err: any) {
+      setAiFitExplanations((prev) => ({
+        ...prev,
+        [key]: {
+          status: 'error',
+          error: err?.message || 'Could not explain buyer fit.'
+        }
+      }));
+    }
   };
 
   const handleSaveLead = async (item: BusinessSearchResult) => {
@@ -725,6 +825,120 @@ export default function BusinessSearchPage() {
               )}
             </div>
 
+            {/* AI Buyer Discovery & Target Categories */}
+            <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white">AI Buyer Discovery (Gemini)</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-medium">
+                        Targeting Assistant
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Discovers high-probability buyer segments and retail categories for your product.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    id="btn-suggest-ai-targets"
+                    onClick={handleGenerateAiTargets}
+                    disabled={isGeneratingAiTargets || !query.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isGeneratingAiTargets ? 'animate-spin' : ''}`} />
+                    <span>{isGeneratingAiTargets ? 'Analyzing Market...' : 'Suggest Buyer Categories'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Alert */}
+              {aiTargetsError && (
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{aiTargetsError}</span>
+                  </div>
+                  <a href="/settings/ai-models" className="underline hover:text-white shrink-0 text-[11px]">
+                    Configure AI Settings
+                  </a>
+                </div>
+              )}
+
+              {/* AI Category Chips */}
+              {aiTargetCategories.length > 0 && (
+                <div className="space-y-2 pt-1" id="ai-target-categories-container">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="font-medium text-slate-300">Suggested Target Categories:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAiTargetCategories((prev) => prev.map((c) => ({ ...c, selected: true })))}
+                        className="text-[10px] text-indigo-400 hover:text-indigo-300"
+                      >
+                        Select All
+                      </button>
+                      <span>•</span>
+                      <button
+                        type="button"
+                        onClick={() => setAiTargetCategories((prev) => prev.map((c) => ({ ...c, selected: false })))}
+                        className="text-[10px] text-slate-500 hover:text-slate-400"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {aiTargetCategories.map((cat) => (
+                      <div
+                        key={cat.name}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition cursor-pointer ${
+                          cat.selected
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={cat.selected}
+                          onChange={() => handleToggleCategoryChip(cat.name)}
+                          className="rounded bg-slate-950 border-slate-700 text-amber-500 focus:ring-0 cursor-pointer"
+                        />
+                        <span onClick={() => handleToggleCategoryChip(cat.name)} className="font-medium">
+                          {cat.name}
+                        </span>
+                        <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800/80 text-slate-400 uppercase font-mono">
+                          {cat.relevance}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApplyCategoryAsOverride(cat.name);
+                          }}
+                          title="Apply as search category filter"
+                          className="ml-1 text-[10px] text-indigo-400 hover:text-indigo-300 hover:underline"
+                        >
+                          Filter
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-slate-500 italic">
+                    AI target recommendations — Not a verified fact. Select segments to refine buyer outreach.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Quick Search Chips */}
             <div className="pt-2 flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-slate-400 font-medium">Quick examples:</span>
@@ -981,6 +1195,16 @@ export default function BusinessSearchPage() {
 
                           <button
                             type="button"
+                            onClick={() => handleExplainBuyerFit(item)}
+                            disabled={aiFitExplanations[key]?.status === 'loading'}
+                            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition flex items-center gap-1"
+                          >
+                            <Sparkles className={`w-3.5 h-3.5 ${aiFitExplanations[key]?.status === 'loading' ? 'animate-spin' : ''}`} />
+                            <span>{aiFitExplanations[key]?.status === 'loading' ? 'Analyzing...' : 'Explain Fit'}</span>
+                          </button>
+
+                          <button
+                            type="button"
                             disabled
                             title="Contact enrichment pipeline (wa.me inspection & email extraction) scheduled in M8 Step 5"
                             className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-900/60 text-slate-500 border border-slate-800/60 cursor-not-allowed opacity-60 flex items-center gap-1"
@@ -1038,6 +1262,54 @@ export default function BusinessSearchPage() {
                               {item.description}
                             </div>
                           )}
+                        </div>
+                      )}
+
+                      {/* AI Buyer Fit Assessment Box */}
+                      {aiFitExplanations[key] && aiFitExplanations[key].status === 'success' && (
+                        <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/20 text-xs space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-1">
+                            <div className="flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                              <span className="font-semibold text-amber-300">AI Buyer Fit:</span>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                                  aiFitExplanations[key].fitLevel === 'HIGH'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : aiFitExplanations[key].fitLevel === 'MEDIUM'
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                }`}
+                              >
+                                {aiFitExplanations[key].fitLevel} FIT
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-amber-400/80 italic">
+                              AI reasoning — Not a verified fact
+                            </span>
+                          </div>
+                          <p className="text-slate-300 leading-relaxed text-[11px]">
+                            {aiFitExplanations[key].explanation}
+                          </p>
+                          {aiFitExplanations[key].keyFactors && aiFitExplanations[key].keyFactors!.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                              {aiFitExplanations[key].keyFactors!.map((factor, fIdx) => (
+                                <span
+                                  key={fIdx}
+                                  className="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300"
+                                >
+                                  • {factor}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {aiFitExplanations[key] && aiFitExplanations[key].status === 'error' && (
+                        <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{aiFitExplanations[key].error}</span>
                         </div>
                       )}
 

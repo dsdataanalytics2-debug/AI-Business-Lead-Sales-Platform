@@ -17,3 +17,4 @@ export * from './schemas/analytics.js';
 export * from './schemas/buyer-discovery.js';
 export * from './schemas/datasource-settings.js';
 export * from './schemas/campaign.js';
+export * from './schemas/ai.js';

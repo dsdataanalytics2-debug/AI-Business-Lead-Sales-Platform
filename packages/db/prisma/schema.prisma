@@ -260,6 +260,7 @@ model Organization {
   dataSourceConfigs      DataSourceConfig[]
   opportunities          Opportunity[]
   buyerIntentSignals     BuyerIntentSignal[]
+  aiProviderConfigs      AiProviderConfig[]
 
   @@map("organizations")
 
@@ -384,6 +385,30 @@ model DataSourceConfig {
   @@index([organizationId, provider])
   @@index([organizationId, isEnabled])
   @@map("data_source_configs")
+}
+
+model AiProviderConfig {
+  id                  String    @id @default(uuid())
+  organizationId      String    @map("organization_id")
+  provider            String    @default("gemini")
+  name                String
+  model               String    @default("gemini-3.1-flash-lite")
+  isEnabled           Boolean   @default(false) @map("is_enabled")
+  isDefault           Boolean   @default(false) @map("is_default")
+  encryptedCredential String?   @map("encrypted_credential")
+  credentialMasked    String?   @map("credential_masked")
+  credentialLastFour  String?   @map("credential_last_four")
+  lastTestedAt        DateTime? @map("last_tested_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([organizationId])
+  @@index([organizationId, provider])
+  @@index([organizationId, isEnabled])
+  @@map("ai_provider_configs")
 }
 
 

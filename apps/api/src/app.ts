@@ -19,6 +19,8 @@ import { datasourceSettingsRouter } from './routes/datasource-settings.routes.js
 import { metaWhatsAppWebhookRouter } from './routes/meta-webhook.routes.js';
 import { resendEmailWebhookRouter } from './routes/resend-webhook.routes.js';
 import { locationRouter } from './routes/location.routes.js';
+import { aiSettingsRouter } from './routes/ai-settings.routes.js';
+import { aiRouter } from './routes/ai.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -57,7 +59,9 @@ export function createApp(): Express {
   app.use('/api/v1/demos', demoRouter);
   app.use('/api/v1/campaigns', campaignRouter);
   app.use('/api/v1/settings/data-sources', datasourceSettingsRouter);
+  app.use('/api/v1/settings/ai-models', aiSettingsRouter);
   app.use('/api/v1/locations', locationRouter);
+  app.use('/api/v1/ai', aiRouter);
 
 
   // 404 handler
