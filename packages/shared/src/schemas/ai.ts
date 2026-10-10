@@ -2,20 +2,23 @@ import { z } from 'zod';
 
 export const GEMINI_DEFAULT_MODEL = 'gemini-3.5-flash-lite';
 export const GEMINI_STRONGER_MODEL = 'gemini-3.8-flash';
+export const GEMINI_LATEST_ALIAS_MODEL = 'gemini-flash-lite-latest';
+
+export const RECOMMENDED_GEMINI_MODELS = [
+  GEMINI_DEFAULT_MODEL,
+  GEMINI_STRONGER_MODEL,
+  GEMINI_LATEST_ALIAS_MODEL
+] as const;
 
 export const LEGACY_GEMINI_MODELS = [
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
   'gemini-3.1-flash-lite',
   'gemini-3.6-flash'
 ] as const;
 
-export const RECOMMENDED_GEMINI_MODELS = [
-  GEMINI_DEFAULT_MODEL,
-  GEMINI_STRONGER_MODEL
-] as const;
-
 export const SUPPORTED_GEMINI_MODELS = [
-  GEMINI_DEFAULT_MODEL,
-  GEMINI_STRONGER_MODEL,
+  ...RECOMMENDED_GEMINI_MODELS,
   ...LEGACY_GEMINI_MODELS
 ] as const;
 
@@ -33,7 +36,7 @@ export const GEMINI_MODEL_METADATA: Record<string, GeminiModelMetadata> = {
   'gemini-3.5-flash-lite': {
     id: 'gemini-3.5-flash-lite',
     label: 'Gemini 3.5 Flash-Lite',
-    purpose: 'low-cost/high-volume',
+    purpose: 'low-cost/high-volume (recommended default)',
     recommendedDefault: true,
     isLegacy: false
   },
@@ -43,6 +46,27 @@ export const GEMINI_MODEL_METADATA: Record<string, GeminiModelMetadata> = {
     purpose: 'advanced reasoning/high-quality generation',
     recommendedDefault: false,
     isLegacy: false
+  },
+  'gemini-flash-lite-latest': {
+    id: 'gemini-flash-lite-latest',
+    label: 'Gemini Flash-Lite (Latest Alias)',
+    purpose: 'dynamic auto-updating flash-lite endpoint',
+    recommendedDefault: false,
+    isLegacy: false
+  },
+  'gemini-2.5-flash-lite': {
+    id: 'gemini-2.5-flash-lite',
+    label: 'Gemini 2.5 Flash-Lite (Legacy)',
+    purpose: 'low-cost/high-volume (legacy projects only)',
+    recommendedDefault: false,
+    isLegacy: true
+  },
+  'gemini-2.5-flash': {
+    id: 'gemini-2.5-flash',
+    label: 'Gemini 2.5 Flash (Legacy)',
+    purpose: 'reasoning/quality (legacy projects only)',
+    recommendedDefault: false,
+    isLegacy: true
   },
   'gemini-3.1-flash-lite': {
     id: 'gemini-3.1-flash-lite',

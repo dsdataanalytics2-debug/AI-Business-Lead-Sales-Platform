@@ -7,8 +7,9 @@
  *
  * MODELS:
  * - Default / Low-Cost: gemini-3.5-flash-lite (fast, cost-effective for buyer expansion & summaries)
- * - Stronger: gemini-3.8-flash (complex reasoning, personalized copy)
- * - Legacy-compatible: gemini-3.1-flash-lite, gemini-3.6-flash
+ * - Stronger: gemini-3.8-flash (advanced reasoning, high-quality generation)
+ * - Dynamic Latest Alias: gemini-flash-lite-latest
+ * - Legacy-compatible: gemini-2.5-flash-lite, gemini-2.5-flash, gemini-3.1-flash-lite, gemini-3.6-flash
  *
  * SECURITY & PRIVACY INVARIANTS:
  * - Server-side only: Browser never receives secret API keys.

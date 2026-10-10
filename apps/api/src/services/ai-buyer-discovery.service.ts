@@ -82,7 +82,13 @@ STRICT INVARIANTS:
 1. Return ONLY commercial business categories (e.g. "Electronics Retailer", "Mobile Accessories Shop", "Pharmacy", "Medical Distributor").
 2. NEVER invent private personal names, individual consumers, phone numbers, emails, or WhatsApp contacts.
 3. For each category, provide a concise, factual reason (1-2 sentences) explaining why this business type distributes or purchases this product.
-4. Output MUST conform strictly to the JSON schema.
+4. Output MUST conform strictly to this JSON format:
+{
+  "product": "${trimmedProduct}",
+  "buyerTargets": [
+    { "category": "Category Name", "reason": "1-2 sentence explanation" }
+  ]
+}
 `.trim();
 
     try {
@@ -144,7 +150,12 @@ STRICT RULES:
 2. Write a 1-2 sentence concise commercial explanation of why this business category would or would not stock or buy this product.
 3. NEVER claim verified purchase intent, RFQ commitments, or active buying orders.
 4. NEVER invent phone, email, or WhatsApp data.
-5. Output MUST conform strictly to the JSON schema.
+5. Output MUST conform strictly to this JSON format:
+{
+  "fitLevel": "HIGH",
+  "explanation": "Concise commercial reason",
+  "disclaimer": "AI Buyer Fit is an automated explanation based on public business categorization, not verified purchase intent."
+}
 `.trim();
 
     try {

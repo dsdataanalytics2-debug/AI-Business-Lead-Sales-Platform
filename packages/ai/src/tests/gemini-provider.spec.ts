@@ -12,13 +12,16 @@ import {
 } from '../index.js';
 
 describe('GeminiProvider & Centralized AI Architecture', () => {
-  it('1. Model Validation: Defaults to gemini-3.5-flash-lite and supports gemini-3.8-flash and legacy models', () => {
+  it('1. Model Validation: Defaults to gemini-3.5-flash-lite and supports gemini-3.8-flash, gemini-flash-lite-latest, and legacy models', () => {
     const provider = new GeminiProvider();
 
     expect(provider.validateModel()).toBe('gemini-3.5-flash-lite');
     expect(provider.validateModel('gemini-3.5-flash-lite')).toBe('gemini-3.5-flash-lite');
     expect(provider.validateModel('gemini-3.8-flash')).toBe('gemini-3.8-flash');
+    expect(provider.validateModel('gemini-flash-lite-latest')).toBe('gemini-flash-lite-latest');
     // Legacy models backward compatibility
+    expect(provider.validateModel('gemini-2.5-flash-lite')).toBe('gemini-2.5-flash-lite');
+    expect(provider.validateModel('gemini-2.5-flash')).toBe('gemini-2.5-flash');
     expect(provider.validateModel('gemini-3.1-flash-lite')).toBe('gemini-3.1-flash-lite');
     expect(provider.validateModel('gemini-3.6-flash')).toBe('gemini-3.6-flash');
 
@@ -151,7 +154,12 @@ describe('GeminiProvider & Centralized AI Architecture', () => {
 
     const meta = registry.getMetadata('gemini');
     expect(meta?.defaultModel).toBe('gemini-3.5-flash-lite');
+    expect(meta?.supportedModels).toContain('gemini-3.5-flash-lite');
     expect(meta?.supportedModels).toContain('gemini-3.8-flash');
+    expect(meta?.supportedModels).toContain('gemini-flash-lite-latest');
+    expect(meta?.supportedModels).toContain('gemini-2.5-flash-lite');
+    expect(meta?.supportedModels).toContain('gemini-2.5-flash');
+    expect(meta?.supportedModels).toContain('gemini-3.1-flash-lite');
     expect(meta?.supportedModels).toContain('gemini-3.6-flash');
 
     const allMeta = registry.listMetadata();

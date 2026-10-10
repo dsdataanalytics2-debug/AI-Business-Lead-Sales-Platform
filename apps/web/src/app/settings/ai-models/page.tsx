@@ -54,7 +54,7 @@ const DEFAULT_AI_PROVIDERS: AiProviderCard[] = [
     isEnabled: false,
     isConfigured: false,
     defaultModel: 'gemini-3.5-flash-lite',
-    supportedModels: ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-3.6-flash'],
+    supportedModels: ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.6-flash'],
     credentialMasked: null,
     credentialLastFour: null,
     lastTestedAt: null,
@@ -284,7 +284,7 @@ export default function AiModelsSettingsPage() {
                 Model Strategy & Architecture
               </p>
               <p className="text-slate-400">
-                Default: <span className="text-indigo-300 font-mono">gemini-3.5-flash-lite</span> (recommended low-cost / high-volume). Stronger: <span className="text-indigo-300 font-mono">gemini-3.8-flash</span> (advanced reasoning / generation). Legacy 3.1 & 3.6 fully supported.
+                Default: <span className="text-indigo-300 font-mono">gemini-3.5-flash-lite</span> (recommended low-cost / high-volume). Stronger: <span className="text-indigo-300 font-mono">gemini-3.8-flash</span> (advanced reasoning). Latest alias: <span className="text-indigo-300 font-mono">gemini-flash-lite-latest</span>. Legacy models supported.
               </p>
             </div>
           </div>
@@ -413,8 +413,11 @@ export default function AiModelsSettingsPage() {
                         <optgroup label="Recommended for New Setups">
                           <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Default / Low-Cost)</option>
                           <option value="gemini-3.8-flash">gemini-3.8-flash (Stronger / Advanced Reasoning)</option>
+                          <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Dynamic Latest Alias)</option>
                         </optgroup>
                         <optgroup label="Legacy / Backward-Compatible">
+                          <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (Legacy Low-Cost)</option>
+                          <option value="gemini-2.5-flash">gemini-2.5-flash (Legacy Reasoning)</option>
                           <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Legacy Low-Cost)</option>
                           <option value="gemini-3.6-flash">gemini-3.6-flash (Legacy Stronger)</option>
                         </optgroup>
@@ -549,13 +552,22 @@ export default function AiModelsSettingsPage() {
                 >
                   <optgroup label="Recommended for New Setups">
                     <option value="gemini-3.5-flash-lite">
-                      gemini-3.5-flash-lite (Default / Low Cost / High Volume)
+                      gemini-3.5-flash-lite (Default / Low-Cost / High-Volume)
                     </option>
                     <option value="gemini-3.8-flash">
                       gemini-3.8-flash (Stronger / Advanced Reasoning)
                     </option>
+                    <option value="gemini-flash-lite-latest">
+                      gemini-flash-lite-latest (Dynamic Latest Alias)
+                    </option>
                   </optgroup>
                   <optgroup label="Legacy / Backward-Compatible">
+                    <option value="gemini-2.5-flash-lite">
+                      gemini-2.5-flash-lite (Legacy Low-Cost)
+                    </option>
+                    <option value="gemini-2.5-flash">
+                      gemini-2.5-flash (Legacy Reasoning)
+                    </option>
                     <option value="gemini-3.1-flash-lite">
                       gemini-3.1-flash-lite (Legacy Low-Cost)
                     </option>

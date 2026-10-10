@@ -143,6 +143,9 @@ describe('AI Buyer Discovery & Provider Integration Spec', () => {
       expect(geminiCard.defaultModel).toBe('gemini-3.5-flash-lite');
       expect(geminiCard.supportedModels).toContain('gemini-3.5-flash-lite');
       expect(geminiCard.supportedModels).toContain('gemini-3.8-flash');
+      expect(geminiCard.supportedModels).toContain('gemini-flash-lite-latest');
+      expect(geminiCard.supportedModels).toContain('gemini-2.5-flash-lite');
+      expect(geminiCard.supportedModels).toContain('gemini-2.5-flash');
       expect(geminiCard.supportedModels).toContain('gemini-3.1-flash-lite');
       expect(geminiCard.supportedModels).toContain('gemini-3.6-flash');
       expect(geminiCard.supportedModels).not.toContain('gemini-3.5-flash');

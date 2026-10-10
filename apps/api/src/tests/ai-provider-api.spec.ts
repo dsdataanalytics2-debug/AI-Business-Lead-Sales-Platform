@@ -169,7 +169,11 @@ describe('AI Provider System & Buyer Discovery API', () => {
     expect(gemini.isConfigured).toBe(false);
     expect(gemini.status).toBe('NOT_CONFIGURED');
     expect(gemini.defaultModel).toBe('gemini-3.5-flash-lite');
+    expect(gemini.supportedModels).toContain('gemini-3.5-flash-lite');
     expect(gemini.supportedModels).toContain('gemini-3.8-flash');
+    expect(gemini.supportedModels).toContain('gemini-flash-lite-latest');
+    expect(gemini.supportedModels).toContain('gemini-2.5-flash-lite');
+    expect(gemini.supportedModels).toContain('gemini-2.5-flash');
     expect(gemini.supportedModels).toContain('gemini-3.1-flash-lite');
     expect(gemini.supportedModels).toContain('gemini-3.6-flash');
   });
