@@ -18,6 +18,7 @@ import { campaignRouter } from './routes/campaign.routes.js';
 import { datasourceSettingsRouter } from './routes/datasource-settings.routes.js';
 import { metaWhatsAppWebhookRouter } from './routes/meta-webhook.routes.js';
 import { resendEmailWebhookRouter } from './routes/resend-webhook.routes.js';
+import { locationRouter } from './routes/location.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -56,6 +57,7 @@ export function createApp(): Express {
   app.use('/api/v1/demos', demoRouter);
   app.use('/api/v1/campaigns', campaignRouter);
   app.use('/api/v1/settings/data-sources', datasourceSettingsRouter);
+  app.use('/api/v1/locations', locationRouter);
 
 
   // 404 handler

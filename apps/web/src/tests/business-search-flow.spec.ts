@@ -561,4 +561,161 @@ describe('M1 Step 8: Business Search Frontend Page & API Integration Matrix', ()
     expect(content).toContain('setResults(data);');
     expect(content).toContain('setHasSearched(true);');
   });
+
+  /* =========================================================================
+   * Section 5: Buyer Discovery Redesign & Usability Audits
+   * ========================================================================= */
+
+  it('23. Buyer-Centric Title & Positioning: Displays "Find Potential Buyers" and avoids developer badge dominating header', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('Find Potential Buyers');
+    expect(content).toContain('Discover relevant retailers, wholesalers, distributors, and business buyers');
+    expect(content).not.toContain('Milestone M1');
+  });
+
+  it('24. Selling Goal Form Labels: Renders "What are you selling?", "Location / Market", "Buyer Type", and helper text', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('What are you selling?');
+    expect(content).toContain('Enter the product or service you want to find buyers for.');
+    expect(content).toContain('Location / Market');
+    expect(content).toContain('Choose the city or market where you want to find customers.');
+    expect(content).toContain('Buyer Type');
+    expect(content).toContain('Choose who you want to sell to.');
+    expect(content).toContain('Any Buyer');
+    expect(content).toContain('Retailer');
+    expect(content).toContain('Wholesaler');
+    expect(content).toContain('Distributor');
+  });
+
+  it('25. Interactive Quick Search Chips: Features discovery examples for one-click field population', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('Quick examples:');
+    expect(content).toContain('Pharmacies in Dhaka');
+    expect(content).toContain('Electronics Shops in Mirpur');
+    expect(content).toContain('Medical Distributors in Chattogram');
+    expect(content).toContain('Retailers in Gulshan');
+  });
+
+  it('26. Empty State Redesign: Displays customer-focused guide and 3 concrete buyer workflows', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('Find businesses that could become your next customers.');
+    expect(content).toContain('Search by product, location, and buyer type.');
+    expect(content).toContain('Smart Watch → Electronics Retailers → Dhaka');
+    expect(content).toContain('Diabetes Machine → Pharmacies → Chattogram');
+    expect(content).toContain('Power Bank → Mobile Shops → Mirpur');
+  });
+
+  it('27. Primary CTA Label: Form submit button renders "Find Potential Buyers"', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('id="business-search-submit-btn"');
+    expect(content).toContain('Find Potential Buyers');
+  });
+
+  it('28. Provider Provenance & Strategy: Displays Search Strategy and badges without hiding source', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('Search Strategy:');
+    expect(content).toContain('OpenStreetMap is searched first. Google Places is used only when needed');
+    expect(content).toContain('Google Places');
+    expect(content).toContain('OpenStreetMap');
+    expect(content).toContain('Mock Provider');
+    expect(content).toContain('Provider: {item.provider}');
+  });
+
+  /* =========================================================================
+   * Section 6: Real Location Autocomplete & Geographic Suggestions
+   * ========================================================================= */
+
+  it('29. Location Autocomplete Client Integration: apiClient exposes locations.suggest with safe array handling', async () => {
+    const apiClientPath = path.resolve(__dirname, '../lib/api-client.ts');
+    const content = fs.readFileSync(apiClientPath, 'utf-8');
+
+    expect(content).toContain('locations: {');
+    expect(content).toContain('suggest: async (');
+    expect(content).toContain('/locations/suggest');
+    expect(content).toContain('Array.isArray(res)');
+  });
+
+  it('30. Minimum Input Length Guard: Business Search enforces min 3 chars before fetching location suggestions', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('trimmed.length < 3');
+    expect(content).toContain('setLocationSuggestions([]);');
+    expect(content).toContain('setShowSuggestions(false);');
+  });
+
+  it('31. Debounced Geographic Suggestion Fetcher: Debounces user keystrokes and supports cancellation', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('setTimeout(async () => {');
+    expect(content).toContain('apiClient.locations.suggest(trimmed, 6');
+    expect(content).toContain('AbortController');
+    expect(content).toContain('350');
+  });
+
+  it('32. Autocomplete Suggestions Combobox: Renders listbox dropdown with primaryText, secondaryText, and MapPin', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('id="location-suggestions-dropdown"');
+    expect(content).toContain('role="listbox"');
+    expect(content).toContain('role="option"');
+    expect(content).toContain('item.primaryText');
+    expect(content).toContain('item.secondaryText');
+  });
+
+  it('33. Selection & Standardized Location: Selecting suggestion fills location with standardized label and closes popup', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('handleSelectSuggestion = (suggestion: LocationSuggestionItem)');
+    expect(content).toContain('setLocation(suggestion.label);');
+    expect(content).toContain('setShowSuggestions(false);');
+  });
+
+  it('34. Subtle Loading, Empty, and Error Feedback: User-facing safe feedback without exposing technical internals', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain('Searching locations...');
+    expect(content).toContain('No matching locations found.');
+    expect(content).toContain('Location suggestions unavailable — you can still type manually.');
+    expect(content).not.toContain('X-Goog-Api-Key');
+    expect(content).not.toContain('encryptedCredential');
+  });
+
+  it('35. Keyboard Navigation & Dismissal: Supports ArrowDown, ArrowUp, Enter, and Escape', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    expect(content).toContain("e.key === 'ArrowDown'");
+    expect(content).toContain("e.key === 'ArrowUp'");
+    expect(content).toContain("e.key === 'Enter'");
+    expect(content).toContain("e.key === 'Escape'");
+  });
+
+  it('36. Non-blocking Manual Input & Quick Search Chips: Manual typing and chips operate seamlessly without stuck dropdowns', () => {
+    const pagePath = path.resolve(__dirname, '../app/business-search/page.tsx');
+    const content = fs.readFileSync(pagePath, 'utf-8');
+
+    // Quick chips dismiss suggestions dropdown
+    expect(content).toContain('setShowSuggestions(false);');
+    // Manual text input preserves native typing
+    expect(content).toContain('onChange={(e) => setLocation(e.target.value)}');
+    // Form submission submits whatever location is active in state
+    expect(content).toContain('location: trimmedLoc');
+  });
 });

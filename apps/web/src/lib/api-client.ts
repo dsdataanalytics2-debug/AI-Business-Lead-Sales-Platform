@@ -74,8 +74,16 @@ export interface BusinessSearchQueryParams {
   q: string;
   location: string;
   category?: string;
+  buyerType?: string;
   limit?: number;
   provider?: string;
+}
+
+export interface LocationSuggestionItem {
+  id: string;
+  label: string;
+  primaryText: string;
+  secondaryText?: string;
 }
 
 export interface SaveLeadResponse {
@@ -178,6 +186,7 @@ export const apiClient = {
       searchParams.set('q', params.q);
       searchParams.set('location', params.location);
       if (params.category) searchParams.set('category', params.category);
+      if (params.buyerType) searchParams.set('buyerType', params.buyerType);
       if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
       if (params.provider) searchParams.set('provider', params.provider);
 
@@ -190,6 +199,27 @@ export const apiClient = {
         method: 'POST',
         body: JSON.stringify(input)
       })
+  },
+  locations: {
+    suggest: async (
+      q: string,
+      limit = 5,
+      options: RequestInit = {}
+    ): Promise<LocationSuggestionItem[]> => {
+      const searchParams = new URLSearchParams();
+      searchParams.set('q', q);
+      if (limit) searchParams.set('limit', String(limit));
+      const res = await request<LocationSuggestionItem[] | { data: LocationSuggestionItem[] }>(
+        `/locations/suggest?${searchParams.toString()}`,
+        {
+          ...options,
+          method: 'GET'
+        }
+      );
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray((res as any).data)) return (res as any).data;
+      return [];
+    }
   },
   leads: {
     list: async (params: Partial<LeadListQuery> = {}, options: RequestInit = {}): Promise<LeadListResponse> => {

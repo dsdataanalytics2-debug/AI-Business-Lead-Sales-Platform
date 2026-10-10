@@ -18,6 +18,11 @@ export const businessSearchQuerySchema = cursorPaginationSchema.extend({
     .trim()
     .max(100, 'Category cannot exceed 100 characters')
     .optional(),
+  buyerType: z
+    .string()
+    .trim()
+    .max(100)
+    .optional(),
   provider: z
     .string()
     .trim()
@@ -27,6 +32,39 @@ export const businessSearchQuerySchema = cursorPaginationSchema.extend({
 });
 
 export type BusinessSearchQuery = z.infer<typeof businessSearchQuerySchema>;
+
+export const locationSuggestionQuerySchema = z.object({
+  q: z
+    .string()
+    .trim()
+    .min(1, 'Query is required')
+    .max(100, 'Query cannot exceed 100 characters'),
+  limit: z
+    .coerce
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .optional()
+    .default(5)
+});
+
+export type LocationSuggestionQuery = z.infer<typeof locationSuggestionQuerySchema>;
+
+export const locationSuggestionItemSchema = z.object({
+  id: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  primaryText: z.string().trim().min(1),
+  secondaryText: z.string().trim().optional()
+});
+
+export type LocationSuggestionItem = z.infer<typeof locationSuggestionItemSchema>;
+
+export const locationSuggestionResponseSchema = z.object({
+  data: z.array(locationSuggestionItemSchema)
+});
+
+export type LocationSuggestionResponse = z.infer<typeof locationSuggestionResponseSchema>;
 
 
 export const discoveredContactSchema = z.object({

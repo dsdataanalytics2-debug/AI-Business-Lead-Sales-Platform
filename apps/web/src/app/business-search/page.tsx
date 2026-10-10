@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -20,7 +20,9 @@ import {
   RotateCcw,
   Sparkles,
   Database,
-  Info
+  Info,
+  SlidersHorizontal,
+  Eye
 } from 'lucide-react';
 import {
   type BusinessSearchResult,
@@ -32,7 +34,7 @@ import {
 } from '@leadmate/shared';
 import { useAuth } from '@/lib/auth-context';
 import { AppShell } from '@/components/layout/app-shell';
-import { apiClient, ApiClientError } from '@/lib/api-client';
+import { apiClient, ApiClientError, type LocationSuggestionItem } from '@/lib/api-client';
 
 interface RowSaveState {
   status: 'idle' | 'saving' | 'created' | 'merged' | 'candidate' | 'conflict' | 'error';
@@ -66,6 +68,13 @@ function getSafeExternalUrl(url?: string | null): { href: string; label: string 
   }
 }
 
+const QUICK_SEARCH_CHIPS = [
+  { label: 'Pharmacies in Dhaka', q: 'Pharmacy', location: 'Dhaka', buyerType: 'RETAILER', category: 'Pharmacy' },
+  { label: 'Electronics Shops in Mirpur', q: 'Smart Watch', location: 'Mirpur', buyerType: 'RETAILER', category: 'Electronics' },
+  { label: 'Medical Distributors in Chattogram', q: 'Diabetes Machine', location: 'Chattogram', buyerType: 'DISTRIBUTOR', category: 'Medical Supplies' },
+  { label: 'Retailers in Gulshan', q: 'General Retail', location: 'Gulshan', buyerType: 'RETAILER', category: 'Retail' }
+];
+
 export default function BusinessSearchPage() {
   const { user, isAuthenticated, isLoading: isAuthLoading, hasPermission } = useAuth();
   const router = useRouter();
@@ -76,10 +85,11 @@ export default function BusinessSearchPage() {
   // Search form state
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
+  const [buyerType, setBuyerType] = useState('ANY');
   const [category, setCategory] = useState('');
-  const [limit, setLimit] = useState(50);
+  const [showAdvancedCategory, setShowAdvancedCategory] = useState(false);
+  const [limit, setLimit] = useState(20);
   const [provider, setProvider] = useState('AUTO');
-
 
   // Search execution state
   const [isSearching, setIsSearching] = useState(false);
@@ -93,6 +103,109 @@ export default function BusinessSearchPage() {
 
   // Per-row save state tracked by `provider:externalId`
   const [saveStates, setSaveStates] = useState<Record<string, RowSaveState>>({});
+
+  // Expanded card key for "View Details"
+  const [expandedCardKey, setExpandedCardKey] = useState<string | null>(null);
+
+  // Location Autocomplete state
+  const [locationSuggestions, setLocationSuggestions] = useState<LocationSuggestionItem[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const locationContainerRef = useRef<HTMLDivElement>(null);
+  const locationAbortRef = useRef<AbortController | null>(null);
+
+  // Debounced location suggestion fetcher (350ms, >= 3 chars)
+  useEffect(() => {
+    const trimmed = location.trim();
+    if (trimmed.length < 3) {
+      setLocationSuggestions([]);
+      setShowSuggestions(false);
+      setIsLoadingSuggestions(false);
+      setSuggestionsError(null);
+      setHighlightedIndex(-1);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      if (locationAbortRef.current) {
+        locationAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      locationAbortRef.current = controller;
+
+      setIsLoadingSuggestions(true);
+      setSuggestionsError(null);
+
+      try {
+        const items = await apiClient.locations.suggest(trimmed, 6, {
+          signal: controller.signal
+        });
+        setLocationSuggestions(items);
+        setShowSuggestions(true);
+        setHighlightedIndex(-1);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          setSuggestionsError('Location suggestions unavailable — you can still type manually.');
+          setShowSuggestions(true);
+        }
+      } finally {
+        setIsLoadingSuggestions(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [location]);
+
+  // Close suggestions dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (locationContainerRef.current && !locationContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectSuggestion = (suggestion: LocationSuggestionItem) => {
+    setLocation(suggestion.label);
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+    setHighlightedIndex(-1);
+  };
+
+  const handleLocationKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) {
+      if (e.key === 'ArrowDown' && locationSuggestions.length > 0) {
+        setShowSuggestions(true);
+        setHighlightedIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev < locationSuggestions.length - 1 ? prev + 1 : 0
+      );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) =>
+        prev > 0 ? prev - 1 : locationSuggestions.length - 1
+      );
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && locationSuggestions[highlightedIndex]) {
+        e.preventDefault();
+        handleSelectSuggestion(locationSuggestions[highlightedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowSuggestions(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -127,6 +240,16 @@ export default function BusinessSearchPage() {
     );
   }
 
+  const handleApplyChip = (chip: typeof QUICK_SEARCH_CHIPS[0]) => {
+    setQuery(chip.q);
+    setLocation(chip.location);
+    setBuyerType(chip.buyerType);
+    if (chip.category) {
+      setCategory(chip.category);
+    }
+    setShowSuggestions(false);
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -135,7 +258,7 @@ export default function BusinessSearchPage() {
 
     if (!trimmedQ || !trimmedLoc) {
       setSearchError({
-        message: 'Please provide both a search query and a location.'
+        message: 'Please provide both what you are selling and the target location.'
       });
       return;
     }
@@ -150,6 +273,7 @@ export default function BusinessSearchPage() {
         q: trimmedQ,
         location: trimmedLoc,
         category: category.trim() || undefined,
+        buyerType: buyerType !== 'ANY' ? buyerType : undefined,
         limit,
         provider: provider.trim() || undefined
       });
@@ -178,12 +302,18 @@ export default function BusinessSearchPage() {
     setQuery('');
     setLocation('');
     setCategory('');
-    setLimit(50);
-    setProvider('MOCK');
+    setBuyerType('ANY');
+    setShowAdvancedCategory(false);
+    setLimit(20);
+    setProvider('AUTO');
     setResults(null);
     setHasSearched(false);
     setSearchError(null);
     setSaveStates({});
+    setExpandedCardKey(null);
+    setShowSuggestions(false);
+    setLocationSuggestions([]);
+    setHighlightedIndex(-1);
   };
 
   const handleSaveLead = async (item: BusinessSearchResult) => {
@@ -298,11 +428,23 @@ export default function BusinessSearchPage() {
         return (
           <div
             key={idx}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs text-slate-300"
-            title={`Phone: ${contact.rawValue}`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-700/80 text-xs text-slate-200"
           >
-            <Phone className="w-3.5 h-3.5 text-indigo-400" />
+            <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
             <span className="font-mono">{contact.rawValue}</span>
+            {contact.whatsappStatus === WhatsAppStatus.CONFIRMED ? (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-medium">
+                Confirmed
+              </span>
+            ) : contact.whatsappStatus === WhatsAppStatus.PUBLICLY_LISTED ? (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+                Listed
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 font-medium">
+                Unverified
+              </span>
+            )}
           </div>
         );
 
@@ -310,56 +452,30 @@ export default function BusinessSearchPage() {
         return (
           <div
             key={idx}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-xs text-slate-300"
-            title={`Email: ${contact.rawValue}`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-700/80 text-xs text-slate-200"
           >
-            <Mail className="w-3.5 h-3.5 text-sky-400" />
-            <span className="truncate max-w-[200px]">{contact.rawValue}</span>
+            <Mail className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+            <span className="font-mono">{contact.rawValue}</span>
           </div>
         );
 
-      case ContactType.WHATSAPP: {
-        const isPublic = contact.whatsappStatus === WhatsAppStatus.PUBLICLY_LISTED;
-        const isConfirmed = contact.whatsappStatus === WhatsAppStatus.CONFIRMED;
-
+      case ContactType.WHATSAPP:
         return (
           <div
             key={idx}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border ${
-              isPublic || isConfirmed
-                ? 'bg-emerald-950/40 border-emerald-800/50 text-emerald-300'
-                : 'bg-slate-900 border-slate-800 text-slate-300'
-            }`}
-            title={`WhatsApp: ${contact.rawValue} (${contact.whatsappStatus})`}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-200"
           >
-            <MessageSquare
-              className={`w-3.5 h-3.5 ${isPublic || isConfirmed ? 'text-emerald-400' : 'text-slate-400'}`}
-            />
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span className="font-mono">{contact.rawValue}</span>
-            {isPublic && (
-              <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-900/60 text-emerald-300 font-sans">
-                Listed
-              </span>
-            )}
-            {isConfirmed && (
-              <span className="text-[10px] px-1 py-0.2 rounded bg-emerald-900/60 text-emerald-300 font-sans">
-                Confirmed
-              </span>
-            )}
-            {!isPublic && !isConfirmed && (
-              <span className="text-[10px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-sans">
-                Unverified
-              </span>
-            )}
+            <span className="text-[10px] font-medium text-emerald-400">Verified WhatsApp</span>
           </div>
         );
-      }
 
       default:
         return (
           <div
             key={idx}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 text-xs text-slate-400 border border-slate-800"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-900 text-xs text-slate-400"
           >
             <span>{contact.rawValue}</span>
           </div>
@@ -367,69 +483,76 @@ export default function BusinessSearchPage() {
     }
   };
 
+  const getStrategyLabel = () => {
+    switch (provider) {
+      case 'AUTO':
+        return 'Auto — Free First';
+      case 'OPENSTREETMAP':
+        return 'OpenStreetMap — Free';
+      case 'GOOGLE_PLACES':
+        return 'Google Places — Verified';
+      case 'MOCK':
+      default:
+        return 'Mock — Development';
+    }
+  };
+
   return (
     <AppShell>
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+      <div className="space-y-6">
+        {/* Header & Positioning */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                Discovery Engine
-              </span>
-              <span className="text-xs text-slate-400">Milestone M1</span>
-            </div>
             <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
               <Search className="w-6 h-6 text-indigo-400" />
-              Business Search
+              Find Potential Buyers
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              Discover verified business listings across Bangladesh directories and save them directly to your master lead database.
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Discover relevant retailers, wholesalers, distributors, and business buyers for your product or service.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 self-start sm:self-auto">
-            <Database className="w-4 h-4 text-indigo-400" />
-            <span>Search Strategy:</span>
-            <span className="font-semibold text-slate-200">
-              {provider === 'AUTO'
-                ? 'Auto (Free First - OSM)'
-                : provider === 'OPENSTREETMAP'
-                ? 'OpenStreetMap (Free)'
-                : provider === 'GOOGLE_PLACES'
-                ? 'Google Places (API New)'
-                : 'Mock Fixtures'}
-            </span>
+          {/* Strategy Indicator Card */}
+          <div className="flex flex-col text-xs text-slate-400 bg-slate-900/90 px-3.5 py-2 rounded-xl border border-slate-800 self-start sm:self-auto space-y-0.5">
+            <div className="flex items-center gap-2">
+              <Database className="w-4 h-4 text-indigo-400 shrink-0" />
+              <span className="text-slate-400">Search Strategy:</span>
+              <span className="font-semibold text-slate-100">
+                {getStrategyLabel()}
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 pl-6">
+              OpenStreetMap is searched first. Google Places is used only when needed and configured.
+            </p>
           </div>
         </div>
 
-        {/* Search Form Card */}
-        <div className="p-5 rounded-xl bg-slate-950/70 border border-slate-800/80 shadow-lg">
+        {/* Primary Search Form Card */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-slate-950/70 border border-slate-800/80 shadow-lg space-y-5">
           <form onSubmit={handleSearch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-              {/* Keyword / Name Query */}
-              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                <label htmlFor="search-q" className="block text-xs font-medium text-slate-300">
-                  Business Query <span className="text-indigo-400">*</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5">
+              {/* What are you selling? (4 cols on lg) */}
+              <div className="sm:col-span-2 lg:col-span-4 space-y-1">
+                <label htmlFor="search-q" className="block text-xs font-semibold text-slate-200">
+                  What are you selling? <span className="text-indigo-400">*</span>
                 </label>
-                <div className="relative">
-                  <input
-                    id="search-q"
-                    type="text"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="e.g. Dental Clinic, Steel, Bakery"
-                    required
-                    disabled={isSearching}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
-                  />
-                </div>
+                <input
+                  id="search-q"
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="e.g. Smart Watch, Diabetes Machine, Power Bank, Water Bottle"
+                  required
+                  disabled={isSearching}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                />
+                <p className="text-[11px] text-slate-400">Enter the product or service you want to find buyers for.</p>
               </div>
 
-              {/* Location */}
-              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-                <label htmlFor="search-location" className="block text-xs font-medium text-slate-300">
-                  Location / City <span className="text-indigo-400">*</span>
+              {/* Location / Market (3 cols on lg) with Real Autocomplete */}
+              <div ref={locationContainerRef} className="sm:col-span-1 lg:col-span-3 space-y-1 relative">
+                <label htmlFor="search-location" className="block text-xs font-semibold text-slate-200">
+                  Location / Market <span className="text-indigo-400">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -437,52 +560,124 @@ export default function BusinessSearchPage() {
                     type="text"
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    placeholder="e.g. Dhaka, Gulshan, Chittagong"
+                    onKeyDown={handleLocationKeyDown}
+                    onFocus={() => {
+                      if (location.trim().length >= 3 && (locationSuggestions.length > 0 || suggestionsError)) {
+                        setShowSuggestions(true);
+                      }
+                    }}
+                    placeholder="e.g. Dhaka, Mirpur, Gulshan, Chattogram"
                     required
                     disabled={isSearching}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                    autoComplete="off"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-700/80 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
                   />
+                  {isLoadingSuggestions && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-label="Loading suggestions">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                    </div>
+                  )}
                 </div>
+                <p className="text-[11px] text-slate-400">Choose the city or market where you want to find customers.</p>
+
+                {/* Autocomplete Dropdown */}
+                {showSuggestions && (
+                  <div
+                    id="location-suggestions-dropdown"
+                    role="listbox"
+                    className="absolute z-50 left-0 right-0 top-full mt-1.5 py-1.5 rounded-xl bg-slate-900/95 border border-slate-700/90 shadow-2xl backdrop-blur-md max-h-60 overflow-y-auto"
+                  >
+                    {isLoadingSuggestions && locationSuggestions.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-slate-400 flex items-center gap-2">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400 shrink-0" />
+                        <span>Searching locations...</span>
+                      </div>
+                    ) : suggestionsError ? (
+                      <div className="px-3 py-2 text-xs text-amber-400/90 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 shrink-0" />
+                        <span>{suggestionsError}</span>
+                      </div>
+                    ) : locationSuggestions.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-slate-400">
+                        No matching locations found.
+                      </div>
+                    ) : (
+                      locationSuggestions.map((item, idx) => {
+                        const isHighlighted = idx === highlightedIndex;
+                        return (
+                          <button
+                            key={item.id || idx}
+                            type="button"
+                            role="option"
+                            aria-selected={isHighlighted}
+                            onMouseEnter={() => setHighlightedIndex(idx)}
+                            onClick={() => handleSelectSuggestion(item)}
+                            className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2.5 transition-colors cursor-pointer ${
+                              isHighlighted
+                                ? 'bg-indigo-600/30 text-white'
+                                : 'text-slate-200 hover:bg-slate-800/80'
+                            }`}
+                          >
+                            <MapPin className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-slate-100 truncate">{item.primaryText}</div>
+                              {item.secondaryText && (
+                                <div className="text-[11px] text-slate-400 truncate">{item.secondaryText}</div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Category (Optional) */}
-              <div className="space-y-1.5 sm:col-span-1">
-                <label htmlFor="search-category" className="block text-xs font-medium text-slate-300">
-                  Category <span className="text-slate-500">(Optional)</span>
+              {/* Buyer Type (2 cols on lg) */}
+              <div className="sm:col-span-1 lg:col-span-2 space-y-1">
+                <label htmlFor="search-buyer-type" className="block text-xs font-semibold text-slate-200">
+                  Buyer Type
                 </label>
-                <input
-                  id="search-category"
-                  type="text"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="e.g. Dental Clinic, Retail"
+                <select
+                  id="search-buyer-type"
+                  value={buyerType}
+                  onChange={(e) => setBuyerType(e.target.value)}
                   disabled={isSearching}
-                  className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
-                />
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-700/80 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                >
+                  <option value="ANY">Any Buyer</option>
+                  <option value="RETAILER">Retailer</option>
+                  <option value="WHOLESALER">Wholesaler</option>
+                  <option value="DISTRIBUTOR">Distributor</option>
+                  <option value="ECOMMERCE_SELLER">E-commerce Seller</option>
+                  <option value="CORPORATE_BUYER">Corporate Buyer</option>
+                </select>
+                <p className="text-[11px] text-slate-400">Choose who you want to sell to.</p>
               </div>
 
-              {/* Provider Selector */}
-              <div className="space-y-1.5 sm:col-span-1">
-                <label htmlFor="search-provider" className="block text-xs font-medium text-slate-300">
-                  Data Provider
+              {/* Search Source (2 cols on lg) */}
+              <div className="sm:col-span-1 lg:col-span-2 space-y-1">
+                <label htmlFor="search-provider" className="block text-xs font-semibold text-slate-200">
+                  Search Source
                 </label>
                 <select
                   id="search-provider"
                   value={provider}
                   onChange={(e) => setProvider(e.target.value)}
                   disabled={isSearching}
-                  className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-700/80 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
                 >
-                  <option value="AUTO">Auto (Free First - OSM)</option>
-                  <option value="OPENSTREETMAP">OpenStreetMap (Live Free)</option>
-                  <option value="GOOGLE_PLACES">Google Places (API New)</option>
-                  <option value="MOCK">Mock Provider (Offline)</option>
+                  <option value="AUTO">Auto — Free First</option>
+                  <option value="OPENSTREETMAP">OpenStreetMap — Free</option>
+                  <option value="GOOGLE_PLACES">Google Places — Verified</option>
+                  <option value="MOCK">Mock — Development</option>
                 </select>
+                <p className="text-[11px] text-slate-400">Data source provider.</p>
               </div>
 
-              {/* Limit */}
-              <div className="space-y-1.5 sm:col-span-1">
-                <label htmlFor="search-limit" className="block text-xs font-medium text-slate-300">
+              {/* Result Limit (1 col on lg) */}
+              <div className="sm:col-span-1 lg:col-span-1 space-y-1">
+                <label htmlFor="search-limit" className="block text-xs font-semibold text-slate-200">
                   Result Limit
                 </label>
                 <select
@@ -490,32 +685,76 @@ export default function BusinessSearchPage() {
                   value={limit}
                   onChange={(e) => setLimit(Number(e.target.value))}
                   disabled={isSearching}
-                  className="w-full px-3 py-2 text-xs rounded-lg bg-slate-900 border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
+                  className="w-full px-2.5 py-2.5 text-xs rounded-xl bg-slate-900/90 border border-slate-700/80 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all disabled:opacity-50"
                 >
-                  <option value={10}>10 results</option>
-                  <option value={20}>20 results</option>
-                  <option value={50}>50 results</option>
-                  <option value={100}>100 results</option>
-                  <option value={200}>200 results</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
                 </select>
+                <p className="text-[11px] text-slate-400">Max limit.</p>
               </div>
             </div>
 
+            {/* Advanced / Specific Business Category Filter Toggle */}
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedCategory(!showAdvancedCategory)}
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1.5 transition"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>{showAdvancedCategory ? 'Hide Advanced Options' : '+ Advanced: Specific Business Category'}</span>
+              </button>
+
+              {showAdvancedCategory && (
+                <div className="mt-2.5 p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 max-w-md space-y-1.5">
+                  <label htmlFor="search-category" className="block text-xs font-semibold text-slate-200">
+                    Specific Business Category <span className="text-slate-500 font-normal">(Optional override)</span>
+                  </label>
+                  <input
+                    id="search-category"
+                    type="text"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    placeholder="e.g. Pharmacy, Electronics, Dental Clinic, Retail"
+                    disabled={isSearching}
+                    className="w-full px-3 py-2 text-xs rounded-lg bg-slate-950 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400">Fine-tunes Overpass or Places API classification filter.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Quick Search Chips */}
+            <div className="pt-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-slate-400 font-medium">Quick examples:</span>
+              {QUICK_SEARCH_CHIPS.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => handleApplyChip(chip)}
+                  disabled={isSearching}
+                  className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 transition flex items-center gap-1.5"
+                >
+                  <span>{chip.label}</span>
+                </button>
+              ))}
+            </div>
 
             {/* Form Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/60">
               <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-slate-400" />
+                <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <span>Search results are previewed securely before writing to database.</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto">
                 {hasSearched && (
                   <button
                     type="button"
                     onClick={handleReset}
                     disabled={isSearching}
-                    className="px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-900 hover:bg-slate-800 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5"
+                    className="px-3.5 py-2.5 text-xs font-medium text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 rounded-xl border border-slate-700 transition flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Reset</span>
@@ -526,17 +765,17 @@ export default function BusinessSearchPage() {
                   type="submit"
                   id="business-search-submit-btn"
                   disabled={isSearching}
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:opacity-60 rounded-lg shadow-sm shadow-indigo-500/20 transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:opacity-60 rounded-xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {isSearching ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Searching Directories...</span>
+                      <span>Finding Potential Buyers...</span>
                     </>
                   ) : (
                     <>
                       <Search className="w-4 h-4" />
-                      <span>Search Businesses</span>
+                      <span>Find Potential Buyers</span>
                     </>
                   )}
                 </button>
@@ -572,47 +811,49 @@ export default function BusinessSearchPage() {
         <div>
           {/* 1. Initial State before search */}
           {!hasSearched && !isSearching && (
-            <div className="p-8 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center space-y-3">
-              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400 shadow-sm">
-                <Sparkles className="w-6 h-6" />
+            <div className="p-8 sm:p-10 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-center space-y-6 shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400 shadow-sm">
+                <Sparkles className="w-7 h-7" />
               </div>
-              <h2 className="text-sm font-semibold text-slate-200">
-                Search for businesses by name, category, or location.
-              </h2>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                Discover local dental clinics, steel distributors, bakeries, and retail businesses in Dhaka, Gulshan, Chittagong, and across Bangladesh.
-              </p>
-              <div className="pt-2 flex flex-wrap justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery('Dental');
-                    setLocation('Dhaka');
-                  }}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-slate-900 border border-slate-800 text-slate-400 hover:text-indigo-300 hover:border-indigo-500/40 transition-colors"
+              <div className="max-w-lg mx-auto space-y-2">
+                <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                  Find businesses that could become your next customers.
+                </h2>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Search by product, location, and buyer type. LeadAtlas will find public business listings from configured data sources.
+                </p>
+              </div>
+
+              {/* 3 Quick Visual Workflow Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 max-w-3xl mx-auto pt-2 text-left">
+                <div
+                  onClick={() => handleApplyChip(QUICK_SEARCH_CHIPS[1])}
+                  className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/40 transition cursor-pointer group"
                 >
-                  Try &quot;Dental in Dhaka&quot;
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setQuery('Steel');
-                    setLocation('Chittagong');
-                  }}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-slate-900 border border-slate-800 text-slate-400 hover:text-indigo-300 hover:border-indigo-500/40 transition-colors"
+                  <div className="text-[11px] font-semibold text-indigo-400 group-hover:text-indigo-300">Electronics Workflow</div>
+                  <div className="text-xs font-bold text-white mt-1">Smart Watch → Electronics Retailers → Dhaka</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Targets gadget and electronics retailers in Dhaka</div>
+                </div>
+                <div
+                  onClick={() => handleApplyChip(QUICK_SEARCH_CHIPS[2])}
+                  className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/40 transition cursor-pointer group"
                 >
-                  Try &quot;Steel in Chittagong&quot;
-                </button>
-                <button
-                  type="button"
+                  <div className="text-[11px] font-semibold text-emerald-400 group-hover:text-emerald-300">Healthcare Workflow</div>
+                  <div className="text-xs font-bold text-white mt-1">Diabetes Machine → Pharmacies → Chattogram</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Targets pharmacy shops and regional health distributors</div>
+                </div>
+                <div
                   onClick={() => {
-                    setQuery('Bakery');
+                    setQuery('Power Bank');
                     setLocation('Mirpur');
+                    setBuyerType('RETAILER');
                   }}
-                  className="px-2.5 py-1 text-[11px] rounded-md bg-slate-900 border border-slate-800 text-slate-400 hover:text-indigo-300 hover:border-indigo-500/40 transition-colors"
+                  className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 hover:border-indigo-500/40 transition cursor-pointer group"
                 >
-                  Try &quot;Bakery in Mirpur&quot;
-                </button>
+                  <div className="text-[11px] font-semibold text-amber-400 group-hover:text-amber-300">Accessories Workflow</div>
+                  <div className="text-xs font-bold text-white mt-1">Power Bank → Mobile Shops → Mirpur</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Targets telecom and smartphone accessory stores</div>
+                </div>
               </div>
             </div>
           )}
@@ -621,7 +862,7 @@ export default function BusinessSearchPage() {
           {isSearching && (
             <div className="p-12 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center space-y-4">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
-              <div className="text-xs font-semibold text-slate-200">Querying provider directories...</div>
+              <div className="text-xs font-semibold text-slate-200">Finding potential buyers from directories...</div>
               <p className="text-[11px] text-slate-500">Normalizing addresses and formatting discovered contacts.</p>
             </div>
           )}
@@ -643,12 +884,15 @@ export default function BusinessSearchPage() {
           {hasSearched && !isSearching && results !== null && results.length > 0 && (
             <div className="space-y-4">
               {/* Summary Bar */}
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 px-1">
                 <div>
-                  Discovered <span className="font-semibold text-slate-200">{results.length}</span> business listings for &quot;<span className="text-slate-200">{query}</span>&quot; in &quot;<span className="text-slate-200">{location}</span>&quot;
+                  Discovered <span className="font-semibold text-slate-200">{results.length}</span> potential buyers for &quot;<span className="text-slate-200">{query}</span>&quot; in &quot;<span className="text-slate-200">{location}</span>&quot;
                 </div>
-                <div className="text-[11px] text-slate-500">
-                  Source: {provider}
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <span>Source:</span>
+                  <span className="font-semibold text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                    {provider}
+                  </span>
                 </div>
               </div>
 
@@ -658,22 +902,28 @@ export default function BusinessSearchPage() {
                   const key = `${item.provider}:${item.externalId}`;
                   const saveState = saveStates[key] || { status: 'idle' };
                   const isSaving = saveState.status === 'saving';
+                  const isExpanded = expandedCardKey === key;
 
                   return (
                     <div
                       key={key}
                       className="p-4 sm:p-5 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-slate-700/80 transition-all shadow-sm space-y-3"
                     >
-                      {/* Top Row: Name, Category, Rating & Save Action */}
+                      {/* Top Row: Name, Category, Rating & Actions */}
                       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                         <div className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-sm sm:text-base font-bold text-white tracking-tight">
                               {item.name}
                             </h3>
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300 font-medium">
+                            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300 font-medium">
                               {item.category || '—'}
                             </span>
+                            {buyerType !== 'ANY' && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-medium">
+                                Target: {buyerType.replace(/_/g, ' ')}
+                              </span>
+                            )}
                             {item.rating !== undefined && (
                               <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300">
                                 <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -718,8 +968,27 @@ export default function BusinessSearchPage() {
                           </div>
                         </div>
 
-                        {/* Save Lead Button */}
-                        <div className="shrink-0 self-start">
+                        {/* Card Actions: View Details, Enrich, Save Lead */}
+                        <div className="flex items-center gap-2 shrink-0 self-start">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedCardKey(isExpanded ? null : key)}
+                            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition flex items-center gap-1"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled
+                            title="Contact enrichment pipeline (wa.me inspection & email extraction) scheduled in M8 Step 5"
+                            className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-900/60 text-slate-500 border border-slate-800/60 cursor-not-allowed opacity-60 flex items-center gap-1"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Enrich</span>
+                          </button>
+
                           {saveState.status === 'created' ? (
                             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 text-xs font-medium">
                               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -754,6 +1023,24 @@ export default function BusinessSearchPage() {
                         </div>
                       </div>
 
+                      {/* Expanded Details Drawer */}
+                      {isExpanded && (
+                        <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800/90 space-y-2 text-xs">
+                          <div className="font-semibold text-slate-200">Listing Details & Provenance</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 text-[11px]">
+                            <div><span className="text-slate-500">Provider:</span> {item.provider}</div>
+                            <div><span className="text-slate-500">External ID:</span> <span className="font-mono">{item.externalId}</span></div>
+                            <div><span className="text-slate-500">Coordinates:</span> {item.latitude && item.longitude ? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}` : 'Not listed'}</div>
+                            <div><span className="text-slate-500">Country:</span> {item.country || 'BD'}</div>
+                          </div>
+                          {item.description && (
+                            <div className="text-[11px] text-slate-300 border-t border-slate-800/60 pt-2">
+                              {item.description}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Contacts List */}
                       {item.contacts && item.contacts.length > 0 && (
                         <div className="pt-2 border-t border-slate-800/60">
@@ -764,13 +1051,6 @@ export default function BusinessSearchPage() {
                             {item.contacts.map((c, cIdx) => renderContactBadge(c, cIdx))}
                           </div>
                         </div>
-                      )}
-
-                      {/* Description if present */}
-                      {item.description && (
-                        <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
-                          {item.description}
-                        </p>
                       )}
 
                       {/* Conflict / Candidate / Error Feedback Alert for this row */}
@@ -827,9 +1107,18 @@ export default function BusinessSearchPage() {
 
                       {/* Footer Metadata: External ID & Provider */}
                       <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-900">
-                        <span className="font-mono">
-                          ID: {item.externalId} • Provider: {item.provider}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-900 text-slate-400 border border-slate-800">
+                            {item.provider === 'google-places' || item.provider === 'GOOGLE_PLACES'
+                              ? 'Google Places'
+                              : item.provider === 'openstreetmap' || item.provider === 'OPENSTREETMAP'
+                              ? 'OpenStreetMap'
+                              : 'Mock Provider'}
+                          </span>
+                          <span className="font-mono">
+                            ID: {item.externalId} • Provider: {item.provider}
+                          </span>
+                        </div>
                         {(() => {
                           const safeSourceUrl = getSafeExternalUrl(item.sourceUrl);
                           return safeSourceUrl ? (
