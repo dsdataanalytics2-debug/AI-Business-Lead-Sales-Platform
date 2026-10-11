@@ -20,7 +20,14 @@ export class AiBuyerDiscoveryController {
         userId: req.user!.id,
         correlationId: String(req.id || 'unknown')
       });
-      res.status(200).json(result);
+      res.status(200).json({
+        ...result,
+        categories: (result.buyerTargets || []).map((b: any) => ({
+          name: b.category,
+          rationale: b.reason,
+          relevance: 'HIGH'
+        }))
+      });
     } catch (err) {
       next(err);
     }

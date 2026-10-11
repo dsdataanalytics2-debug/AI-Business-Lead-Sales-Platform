@@ -79,10 +79,11 @@ BUYER TYPE PREFERENCE: "${input.buyerType || 'Any Buyer'}"
 TARGET MARKET / LOCATION: "${input.location || 'Bangladesh'}"
 
 STRICT INVARIANTS:
-1. Return ONLY commercial business categories (e.g. "Electronics Retailer", "Mobile Accessories Shop", "Pharmacy", "Medical Distributor").
+1. Return ONLY commercial business categories (e.g. "Electronics Retailer", "Mobile Accessories Shop", "Pharmacy", "Medicine Shop", "Medical Distributor").
 2. NEVER invent private personal names, individual consumers, phone numbers, emails, or WhatsApp contacts.
 3. For each category, provide a concise, factual reason (1-2 sentences) explaining why this business type distributes or purchases this product.
-4. Output MUST conform strictly to this JSON format:
+4. MEDICAL SAFETY: If the product is a healthcare, medicine, supplement, or disease-management product (such as Diamum, diabetes care, insulin, pharmaceuticals, or health supplements), classify ONLY commercial trade and retail channel categories (e.g. "Pharmacy", "Medicine Shop", "Medical Distributor", "Health Supplement Store", "Diabetes Care Center"). NEVER validate, infer, or assert medical efficacy claims as facts (never assert "cures diabetes", "clinically proven", or "safe for everyone"). Focus strictly on commercial buyer types.
+5. Output MUST conform strictly to this JSON format:
 {
   "product": "${trimmedProduct}",
   "buyerTargets": [
@@ -99,7 +100,7 @@ STRICT INVARIANTS:
           apiKey: aiContext.apiKey,
           model: aiContext.model || GEMINI_DEFAULT_MODEL,
           systemInstruction:
-            'You are LeadAtlas AI, a commercial trade assistant. You only output valid JSON conforming to the requested schema. You never invent private contact data.',
+            'You are LeadAtlas AI, a commercial trade assistant. You only output valid JSON conforming to the requested schema. You never invent private contact data or validate medical efficacy claims.',
           temperature: 0.2
         }
       );
@@ -188,25 +189,86 @@ STRICT RULES:
   }
 
   /**
-   * Deterministic fallback when Gemini is unconfigured or offline.
+   * Deterministic commercial fallback when Gemini is unconfigured or offline.
+   * Strictly commercial classification — zero medical claims.
    */
-  private generateFallbackBuyerTargets(product: string, buyerType?: string): BuyerTargetsResponse {
+  public generateFallbackBuyerTargets(product: string, buyerType?: string): BuyerTargetsResponse {
     const lower = product.toLowerCase();
     const targets: Array<{ category: string; reason: string }> = [];
 
-    if (lower.includes('watch') || lower.includes('phone') || lower.includes('power') || lower.includes('electronic') || lower.includes('fan')) {
+    if (
+      lower.includes('diamum') ||
+      lower.includes('diabet') ||
+      lower.includes('medic') ||
+      lower.includes('pharma') ||
+      lower.includes('health') ||
+      lower.includes('supplement') ||
+      lower.includes('insulin')
+    ) {
+      targets.push(
+        { category: 'Pharmacy', reason: 'Authoritative retail distribution channel for healthcare, medicine, and diabetes care supplies.' },
+        { category: 'Medicine Shop', reason: 'Local retail point of sale for consumer health, medical, and pharmaceutical supplies.' },
+        { category: 'Medical Distributor', reason: 'Wholesale distributor supplying hospitals, diagnostic centers, and regional pharmacies.' },
+        { category: 'Health Supplement Store', reason: 'Retail shop specializing in wellness, nutrition, and daily health care products.' },
+        { category: 'Diabetes Care Center', reason: 'Specialized clinical and support facility recommending diabetes monitoring and care products.' }
+      );
+    } else if (
+      lower.includes('watch') ||
+      lower.includes('phone') ||
+      lower.includes('power') ||
+      lower.includes('electronic') ||
+      lower.includes('gadget') ||
+      lower.includes('fan')
+    ) {
       targets.push(
         { category: 'Electronics Retailer', reason: 'High retail consumer demand for gadgets and electronic hardware.' },
-        { category: 'Mobile Accessories Shop', reason: 'Direct consumer point of sale for portable devices and accessories.' },
         { category: 'Gadget Store', reason: 'Specialized in consumer technology and smart products.' },
-        { category: 'E-commerce Seller', reason: 'Multi-channel distributors servicing online marketplace shoppers.' }
+        { category: 'Mobile Accessories Shop', reason: 'Direct consumer point of sale for portable devices and accessories.' },
+        { category: 'E-commerce Retailer', reason: 'Multi-channel distributors servicing online marketplace shoppers.' }
       );
-    } else if (lower.includes('diabet') || lower.includes('medic') || lower.includes('health') || lower.includes('pharma')) {
+    } else if (
+      lower.includes('mop') ||
+      lower.includes('clean') ||
+      lower.includes('household')
+    ) {
       targets.push(
-        { category: 'Pharmacy', reason: 'Authoritative retail distribution for health, medical, and diagnostics products.' },
-        { category: 'Medical Equipment Supplier', reason: 'Wholesale and B2B distributor supplying clinics and diagnostic centers.' },
-        { category: 'Diagnostic Center', reason: 'Direct clinical usage and institutional requirement.' },
-        { category: 'Healthcare Distributor', reason: 'Regional supply chain servicing local chemists and drugstores.' }
+        { category: 'Homeware Store', reason: 'Retail store selling home utilities and cleaning appliances.' },
+        { category: 'Cleaning Supply Store', reason: 'Specialized merchant stocking residential and commercial cleaning supplies.' },
+        { category: 'Supermarket', reason: 'High-footfall departmental store with dedicated household cleaning section.' },
+        { category: 'E-commerce Retailer', reason: 'Digital commerce vendor distributing home improvement goods.' }
+      );
+    } else if (
+      lower.includes('bottle') ||
+      lower.includes('kitchen') ||
+      lower.includes('life') ||
+      lower.includes('sport')
+    ) {
+      targets.push(
+        { category: 'Kitchenware Store', reason: 'Retail point of sale for consumer dining and beverage storage hardware.' },
+        { category: 'Lifestyle Store', reason: 'Retail outlet stocking personal accessories and everyday lifestyle products.' },
+        { category: 'Sports Store', reason: 'Retail outlet catering to fitness, hydration, and outdoor activity gear.' },
+        { category: 'Retail Store', reason: 'General departmental store distributing consumer retail merchandise.' }
+      );
+    } else if (
+      lower.includes('software') ||
+      lower.includes('saas') ||
+      lower.includes('tech') ||
+      lower.includes('app')
+    ) {
+      targets.push(
+        { category: 'Corporate Office', reason: 'Commercial business entity with institutional software and operational requirements.' },
+        { category: 'IT Services', reason: 'Technology firm and solutions provider adopting digital workflow tools.' },
+        { category: 'Business Consultancy', reason: 'Professional services firm procuring business software.' },
+        { category: 'Commercial Enterprise', reason: 'Mid-market business adopting automation and management solutions.' }
+      );
+    } else if (
+      lower.includes('dent')
+    ) {
+      targets.push(
+        { category: 'Dental Clinic', reason: 'Specialized oral healthcare provider with direct clinical equipment and consumables requirement.' },
+        { category: 'Dentist', reason: 'Healthcare practitioner offering professional clinical services.' },
+        { category: 'Healthcare Center', reason: 'Integrated medical facility providing dental and primary health care.' },
+        { category: 'Medical Distributor', reason: 'Regional distributor supplying specialized dental supplies.' }
       );
     } else {
       targets.push(

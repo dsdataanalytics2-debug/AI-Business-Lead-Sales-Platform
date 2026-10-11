@@ -7,6 +7,9 @@ import {
   ContactType,
   type BusinessSearchResult,
   type SaveLeadRequest,
+  type BusinessSearchSessionSummary,
+  type BusinessSearchSessionDetail,
+  type CreateBusinessSearchSessionInput,
   type LeadSummary,
   type LeadDetail,
   type LeadContact,
@@ -77,6 +80,7 @@ export interface BusinessSearchQueryParams {
   buyerType?: string;
   limit?: number;
   provider?: string;
+  targetCategories?: string[] | string;
 }
 
 export interface LocationSuggestionItem {
@@ -189,6 +193,13 @@ export const apiClient = {
       if (params.buyerType) searchParams.set('buyerType', params.buyerType);
       if (params.limit !== undefined) searchParams.set('limit', String(params.limit));
       if (params.provider) searchParams.set('provider', params.provider);
+      if (params.targetCategories) {
+        if (Array.isArray(params.targetCategories)) {
+          searchParams.set('targetCategories', params.targetCategories.join(','));
+        } else {
+          searchParams.set('targetCategories', params.targetCategories);
+        }
+      }
 
       return request<BusinessSearchResult[]>(`/business-search?${searchParams.toString()}`, {
         method: 'GET'
@@ -198,6 +209,42 @@ export const apiClient = {
       request<SaveLeadResponse>('/business-search/save-lead', {
         method: 'POST',
         body: JSON.stringify(input)
+      }),
+    getHistory: (limit = 20, options: RequestInit = {}): Promise<BusinessSearchSessionSummary[]> =>
+      request<BusinessSearchSessionSummary[]>(`/business-search/history?limit=${limit}`, {
+        ...options,
+        method: 'GET'
+      }),
+    getLatestSession: async (options: RequestInit = {}): Promise<BusinessSearchSessionDetail | null> => {
+      const res = await request<BusinessSearchSessionDetail | null>('/business-search/history/latest', {
+        ...options,
+        method: 'GET'
+      });
+      return res || null;
+    },
+    getSession: (id: string, options: RequestInit = {}): Promise<BusinessSearchSessionDetail> =>
+      request<BusinessSearchSessionDetail>(`/business-search/history/${encodeURIComponent(id)}`, {
+        ...options,
+        method: 'GET'
+      }),
+    saveSession: (
+      input: CreateBusinessSearchSessionInput,
+      options: RequestInit = {}
+    ): Promise<BusinessSearchSessionDetail> =>
+      request<BusinessSearchSessionDetail>('/business-search/history', {
+        ...options,
+        method: 'POST',
+        body: JSON.stringify(input)
+      }),
+    deleteSession: (id: string, options: RequestInit = {}): Promise<{ success: boolean }> =>
+      request<{ success: boolean }>(`/business-search/history/${encodeURIComponent(id)}`, {
+        ...options,
+        method: 'DELETE'
+      }),
+    clearHistory: (options: RequestInit = {}): Promise<{ success: boolean; count: number }> =>
+      request<{ success: boolean; count: number }>('/business-search/history', {
+        ...options,
+        method: 'DELETE'
       })
   },
   locations: {
@@ -703,7 +750,7 @@ export const apiClient = {
     }),
 
   // AI Buyer Discovery
-  suggestBuyerTargets: async (data: { product: string; location?: string; count?: number; model?: string }): Promise<any> => {
+  suggestBuyerTargets: async (data: { product: string; location?: string; count?: number; model?: string; buyerType?: string }): Promise<any> => {
     return request('/ai/buyer-discovery/suggest-targets', {
       method: 'POST',
       body: JSON.stringify(data)

@@ -28,6 +28,9 @@ export const businessSearchQuerySchema = cursorPaginationSchema.extend({
     .trim()
     .min(1)
     .max(100)
+    .optional(),
+  targetCategories: z
+    .union([z.string(), z.array(z.string())])
     .optional()
 });
 
@@ -96,7 +99,9 @@ export const businessSearchResultSchema = z.object({
   rating: z.number().min(0).max(5).optional(),
   reviewCount: z.number().int().min(0).optional().default(0),
   sourceUrl: z.string().trim().max(500).optional(),
-  contacts: z.array(discoveredContactSchema).default([])
+  contacts: z.array(discoveredContactSchema).default([]),
+  matchedBuyerCategory: z.string().trim().max(200).optional(),
+  searchTargetUsed: z.string().trim().max(200).optional()
 });
 
 export type BusinessSearchResult = z.infer<typeof businessSearchResultSchema>;
@@ -124,3 +129,60 @@ export const saveLeadRequestSchema = z
   .strict();
 
 export type SaveLeadRequest = z.infer<typeof saveLeadRequestSchema>;
+
+export const selectedAiBuyerTargetItemSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  relevance: z.enum(['HIGH', 'MEDIUM', 'LOW']).default('HIGH'),
+  rationale: z.string().trim().max(1000).optional(),
+  selected: z.boolean().default(true)
+});
+
+export type SelectedAiBuyerTargetItem = z.infer<typeof selectedAiBuyerTargetItemSchema>;
+
+export const createBusinessSearchSessionSchema = z.object({
+  productQuery: z.string().trim().min(1, 'Product/service query is required').max(200),
+  location: z.string().trim().min(1, 'Location is required').max(200),
+  buyerType: z.string().trim().max(100).optional().nullable(),
+  category: z.string().trim().max(100).optional().nullable(),
+  provider: z.string().trim().min(1).max(100).default('auto'),
+  limit: z.number().int().min(1).max(100).default(20),
+  selectedAiBuyerTargets: z.array(selectedAiBuyerTargetItemSchema).optional().nullable(),
+  resultsSnapshot: z.array(businessSearchResultSchema).max(200, 'Cannot exceed 200 items in results snapshot'),
+  sourceMetadata: z.record(z.unknown()).optional().nullable(),
+  searchStatus: z.string().trim().max(50).default('SUCCESS')
+});
+
+export type CreateBusinessSearchSessionInput = z.infer<typeof createBusinessSearchSessionSchema>;
+
+export const businessSearchSessionSummarySchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  userId: z.string(),
+  productQuery: z.string(),
+  location: z.string(),
+  buyerType: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  provider: z.string(),
+  limit: z.number().int(),
+  resultCount: z.number().int(),
+  selectedAiBuyerTargets: z.array(selectedAiBuyerTargetItemSchema).nullable().optional(),
+  searchStatus: z.string(),
+  lastOpenedAt: z.union([z.date(), z.string()]),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()])
+});
+
+export type BusinessSearchSessionSummary = z.infer<typeof businessSearchSessionSummarySchema>;
+
+export const businessSearchSessionDetailSchema = businessSearchSessionSummarySchema.extend({
+  resultsSnapshot: z.array(businessSearchResultSchema),
+  sourceMetadata: z.record(z.unknown()).nullable().optional()
+});
+
+export type BusinessSearchSessionDetail = z.infer<typeof businessSearchSessionDetailSchema>;
+
+export const businessSearchHistoryListResponseSchema = z.object({
+  data: z.array(businessSearchSessionSummarySchema)
+});
+
+export type BusinessSearchHistoryListResponse = z.infer<typeof businessSearchHistoryListResponseSchema>;

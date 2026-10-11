@@ -44,6 +44,10 @@ import {
   NotFoundError
 } from '../lib/errors.js';
 import { invalidateLeadOnlinePresenceAnalysis } from './online-presence.service.js';
+import { aiBuyerDiscoveryService } from './ai-buyer-discovery.service.js';
+import { aiSettingsService } from './ai-settings.service.js';
+import { GEMINI_PROVIDER_KEY } from '@leadmate/ai';
+import { datasourceSettingsService } from './datasource-settings.service.js';
 import { z } from 'zod';
 
 export interface BusinessSearchRequestContext {
@@ -58,22 +62,101 @@ export interface SaveLeadResult {
   matchReason?: string;
 }
 
-import { datasourceSettingsService } from './datasource-settings.service.js';
-
 export class BusinessSearchService {
   /**
-   * Performs read-only business search preview across registered providers.
+   * Helper to parse and normalize target categories from query input.
+   */
+  private parseTargetCategories(input?: string[] | string | null): string[] {
+    if (!input) return [];
+    if (Array.isArray(input)) {
+      return input.map((s) => s.trim()).filter((s) => s.length > 0);
+    }
+    if (typeof input === 'string') {
+      const trimmed = input.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) {
+            return parsed.map((s) => String(s).trim()).filter((s) => s.length > 0);
+          }
+        } catch {
+          // Fall back to comma split
+        }
+      }
+      return trimmed
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    }
+    return [];
+  }
+
+  /**
+   * Generates strong deduplication keys for a business result across 4 tiers:
+   * 1. provider + externalId
+   * 2. normalized business name + address / locality / city
+   * 3. verified / found direct phone
+   * 4. normalized website domain
+   */
+  private extractDedupeKeys(item: BusinessSearchResult): string[] {
+    const keys: string[] = [];
+
+    // 1. Provider + externalId
+    if (item.provider && item.externalId) {
+      keys.push(`provider:${item.provider.toUpperCase().trim()}:${item.externalId.trim().toLowerCase()}`);
+    }
+
+    // 2. Normalized business name + address/locality/city
+    const normName = normalizeBusinessName(item.name);
+    if (normName) {
+      const locKey = normalizeBusinessName(item.address || item.locality || item.city || '');
+      if (locKey) {
+        keys.push(`name_loc:${normName}:${locKey}`);
+      } else {
+        keys.push(`name:${normName}`);
+      }
+    }
+
+    // 3. Verified / Found phone number
+    if (item.contacts && item.contacts.length > 0) {
+      for (const c of item.contacts) {
+        if (c.type === ContactType.PHONE || c.type === ContactType.WHATSAPP) {
+          const normPhone = normalizePhone(c.rawValue);
+          if (normPhone.isValid && normPhone.normalizedValue) {
+            keys.push(`phone:${normPhone.normalizedValue}`);
+          }
+        }
+      }
+    }
+
+    // 4. Normalized website domain
+    if (item.website) {
+      const normWeb = normalizeWebsite(item.website);
+      if (normWeb.isValid && normWeb.normalizedDomain) {
+        keys.push(`domain:${normWeb.normalizedDomain.toLowerCase()}`);
+      }
+    }
+
+    return keys;
+  }
+
+  /**
+   * Executes a single provider search for a specific category query.
    * Supports AUTO (free-first: OpenStreetMap -> Google Places -> Mock fallback),
    * OPENSTREETMAP, GOOGLE_PLACES, and MOCK.
-   * STRICTLY READ-ONLY: Never writes or modifies DB records.
    */
-  async search(
-    query: BusinessSearchQuery & { provider?: string },
+  private async executeSingleProviderSearch(
+    subQuery: {
+      q: string;
+      location: string;
+      category?: string;
+      limit?: number;
+      cursor?: string;
+    },
+    requestedProvider: string,
     context: BusinessSearchRequestContext
   ): Promise<BusinessSearchResult[]> {
-    const defaultProvider = process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO';
-    const requestedProvider = (query.provider || defaultProvider).toUpperCase().trim().replace(/-/g, '_');
-
     let rawResults: BusinessSearchResult[] = [];
 
     if (requestedProvider === 'AUTO') {
@@ -82,11 +165,11 @@ export class BusinessSearchService {
         const osmProvider = getProvider('OPENSTREETMAP');
         rawResults = await osmProvider.search(
           {
-            q: query.q,
-            location: query.location,
-            category: query.category,
-            limit: query.limit,
-            cursor: query.cursor
+            q: subQuery.q,
+            location: subQuery.location,
+            category: subQuery.category,
+            limit: subQuery.limit,
+            cursor: subQuery.cursor
           },
           {
             organizationId: context.organizationId,
@@ -105,11 +188,11 @@ export class BusinessSearchService {
             const googleProvider = getProvider('GOOGLE_PLACES');
             rawResults = await googleProvider.search(
               {
-                q: query.q,
-                location: query.location,
-                category: query.category,
-                limit: query.limit,
-                cursor: query.cursor
+                q: subQuery.q,
+                location: subQuery.location,
+                category: subQuery.category,
+                limit: subQuery.limit,
+                cursor: subQuery.cursor
               },
               {
                 organizationId: context.organizationId,
@@ -125,20 +208,24 @@ export class BusinessSearchService {
 
       // 3. Fallback to Mock fixtures if both yielded 0 results in development / test offline environments
       if (rawResults.length === 0) {
-        const mockProvider = getProvider('MOCK');
-        rawResults = await mockProvider.search(
-          {
-            q: query.q,
-            location: query.location,
-            category: query.category,
-            limit: query.limit,
-            cursor: query.cursor
-          },
-          {
-            organizationId: context.organizationId,
-            correlationId: context.correlationId
-          }
-        );
+        try {
+          const mockProvider = getProvider('MOCK');
+          rawResults = await mockProvider.search(
+            {
+              q: subQuery.q,
+              location: subQuery.location,
+              category: subQuery.category,
+              limit: subQuery.limit,
+              cursor: subQuery.cursor
+            },
+            {
+              organizationId: context.organizationId,
+              correlationId: context.correlationId
+            }
+          );
+        } catch {
+          rawResults = [];
+        }
       }
     } else if (requestedProvider === 'GOOGLE_PLACES') {
       const providerContext = await datasourceSettingsService.getActiveProviderContext(context.organizationId);
@@ -148,11 +235,11 @@ export class BusinessSearchService {
       const provider = getProvider('GOOGLE_PLACES');
       rawResults = await provider.search(
         {
-          q: query.q,
-          location: query.location,
-          category: query.category,
-          limit: query.limit,
-          cursor: query.cursor
+          q: subQuery.q,
+          location: subQuery.location,
+          category: subQuery.category,
+          limit: subQuery.limit,
+          cursor: subQuery.cursor
         },
         {
           organizationId: context.organizationId,
@@ -166,8 +253,8 @@ export class BusinessSearchService {
         provider = getProvider(requestedProvider);
       } catch (err) {
         if (err instanceof UnknownProviderError) {
-          throw new BadRequestError(`Unknown datasource provider: "${query.provider}"`, {
-            provider: query.provider
+          throw new BadRequestError(`Unknown datasource provider: "${requestedProvider}"`, {
+            provider: requestedProvider
           });
         }
         throw err;
@@ -175,11 +262,11 @@ export class BusinessSearchService {
 
       rawResults = await provider.search(
         {
-          q: query.q,
-          location: query.location,
-          category: query.category,
-          limit: query.limit,
-          cursor: query.cursor
+          q: subQuery.q,
+          location: subQuery.location,
+          category: subQuery.category,
+          limit: subQuery.limit,
+          cursor: subQuery.cursor
         },
         {
           organizationId: context.organizationId,
@@ -188,8 +275,185 @@ export class BusinessSearchService {
       );
     }
 
+    return rawResults;
+  }
+
+  /**
+   * Performs AI-driven read-only business search preview across registered providers.
+   *
+   * ARCHITECTURAL CONTRACT:
+   * 1. AI Determines WHO to search for (buyer target categories).
+   * 2. Real directory providers (Google Places / OSM) find real businesses.
+   * 3. Selected buyer categories in UI take strict precedence.
+   * 4. Multi-target search distributes API budget across bounded targets (top 3–5).
+   * 5. Results are merged and deduplicated across 4 identifier tiers.
+   * 6. Provenance fields (matchedBuyerCategory, searchTargetUsed) are preserved.
+   * 7. Safe fallback on AI errors without returning 500.
+   */
+  async search(
+    query: BusinessSearchQuery & { provider?: string; targetCategories?: string[] | string },
+    context: BusinessSearchRequestContext
+  ): Promise<BusinessSearchResult[]> {
+    const defaultProvider = process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO';
+    const requestedProvider = (query.provider || defaultProvider).toUpperCase().trim().replace(/-/g, '_');
+    const overallLimit = Math.min(Math.max(query.limit ?? 20, 1), 50);
+
+    // 1. Determine target categories to search
+    let targetCategories: string[] = this.parseTargetCategories(query.targetCategories);
+    const hasExplicitTargets = targetCategories.length > 0;
+
+    if (!hasExplicitTargets) {
+      // Auto AI Mode: Check if AI Buyer Discovery is active for tenant
+      let isAiActive = false;
+      try {
+        const aiContext = await aiSettingsService.getActiveAiContext(
+          context.organizationId,
+          GEMINI_PROVIDER_KEY
+        );
+        isAiActive = Boolean(aiContext.isEnabled && aiContext.apiKey);
+      } catch {
+        isAiActive = false;
+      }
+
+      if (isAiActive) {
+        try {
+          const aiResponse = await aiBuyerDiscoveryService.suggestBuyerTargets(
+            {
+              product: query.q,
+              location: query.location,
+              buyerType: query.buyerType
+            },
+            context
+          );
+
+          const candidates = (aiResponse.buyerTargets || (aiResponse as any).categories || [])
+            .map((t: any) => (t.category || t.name || '').trim())
+            .filter((c: string) => c.length > 0);
+
+          if (candidates.length > 0) {
+            targetCategories = candidates;
+          }
+        } catch {
+          // Fallback safely if AI fails, is quota-limited, or throws
+          targetCategories = [];
+        }
+      }
+
+      // Safe Fallback Resolution when AI is disabled, unconfigured, or returned 0 targets
+      if (targetCategories.length === 0) {
+        if (query.category && query.category.trim().length > 0) {
+          targetCategories = [query.category.trim()];
+        } else {
+          targetCategories = [query.q.trim()];
+        }
+      }
+    }
+
+    // 2. Limit API Cost: Bound target count to top 3–5 categories
+    const boundedTargets = targetCategories.slice(0, 5);
+
+    // 3. Multi-Category Search & Deduplication
+    const dedupedResults: BusinessSearchResult[] = [];
+    const seenKeys = new Set<string>();
+
+    for (let i = 0; i < boundedTargets.length; i++) {
+      if (dedupedResults.length >= overallLimit) {
+        break; // Stop early when enough unique businesses are collected
+      }
+
+      const categoryTarget = boundedTargets[i];
+      const remainingTargets = boundedTargets.length - i;
+      const remainingLimit = overallLimit - dedupedResults.length;
+      const perCategoryBudget = Math.min(
+        overallLimit,
+        Math.max(5, Math.ceil(remainingLimit / remainingTargets))
+      );
+
+      const categoryResults = await this.executeSingleProviderSearch(
+        {
+          q: categoryTarget,
+          location: query.location,
+          category: categoryTarget,
+          limit: perCategoryBudget,
+          cursor: query.cursor
+        },
+        requestedProvider,
+        context
+      );
+
+      for (const item of categoryResults) {
+        const keys = this.extractDedupeKeys(item);
+        const isDuplicate = keys.some((k) => seenKeys.has(k));
+
+        if (!isDuplicate) {
+          for (const k of keys) {
+            seenKeys.add(k);
+          }
+
+          const provenanceItem: BusinessSearchResult = {
+            ...item,
+            matchedBuyerCategory: item.matchedBuyerCategory || categoryTarget,
+            searchTargetUsed: item.searchTargetUsed || `${categoryTarget} in ${query.location}`
+          };
+
+          dedupedResults.push(provenanceItem);
+
+          if (dedupedResults.length >= overallLimit) {
+            break;
+          }
+        }
+      }
+    }
+
+    // 4. Last-Resort Search Fallback if category searches returned 0 results
+    // (Only if user did not provide explicit category targets and raw query was not already searched)
+    if (
+      dedupedResults.length === 0 &&
+      !hasExplicitTargets &&
+      !boundedTargets.some((t) => t.toLowerCase() === query.q.trim().toLowerCase())
+    ) {
+      try {
+        const rawResults = await this.executeSingleProviderSearch(
+          {
+            q: query.q.trim(),
+            location: query.location,
+            category: query.category,
+            limit: overallLimit,
+            cursor: query.cursor
+          },
+          requestedProvider,
+          context
+        );
+
+        for (const item of rawResults) {
+          const keys = this.extractDedupeKeys(item);
+          const isDuplicate = keys.some((k) => seenKeys.has(k));
+
+          if (!isDuplicate) {
+            for (const k of keys) {
+              seenKeys.add(k);
+            }
+
+            const provenanceItem: BusinessSearchResult = {
+              ...item,
+              matchedBuyerCategory: item.matchedBuyerCategory || query.category || 'General',
+              searchTargetUsed: item.searchTargetUsed || `${query.q.trim()} in ${query.location}`
+            };
+
+            dedupedResults.push(provenanceItem);
+
+            if (dedupedResults.length >= overallLimit) {
+              break;
+            }
+          }
+        }
+      } catch {
+        // Safe non-blocking fallback
+      }
+    }
+
     // Runtime validation of provider search response
-    return z.array(businessSearchResultSchema).parse(rawResults);
+    return z.array(businessSearchResultSchema).parse(dedupedResults.slice(0, overallLimit));
   }
 
   /**

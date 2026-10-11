@@ -19,6 +19,15 @@
   - AUTO Free-First Strategy (OpenStreetMap prioritized first; Google fallback only when needed & configured)
   - Complete Sidebar SOON Badge Removal (0 SOON badges remain; all primary navigation active)
   - Core Invariants Preserved: `PHONE != WHATSAPP`, `Approval != Dispatch`, strict tenant isolation, zero secret leakage
+  - Persistent Business Search Sessions & Recent Search History:
+    - Forward migration `20261010140000_add_business_search_session` creating `business_search_sessions` table with composite tenant foreign keys `(user_id, organization_id)`.
+    - Last Search Restore: Returns users directly to their previous search session on `/business-search`, restoring product query, market location, buyer type, category, provider, limit, selected AI buyer targets, and normalized result snapshots.
+    - Zero Automatic Re-calling: Zero automatic API requests to Google Places, OpenStreetMap, or Gemini when restoring saved search sessions.
+    - Last Search UI Banner: Displays "Viewing saved search" with query terms, result count, relative timestamp, and explicit "Refresh Results" action.
+    - Recent Search History: Tracks up to 20 searches per user (newest-first) with deduplication reuse within a 1-hour window to eliminate history spam.
+    - Saved Result Snapshot Safety: Strict payload validation cap (1.5MB max) and sanitization ensuring only safe normalized business card attributes are stored (zero secrets, credentials, or raw payloads).
+    - Refresh Results Behavior: Re-executes the search against data sources only when explicitly requested by user click; updates timestamp and snapshot.
+    - Tenant & User Isolation: Scoped strictly to authenticated session `(organization_id, user_id)`.
 - **Remaining M8 Milestone Scope (Post Fast-Track):**
   - Contact Enrichment Provider abstraction & provenance
   - Public website contact inspection & SSRF-safe fetching

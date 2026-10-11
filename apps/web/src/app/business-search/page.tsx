@@ -22,11 +22,16 @@ import {
   Database,
   Info,
   SlidersHorizontal,
-  Eye
+  Eye,
+  Clock,
+  Trash2,
+  X
 } from 'lucide-react';
 import {
   type BusinessSearchResult,
   type DiscoveredContact,
+  type BusinessSearchSessionSummary,
+  type BusinessSearchSessionDetail,
   ContactType,
   WhatsAppStatus,
   DuplicateAction,
@@ -40,6 +45,26 @@ interface RowSaveState {
   status: 'idle' | 'saving' | 'created' | 'merged' | 'candidate' | 'conflict' | 'error';
   message?: string;
   requestId?: string;
+}
+
+/**
+ * Formats relative timestamp for saved searches (e.g. "8m ago", "2h ago").
+ */
+function formatRelativeTime(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'recently';
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  const now = new Date();
+  const diffMs = Math.max(0, now.getTime() - date.getTime());
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+
+  if (diffSec < 60) return `${diffSec || 1}s ago`;
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString();
 }
 
 /**
@@ -120,6 +145,8 @@ export default function BusinessSearchPage() {
   const [isGeneratingAiTargets, setIsGeneratingAiTargets] = useState(false);
   const [aiTargetCategories, setAiTargetCategories] = useState<Array<{ name: string; relevance: 'HIGH' | 'MEDIUM' | 'LOW'; rationale?: string; selected: boolean }>>([]);
   const [aiTargetsError, setAiTargetsError] = useState<string | null>(null);
+  const [lastSearchedTargets, setLastSearchedTargets] = useState<string[]>([]);
+  const [searchProgressStep, setSearchProgressStep] = useState<'idle' | 'targeting' | 'searching' | 'done'>('idle');
 
   // Per-card AI Fit Explanation state tracked by `provider:externalId`
   const [aiFitExplanations, setAiFitExplanations] = useState<Record<string, {
@@ -130,6 +157,16 @@ export default function BusinessSearchPage() {
     isAiGenerated?: boolean;
     error?: string;
   }>>({});
+
+  // Business Search Session & History persistence state
+  const [isRestoringSession, setIsRestoringSession] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [isSavedSnapshot, setIsSavedSnapshot] = useState(false);
+  const [savedSessionTimestamp, setSavedSessionTimestamp] = useState<string | null>(null);
+  const [historyList, setHistoryList] = useState<BusinessSearchSessionSummary[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasInitializedFromMount = useRef(false);
 
   // Debounced location suggestion fetcher (350ms, >= 3 chars)
   useEffect(() => {
@@ -228,6 +265,170 @@ export default function BusinessSearchPage() {
     }
   }, [isAuthLoading, isAuthenticated, router]);
 
+  // Synchronize lightweight search parameters in browser URL
+  const updateUrlParams = (q?: string, loc?: string, bType?: string, cat?: string) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams();
+      if (q && q.trim()) params.set('q', q.trim());
+      if (loc && loc.trim()) params.set('location', loc.trim());
+      if (bType && bType !== 'ANY') params.set('buyerType', bType);
+      if (cat && cat.trim()) params.set('category', cat.trim());
+
+      const qs = params.toString();
+      const newUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+      window.history.replaceState(null, '', newUrl);
+    } catch {
+      // browser URL state safety
+    }
+  };
+
+  const loadHistoryList = async () => {
+    try {
+      setIsLoadingHistory(true);
+      const list = await apiClient.businessSearch.getHistory(20);
+      setHistoryList(list || []);
+    } catch {
+      // non-blocking
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const applySessionToState = (session: BusinessSearchSessionDetail) => {
+    setQuery(session.productQuery || '');
+    setLocation(session.location || '');
+    setBuyerType(session.buyerType || 'ANY');
+    setCategory(session.category || '');
+    if (session.category) {
+      setShowAdvancedCategory(true);
+    }
+    setProvider(session.provider || 'AUTO');
+    setLimit(session.limit || 20);
+
+    // Restore selected AI buyer targets without re-calling Gemini
+    if (session.selectedAiBuyerTargets && Array.isArray(session.selectedAiBuyerTargets)) {
+      const restored = session.selectedAiBuyerTargets.map((c: any) => ({
+        name: c.name,
+        relevance: c.relevance || 'HIGH',
+        rationale: c.rationale,
+        selected: c.selected !== false
+      }));
+      setAiTargetCategories(restored);
+      setLastSearchedTargets(restored.filter((c: any) => c.selected).map((c: any) => c.name));
+    } else {
+      setAiTargetCategories([]);
+      setLastSearchedTargets([]);
+    }
+
+    // Restore saved results snapshot without re-calling Google or OpenStreetMap
+    if (session.resultsSnapshot && Array.isArray(session.resultsSnapshot)) {
+      setResults(session.resultsSnapshot);
+      setHasSearched(true);
+    } else {
+      setResults([]);
+      setHasSearched(false);
+    }
+
+    setCurrentSessionId(session.id);
+    setIsSavedSnapshot(true);
+    setSavedSessionTimestamp(String(session.lastOpenedAt || session.updatedAt || session.createdAt));
+    setSaveStates({});
+    setAiFitExplanations({});
+    setExpandedCardKey(null);
+
+    updateUrlParams(session.productQuery, session.location, session.buyerType || undefined, session.category || undefined);
+  };
+
+  const restoreLatestSession = async () => {
+    try {
+      setIsRestoringSession(true);
+      const latest = await apiClient.businessSearch.getLatestSession();
+      if (latest) {
+        applySessionToState(latest);
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setIsRestoringSession(false);
+    }
+  };
+
+  const handleSelectHistoryItem = async (historyId: string) => {
+    try {
+      setIsRestoringSession(true);
+      const session = await apiClient.businessSearch.getSession(historyId);
+      if (session) {
+        applySessionToState(session);
+        loadHistoryList();
+      }
+    } catch (err: any) {
+      setSearchError({
+        message: err?.message || 'Could not restore saved search session.'
+      });
+    } finally {
+      setIsRestoringSession(false);
+    }
+  };
+
+  const handleDeleteHistoryItem = async (e: React.MouseEvent, historyId: string) => {
+    e.stopPropagation();
+    try {
+      await apiClient.businessSearch.deleteSession(historyId);
+      if (currentSessionId === historyId) {
+        setIsSavedSnapshot(false);
+        setCurrentSessionId(null);
+      }
+      loadHistoryList();
+    } catch (err: any) {
+      console.warn('Failed to delete history item:', err);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!window.confirm('Are you sure you want to clear your search history? This will delete all saved search sessions.')) {
+      return;
+    }
+    try {
+      await apiClient.businessSearch.clearHistory();
+      setHistoryList([]);
+      if (isSavedSnapshot) {
+        setIsSavedSnapshot(false);
+        setCurrentSessionId(null);
+      }
+    } catch (err: any) {
+      console.warn('Failed to clear search history:', err);
+    }
+  };
+
+  // Mount effect: restore latest search or read URL params (must execute unconditionally)
+  useEffect(() => {
+    if (!isAuthenticated || !canReadLeads || hasInitializedFromMount.current) return;
+    hasInitializedFromMount.current = true;
+
+    const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+    const urlQ = urlParams?.get('q');
+    const urlLoc = urlParams?.get('location');
+    const urlBuyerType = urlParams?.get('buyerType');
+    const urlCategory = urlParams?.get('category');
+
+    if (urlQ || urlLoc) {
+      if (urlQ) setQuery(urlQ);
+      if (urlLoc) setLocation(urlLoc);
+      if (urlBuyerType) setBuyerType(urlBuyerType);
+      if (urlCategory) {
+        setCategory(urlCategory);
+        setShowAdvancedCategory(true);
+      }
+      loadHistoryList();
+      return;
+    }
+
+    // Default: restore latest personal search session
+    restoreLatestSession();
+    loadHistoryList();
+  }, [isAuthenticated, canReadLeads]);
+
   if (isAuthLoading || !user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-slate-950">
@@ -263,10 +464,11 @@ export default function BusinessSearchPage() {
       setCategory(chip.category);
     }
     setShowSuggestions(false);
+    updateUrlParams(chip.q, chip.location, chip.buyerType, chip.category);
   };
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
 
     const trimmedQ = query.trim();
     const trimmedLoc = location.trim();
@@ -283,6 +485,53 @@ export default function BusinessSearchPage() {
       setSearchError(null);
       // Reset row save states when executing a fresh search
       setSaveStates({});
+      setAiFitExplanations({});
+
+      // 1. Determine active buyer categories to search
+      let activeCategories: string[] = [];
+      const selectedExisting = aiTargetCategories
+        .filter((c) => c.selected)
+        .map((c) => c.name.trim())
+        .filter(Boolean);
+
+      if (selectedExisting.length > 0) {
+        // User has explicitly selected targets: use ONLY selected categories
+        activeCategories = selectedExisting.slice(0, 5);
+      } else {
+        // Auto AI Mode: generate buyer targets once on deliberate search
+        setSearchProgressStep('targeting');
+        try {
+          const aiRes = await apiClient.suggestBuyerTargets({
+            product: trimmedQ,
+            location: trimmedLoc,
+            buyerType: buyerType !== 'ANY' ? buyerType : undefined,
+            count: 5
+          });
+
+          const candidates = aiRes?.buyerTargets || aiRes?.categories || [];
+          if (candidates.length > 0) {
+            const mapped = candidates
+              .slice(0, 5)
+              .map((c: any) => ({
+                name: (c.category || c.name || '').trim(),
+                relevance: (c.relevance || 'HIGH') as 'HIGH' | 'MEDIUM' | 'LOW',
+                rationale: c.reason || c.rationale,
+                selected: true
+              }))
+              .filter((c: any) => c.name.length > 0);
+
+            if (mapped.length > 0) {
+              setAiTargetCategories(mapped);
+              activeCategories = mapped.map((m: any) => m.name);
+            }
+          }
+        } catch {
+          // Safe non-blocking fallback handled server-side
+        }
+      }
+
+      setLastSearchedTargets(activeCategories);
+      setSearchProgressStep('searching');
 
       const data = await apiClient.businessSearch.search({
         q: trimmedQ,
@@ -290,11 +539,35 @@ export default function BusinessSearchPage() {
         category: category.trim() || undefined,
         buyerType: buyerType !== 'ANY' ? buyerType : undefined,
         limit,
-        provider: provider.trim() || undefined
+        provider: provider.trim() || undefined,
+        targetCategories: activeCategories.length > 0 ? activeCategories : undefined
       });
 
       setResults(data);
       setHasSearched(true);
+      setIsSavedSnapshot(false);
+
+      updateUrlParams(trimmedQ, trimmedLoc, buyerType, category);
+
+      // Persist session snapshot to backend history
+      try {
+        const saved = await apiClient.businessSearch.saveSession({
+          productQuery: trimmedQ,
+          location: trimmedLoc,
+          buyerType: buyerType !== 'ANY' ? buyerType : null,
+          category: category.trim() || null,
+          provider: provider.trim() || 'auto',
+          limit,
+          selectedAiBuyerTargets: aiTargetCategories.length > 0 ? aiTargetCategories : null,
+          resultsSnapshot: data,
+          searchStatus: 'SUCCESS'
+        });
+        setCurrentSessionId(saved.id);
+        setSavedSessionTimestamp(String(saved.lastOpenedAt || saved.createdAt));
+        loadHistoryList();
+      } catch (saveErr) {
+        console.warn('Could not persist search history session:', saveErr);
+      }
     } catch (err) {
       if (err instanceof ApiClientError) {
         setSearchError({
@@ -310,6 +583,16 @@ export default function BusinessSearchPage() {
       setResults(null);
     } finally {
       setIsSearching(false);
+      setSearchProgressStep('idle');
+    }
+  };
+
+  const handleRefreshResults = async () => {
+    setIsRefreshing(true);
+    try {
+      await handleSearch();
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -332,6 +615,12 @@ export default function BusinessSearchPage() {
     setAiTargetCategories([]);
     setAiTargetsError(null);
     setAiFitExplanations({});
+    setIsSavedSnapshot(false);
+    setCurrentSessionId(null);
+    setSavedSessionTimestamp(null);
+    setLastSearchedTargets([]);
+    setSearchProgressStep('idle');
+    updateUrlParams('', '', 'ANY', '');
   };
 
   const handleGenerateAiTargets = async () => {
@@ -348,18 +637,20 @@ export default function BusinessSearchPage() {
       const res = await apiClient.suggestBuyerTargets({
         product: trimmedQ,
         location: location.trim() || undefined,
+        buyerType: buyerType !== 'ANY' ? buyerType : undefined,
         count: 6
       });
 
-      if (res && res.categories && res.categories.length > 0) {
-        setAiTargetCategories(
-          res.categories.map((c: any) => ({
-            name: c.name,
-            relevance: c.relevance || 'HIGH',
-            rationale: c.rationale,
-            selected: true
-          }))
-        );
+      const items = res?.buyerTargets || res?.categories || [];
+      if (items.length > 0) {
+        const mapped = items.map((c: any) => ({
+          name: (c.category || c.name || '').trim(),
+          relevance: (c.relevance || 'HIGH') as 'HIGH' | 'MEDIUM' | 'LOW',
+          rationale: c.reason || c.rationale,
+          selected: true
+        })).filter((c: any) => c.name.length > 0);
+
+        setAiTargetCategories(mapped);
       }
     } catch (err: any) {
       setAiTargetsError(err?.message || 'Could not generate AI buyer suggestions. Check AI settings.');
@@ -626,6 +917,133 @@ export default function BusinessSearchPage() {
             </p>
           </div>
         </div>
+
+        {/* Restoring Session Indicator */}
+        {isRestoringSession && (
+          <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 text-xs text-slate-300 flex items-center gap-2.5 shadow-sm">
+            <Loader2 className="w-4 h-4 animate-spin text-indigo-400 shrink-0" />
+            <span>Restoring saved search session without re-calling data providers...</span>
+          </div>
+        )}
+
+        {/* Last Search / Viewing Saved Search Banner */}
+        {isSavedSnapshot && hasSearched && results && (
+          <div
+            id="viewing-saved-search-banner"
+            className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-indigo-950/50 via-slate-900/70 to-slate-900/40 border border-indigo-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-md"
+          >
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+                <BookmarkPlus className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold text-indigo-300 uppercase px-2 py-0.5 rounded-md bg-indigo-500/20 border border-indigo-500/30 tracking-wider">
+                    Viewing saved search
+                  </span>
+                  <span className="text-xs sm:text-sm font-bold text-white">
+                    {query}
+                  </span>
+                  <span className="text-slate-500 text-xs">•</span>
+                  <span className="text-xs text-slate-300">{location}</span>
+                  {buyerType && buyerType !== 'ANY' && (
+                    <>
+                      <span className="text-slate-500 text-xs">•</span>
+                      <span className="text-xs text-indigo-300 font-semibold">{buyerType}</span>
+                    </>
+                  )}
+                </div>
+                <div className="text-xs text-slate-400">
+                  <span className="font-semibold text-slate-200">{results.length} saved results</span>
+                  <span className="mx-1.5 text-slate-600">•</span>
+                  <span>Last searched {formatRelativeTime(savedSessionTimestamp)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-auto">
+              <button
+                type="button"
+                onClick={handleRefreshResults}
+                disabled={isSearching || isRefreshing}
+                id="business-search-refresh-btn"
+                className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl shadow-md shadow-indigo-600/20 transition flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                {isRefreshing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                <span>Refresh Results</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Recent Searches Section (up to 20 items, newest first) */}
+        {historyList.length > 0 && (
+          <div
+            id="recent-searches-panel"
+            className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800/80 shadow-md space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-indigo-400" />
+                <span className="text-xs font-bold text-white">Recent Searches</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800">
+                  {historyList.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearHistory}
+                id="clear-search-history-btn"
+                className="text-[11px] text-slate-400 hover:text-red-400 transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear History</span>
+              </button>
+            </div>
+
+            <div className="flex gap-2.5 overflow-x-auto pb-1.5 pt-0.5 scrollbar-thin scrollbar-thumb-slate-800">
+              {historyList.map((item) => {
+                const isCurrent = item.id === currentSessionId;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => handleSelectHistoryItem(item.id)}
+                    className={`min-w-[210px] max-w-[260px] p-3 rounded-xl border text-left cursor-pointer transition relative group shrink-0 ${
+                      isCurrent
+                        ? 'bg-indigo-950/50 border-indigo-500/60 shadow-sm'
+                        : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <div className="font-bold text-xs text-white truncate flex-1">
+                        {item.productQuery}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteHistoryItem(e, item.id)}
+                        title="Delete from history"
+                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 p-0.5 transition shrink-0 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-400 truncate mt-1">
+                      {item.location} • {item.buyerType || 'Any Buyer'}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 font-mono">
+                      <span>{item.resultCount} results</span>
+                      <span>{formatRelativeTime(item.lastOpenedAt)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Primary Search Form Card */}
         <div className="p-5 sm:p-6 rounded-2xl bg-slate-950/70 border border-slate-800/80 shadow-lg space-y-5">
@@ -1074,10 +1492,29 @@ export default function BusinessSearchPage() {
 
           {/* 2. Loading State */}
           {isSearching && (
-            <div className="p-12 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center space-y-4">
+            <div className="p-8 sm:p-12 rounded-xl bg-slate-950/40 border border-slate-800/60 text-center space-y-4">
               <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mx-auto" />
-              <div className="text-xs font-semibold text-slate-200">Finding potential buyers from directories...</div>
-              <p className="text-[11px] text-slate-500">Normalizing addresses and formatting discovered contacts.</p>
+              {searchProgressStep === 'targeting' ? (
+                <>
+                  <div className="text-xs font-semibold text-slate-200">Analyzing product & discovering buyer targets...</div>
+                  <p className="text-[11px] text-slate-500">Translating &quot;{query}&quot; into commercial retail and distribution channels.</p>
+                </>
+              ) : (
+                <>
+                  <div className="text-xs font-semibold text-slate-200">Searching real businesses for buyer categories...</div>
+                  {lastSearchedTargets.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1 max-w-lg mx-auto">
+                      <span className="text-[11px] text-slate-400">AI Buyer Targets Used:</span>
+                      {lastSearchedTargets.map((cat, idx) => (
+                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-200 font-medium">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-slate-500">Searching OpenStreetMap / Google Places for authentic business listings.</p>
+                </>
+              )}
             </div>
           )}
 
@@ -1088,8 +1525,20 @@ export default function BusinessSearchPage() {
                 <Search className="w-6 h-6" />
               </div>
               <h2 className="text-sm font-semibold text-slate-200">No businesses found for this search.</h2>
+              {lastSearchedTargets.length > 0 && (
+                <div className="p-3.5 max-w-md mx-auto rounded-xl bg-slate-900/60 border border-slate-800/80 text-[11px] text-slate-300 space-y-1.5 text-left">
+                  <div>
+                    <span className="text-slate-500">Product understood as:</span>{' '}
+                    <span className="font-semibold text-white">{query}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Searched buyer categories:</span>{' '}
+                    <span className="font-medium text-amber-300">{lastSearchedTargets.join(', ')}</span>
+                  </div>
+                </div>
+              )}
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                Try adjusting your search keyword or selecting a broader location (e.g., &quot;Dhaka&quot; instead of a specific road).
+                No matching businesses found in &quot;{location}&quot; for these buyer categories. Try adjusting your product keyword or selecting a broader location.
               </p>
             </div>
           )}
@@ -1097,16 +1546,53 @@ export default function BusinessSearchPage() {
           {/* 4. Results List */}
           {hasSearched && !isSearching && results !== null && results.length > 0 && (
             <div className="space-y-4">
-              {/* Summary Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 px-1">
-                <div>
-                  Discovered <span className="font-semibold text-slate-200">{results.length}</span> potential buyers for &quot;<span className="text-slate-200">{query}</span>&quot; in &quot;<span className="text-slate-200">{location}</span>&quot;
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <span>Source:</span>
-                  <span className="font-semibold text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                    {provider}
-                  </span>
+              {/* Summary Bar & AI Targets Feedback */}
+              <div className="space-y-2">
+                {lastSearchedTargets.length > 0 && (
+                  <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 text-xs flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-amber-400 font-semibold">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>AI Buyer Targets Used:</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {lastSearchedTargets.map((cat, idx) => (
+                        <span key={idx} className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-200 font-medium">
+                          {cat}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400 px-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>
+                      {isSavedSnapshot ? 'Showing saved results:' : 'Discovered'}{' '}
+                      <span className="font-semibold text-slate-200">{results.length}</span> potential buyers for &quot;<span className="text-slate-200">{query}</span>&quot; in &quot;<span className="text-slate-200">{location}</span>&quot;
+                    </span>
+                    {isSavedSnapshot && (
+                      <span className="text-[10px] bg-slate-900 border border-slate-700/80 text-indigo-300 px-2 py-0.5 rounded font-medium">
+                        Saved snapshot • {formatRelativeTime(savedSessionTimestamp)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                    {isSavedSnapshot && (
+                      <button
+                        type="button"
+                        onClick={handleRefreshResults}
+                        disabled={isSearching || isRefreshing}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 mr-2 transition cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Refresh</span>
+                      </button>
+                    )}
+                    <span>Source:</span>
+                    <span className="font-semibold text-slate-200 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                      {provider}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1133,6 +1619,12 @@ export default function BusinessSearchPage() {
                             <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300 font-medium">
                               {item.category || '—'}
                             </span>
+                            {item.matchedBuyerCategory && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium flex items-center gap-1">
+                                <span>Matched via:</span>
+                                <span className="font-semibold">{item.matchedBuyerCategory}</span>
+                              </span>
+                            )}
                             {buyerType !== 'ANY' && (
                               <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 font-medium">
                                 Target: {buyerType.replace(/_/g, ' ')}
@@ -1254,6 +1746,12 @@ export default function BusinessSearchPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300 text-[11px]">
                             <div><span className="text-slate-500">Provider:</span> {item.provider}</div>
                             <div><span className="text-slate-500">External ID:</span> <span className="font-mono">{item.externalId}</span></div>
+                            {item.matchedBuyerCategory && (
+                              <div><span className="text-slate-500">Matched via:</span> <span className="font-semibold text-emerald-300">{item.matchedBuyerCategory}</span></div>
+                            )}
+                            {item.searchTargetUsed && (
+                              <div><span className="text-slate-500">Search Target:</span> <span className="font-mono text-slate-300">{item.searchTargetUsed}</span></div>
+                            )}
                             <div><span className="text-slate-500">Coordinates:</span> {item.latitude && item.longitude ? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}` : 'Not listed'}</div>
                             <div><span className="text-slate-500">Country:</span> {item.country || 'BD'}</div>
                           </div>

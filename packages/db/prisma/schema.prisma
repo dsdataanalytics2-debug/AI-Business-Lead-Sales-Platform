@@ -261,6 +261,7 @@ model Organization {
   opportunities          Opportunity[]
   buyerIntentSignals     BuyerIntentSignal[]
   aiProviderConfigs      AiProviderConfig[]
+  businessSearchSessions BusinessSearchSession[]
 
   @@map("organizations")
 
@@ -291,6 +292,7 @@ model User {
   approvedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftApprovedBy")
   rejectedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftRejectedBy")
   requestedOutreachDeliveries OutreachDelivery[]   @relation("OutreachDeliveryRequestedBy")
+  businessSearchSessions     BusinessSearchSession[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -853,4 +855,32 @@ model BuyerIntentSignal {
   @@index([organizationId, opportunityId])
   @@index([organizationId, signalType])
   @@map("buyer_intent_signals")
+}
+
+model BusinessSearchSession {
+  id                     String    @id @default(uuid())
+  organizationId         String    @map("organization_id")
+  userId                 String    @map("user_id")
+  productQuery           String    @map("product_query")
+  location               String    @map("location")
+  buyerType              String?   @map("buyer_type")
+  category               String?   @map("category")
+  provider               String    @default("auto") @map("provider")
+  limit                  Int       @default(20) @map("limit")
+  selectedAiBuyerTargets Json?     @map("selected_ai_buyer_targets")
+  resultCount            Int       @default(0) @map("result_count")
+  resultsSnapshot        Json      @map("results_snapshot")
+  sourceMetadata         Json?     @map("source_metadata")
+  searchStatus           String    @default("SUCCESS") @map("search_status")
+  lastOpenedAt           DateTime  @default(now()) @map("last_opened_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, userId, lastOpenedAt])
+  @@index([organizationId, userId, createdAt])
+  @@map("business_search_sessions")
 }

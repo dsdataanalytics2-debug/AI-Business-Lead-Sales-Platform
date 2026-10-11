@@ -27,6 +27,8 @@ import {
   GEMINI_PROVIDER_KEY,
   defaultAiRegistry
 } from '@leadmate/ai';
+
+export { GEMINI_PROVIDER_KEY };
 import {
   encryptCredential,
   decryptCredential,
