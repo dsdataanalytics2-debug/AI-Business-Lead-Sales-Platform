@@ -44,7 +44,16 @@ import {
   type DataSourceCardStatus,
   type DemoCatalogItem,
   type CampaignSummary,
-  type CreateCampaignRequest
+  type CreateCampaignRequest,
+  type ProductDto,
+  type CreateProductInput,
+  type UpdateProductInput,
+  type SalesMissionDetailDto,
+  type SalesMissionBuyerDto,
+  type CreateSalesMissionInput,
+  type UpdateSalesMissionInput,
+  type AiProductAnalysisResult,
+  type AnalyzeProductInput
 } from '@leadmate/shared';
 
 
@@ -766,7 +775,68 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-  }
+  },
+
+  // Products
+  listProducts: (query?: { page?: number; limit?: number; search?: string; category?: string; status?: string }): Promise<{ products: ProductDto[]; total: number; page: number; totalPages: number }> => {
+    const params = new URLSearchParams();
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+    if (query?.search) params.set('search', query.search);
+    if (query?.category) params.set('category', query.category);
+    if (query?.status) params.set('status', query.status);
+    const qs = params.toString();
+    return request(`/products${qs ? `?${qs}` : ''}`);
+  },
+  createProduct: (data: CreateProductInput): Promise<ProductDto> =>
+    request('/products', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getProduct: (id: string): Promise<ProductDto> =>
+    request(`/products/${encodeURIComponent(id)}`),
+  updateProduct: (id: string, data: UpdateProductInput): Promise<ProductDto> =>
+    request(`/products/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    }),
+
+  // Sales Missions
+  listSalesMissions: (query?: { page?: number; limit?: number; search?: string; productId?: string; status?: string }): Promise<{ missions: SalesMissionDetailDto[]; total: number; page: number; totalPages: number }> => {
+    const params = new URLSearchParams();
+    if (query?.page) params.set('page', String(query.page));
+    if (query?.limit) params.set('limit', String(query.limit));
+    if (query?.search) params.set('search', query.search);
+    if (query?.productId) params.set('productId', query.productId);
+    if (query?.status) params.set('status', query.status);
+    const qs = params.toString();
+    return request(`/sales-missions${qs ? `?${qs}` : ''}`);
+  },
+  createSalesMission: (data: CreateSalesMissionInput): Promise<SalesMissionDetailDto> =>
+    request('/sales-missions', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  getSalesMission: (id: string): Promise<SalesMissionDetailDto> =>
+    request(`/sales-missions/${encodeURIComponent(id)}`),
+  analyzeMission: (id: string): Promise<SalesMissionDetailDto> =>
+    request(`/sales-missions/${encodeURIComponent(id)}/analyze`, {
+      method: 'POST'
+    }),
+  analyzeProductDirect: (data: AnalyzeProductInput): Promise<AiProductAnalysisResult> =>
+    request('/sales-missions/analyze-product', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  discoverMissionBuyers: (id: string, targetCategories?: string[]): Promise<SalesMissionDetailDto> =>
+    request(`/sales-missions/${encodeURIComponent(id)}/discover`, {
+      method: 'POST',
+      body: JSON.stringify(targetCategories ? { targetCategories } : {})
+    }),
+  refreshMission: (id: string): Promise<SalesMissionDetailDto> =>
+    request(`/sales-missions/${encodeURIComponent(id)}/refresh`, {
+      method: 'POST'
+    })
 };
 
 

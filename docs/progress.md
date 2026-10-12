@@ -26,8 +26,17 @@
     - Last Search UI Banner: Displays "Viewing saved search" with query terms, result count, relative timestamp, and explicit "Refresh Results" action.
     - Recent Search History: Tracks up to 20 searches per user (newest-first) with deduplication reuse within a 1-hour window to eliminate history spam.
     - Saved Result Snapshot Safety: Strict payload validation cap (1.5MB max) and sanitization ensuring only safe normalized business card attributes are stored (zero secrets, credentials, or raw payloads).
-    - Refresh Results Behavior: Re-executes the search against data sources only when explicitly requested by user click; updates timestamp and snapshot.
     - Tenant & User Isolation: Scoped strictly to authenticated session `(organization_id, user_id)`.
+  - LeadAtlas Advanced Sales Mission System (Phase 1–7 Vertical Slice):
+    - Forward migration `20261011180000_add_sales_mission_and_products` adding `Product`, `SalesMission`, and `SalesMissionBuyer` tables with foreign keys and composite uniqueness.
+    - Product Catalog at `/products`: Manual creation, inventory tracking, priority categorization, search, and direct mission launching.
+    - Sales Mission Engine at `/sales-missions` and creation wizard at `/sales-missions/new`.
+    - Sales Mission Lifecycle: `DRAFT` -> `ANALYZING` -> `TARGETING` -> `DISCOVERING` -> `READY` -> `COMPLETED`.
+    - AI Product Analysis via Gemini with safe deterministic fallback heuristics for Healthcare, Kitchenware, Electronics, and General goods.
+    - Authentic Business Search Delegation: Reuses existing `businessSearchService` (Google Places / OpenStreetMap) to discover real directory businesses based on AI buyer targets.
+    - Reopen Guarantee: Persisted AI Analysis snapshot and buyer listings reload from database with zero automatic external API requests.
+    - Discovered Buyer Management at `/sales-missions/[id]`: Provenance tracking, CSV export, and 1-click Save to CRM lead creation.
+    - Strict Invariants Preserved: `PHONE != WHATSAPP` status separation, multi-tenant database isolation, zero secret leakage.
 - **Remaining M8 Milestone Scope (Post Fast-Track):**
   - Contact Enrichment Provider abstraction & provenance
   - Public website contact inspection & SSRF-safe fetching

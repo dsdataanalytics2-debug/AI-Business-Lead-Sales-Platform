@@ -262,6 +262,9 @@ model Organization {
   buyerIntentSignals     BuyerIntentSignal[]
   aiProviderConfigs      AiProviderConfig[]
   businessSearchSessions BusinessSearchSession[]
+  products               Product[]
+  salesMissions          SalesMission[]
+  salesMissionBuyers     SalesMissionBuyer[]
 
   @@map("organizations")
 
@@ -293,6 +296,8 @@ model User {
   rejectedSalesDrafts        SalesAssistantDraft[] @relation("SalesAssistantDraftRejectedBy")
   requestedOutreachDeliveries OutreachDelivery[]   @relation("OutreachDeliveryRequestedBy")
   businessSearchSessions     BusinessSearchSession[]
+  createdProducts            Product[]             @relation("ProductCreatedBy")
+  createdSalesMissions       SalesMission[]        @relation("SalesMissionCreatedBy")
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -501,6 +506,7 @@ model Lead {
   outreachDeliveries     OutreachDelivery[]
   opportunities          Opportunity[]
   buyerIntentSignals     BuyerIntentSignal[]
+  salesMissionBuyers     SalesMissionBuyer[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -883,4 +889,109 @@ model BusinessSearchSession {
   @@index([organizationId, userId, lastOpenedAt])
   @@index([organizationId, userId, createdAt])
   @@map("business_search_sessions")
+}
+
+model Product {
+  id                   String    @id @default(uuid())
+  organizationId       String    @map("organization_id")
+  createdByUserId      String?   @map("created_by_user_id")
+  sourceType           String    @default("MANUAL") @map("source_type")
+  sourceProvider       String?   @map("source_provider")
+  externalProductId    String?   @map("external_product_id")
+  sku                  String?
+  name                 String
+  description          String
+  category             String?
+  stockQuantity        Int       @default(0) @map("stock_quantity")
+  sellingPrice         Decimal?  @db.Decimal(12, 2) @map("selling_price")
+  costPrice            Decimal?  @db.Decimal(12, 2) @map("cost_price")
+  currency             String    @default("BDT")
+  minimumOrderQuantity Int?      @map("minimum_order_quantity")
+  brand                String?
+  imageUrl             String?   @map("image_url")
+  productUrl           String?   @map("product_url")
+  importedFrom         String?   @map("imported_from")
+  targetMarket         String?   @map("target_market")
+  notes                String?
+  status               String    @default("ACTIVE")
+  salesPriority        String    @default("NORMAL") @map("sales_priority")
+  lastSyncedAt         DateTime? @map("last_synced_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdByUser User?          @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  salesMissions SalesMission[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, name])
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@map("products")
+}
+
+model SalesMission {
+  id                      String    @id @default(uuid())
+  organizationId          String    @map("organization_id")
+  createdByUserId         String    @map("created_by_user_id")
+  productId               String?   @map("product_id")
+  name                    String
+  goal                    String    @default("WHOLESALE")
+  targetMarket            String    @map("target_market")
+  buyerType               String    @default("AI_DECIDE") @map("buyer_type")
+  resultTarget            Int       @default(50) @map("result_target")
+  status                  String    @default("DRAFT")
+  productAnalysisSnapshot Json?     @map("product_analysis_snapshot")
+  selectedBuyerTargets    Json?     @map("selected_buyer_targets")
+  resultCount             Int       @default(0) @map("result_count")
+  startedAt               DateTime? @map("started_at")
+  completedAt             DateTime? @map("completed_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User                @relation("SalesMissionCreatedBy", fields: [createdByUserId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  product      Product?            @relation(fields: [productId], references: [id], onDelete: SetNull)
+  buyers       SalesMissionBuyer[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, productId])
+  @@index([organizationId, status])
+  @@map("sales_missions")
+}
+
+model SalesMissionBuyer {
+  id                   String   @id @default(uuid())
+  organizationId       String   @map("organization_id")
+  salesMissionId       String   @map("sales_mission_id")
+  externalBusinessId   String   @map("external_business_id")
+  provider             String
+  businessName         String   @map("business_name")
+  category             String?
+  address              String?
+  city                 String?
+  country              String?
+  latitude             Float?
+  longitude            Float?
+  website              String?
+  phone                String?
+  matchedBuyerCategory String?  @map("matched_buyer_category")
+  searchTargetUsed     String?  @map("search_target_used")
+  sourceData           Json?    @map("source_data")
+  leadId               String?  @map("lead_id")
+  status               String   @default("POTENTIAL")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesMission SalesMission @relation(fields: [salesMissionId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@unique([id, organizationId])
+  @@unique([salesMissionId, provider, externalBusinessId])
+  @@index([organizationId, salesMissionId])
+  @@index([organizationId, status])
+  @@map("sales_mission_buyers")
 }

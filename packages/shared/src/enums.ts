@@ -573,3 +573,57 @@ export const BUYER_TYPE_LABELS: Record<BuyerType, string> = {
 export function getBuyerTypeLabel(type: BuyerType): string {
   return BUYER_TYPE_LABELS[type] ?? type;
 }
+
+/* =========================================================
+ * Advanced Sales Mission & Product Catalog Enums
+ * ========================================================= */
+
+export enum ProductSourceType {
+  MANUAL = 'MANUAL',
+  API = 'API'
+}
+
+export enum ProductStatus {
+  ACTIVE = 'ACTIVE',
+  ARCHIVED = 'ARCHIVED',
+  DRAFT = 'DRAFT'
+}
+
+export enum SalesPriority {
+  LOW = 'LOW',
+  NORMAL = 'NORMAL',
+  HIGH = 'HIGH',
+  URGENT = 'URGENT'
+}
+
+export enum SalesMissionGoal {
+  WHOLESALE = 'WHOLESALE',
+  RETAIL_DISTRIBUTION = 'RETAIL_DISTRIBUTION',
+  DISTRIBUTOR_SEARCH = 'DISTRIBUTOR_SEARCH',
+  CORPORATE_SALES = 'CORPORATE_SALES',
+  GENERAL_BUYER_DISCOVERY = 'GENERAL_BUYER_DISCOVERY'
+}
+
+export const SALES_MISSION_GOAL_LABELS: Record<SalesMissionGoal, string> = {
+  [SalesMissionGoal.WHOLESALE]: 'Wholesale',
+  [SalesMissionGoal.RETAIL_DISTRIBUTION]: 'Retail Distribution',
+  [SalesMissionGoal.DISTRIBUTOR_SEARCH]: 'Distributor Search',
+  [SalesMissionGoal.CORPORATE_SALES]: 'Corporate Sales',
+  [SalesMissionGoal.GENERAL_BUYER_DISCOVERY]: 'General Buyer Discovery'
+};
+
+export enum SalesMissionStatus {
+  DRAFT = 'DRAFT',
+  ANALYZING = 'ANALYZING',
+  TARGETING = 'TARGETING',
+  DISCOVERING = 'DISCOVERING',
+  READY = 'READY',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum MissionBuyerStatus {
+  POTENTIAL = 'POTENTIAL',
+  SAVED_TO_CRM = 'SAVED_TO_CRM',
+  DISQUALIFIED = 'DISQUALIFIED'
+}

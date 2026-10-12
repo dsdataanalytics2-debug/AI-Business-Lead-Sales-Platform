@@ -1,0 +1,693 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import {
+  Target,
+  Package,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Building2,
+  Plus,
+  Compass,
+  Check,
+  X,
+  Layers
+} from 'lucide-react';
+import {
+  type ProductDto,
+  type AiProductAnalysisResult,
+  SalesMissionGoal,
+  SALES_MISSION_GOAL_LABELS
+} from '@leadmate/shared';
+import { AppShell } from '@/components/layout/app-shell';
+import { apiClient } from '@/lib/api-client';
+
+export default function NewSalesMissionPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialProductId = searchParams.get('productId');
+
+  // Step state: 1 = Product, 2 = Mission Config, 3 = AI Analysis & Buyer Targets, 4 = Executing
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+
+  // Products catalog
+  const [products, setProducts] = useState<ProductDto[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+
+  // Selection
+  const [selectedProductMode, setSelectedProductMode] = useState<'catalog' | 'manual'>('catalog');
+  const [selectedProductId, setSelectedProductId] = useState<string>(initialProductId || '');
+
+  // Manual product inputs
+  const [manualProduct, setManualProduct] = useState({
+    name: '',
+    description: '',
+    category: '',
+    stockQuantity: 100
+  });
+
+  // Mission configurations
+  const [missionName, setMissionName] = useState('');
+  const [goal, setGoal] = useState<SalesMissionGoal>(SalesMissionGoal.WHOLESALE);
+  const [targetMarket, setTargetMarket] = useState('Dhaka, Bangladesh');
+  const [resultTarget, setResultTarget] = useState(50);
+
+  // AI Analysis State
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<AiProductAnalysisResult | null>(null);
+  const [selectedBuyerTargets, setSelectedBuyerTargets] = useState<string[]>([]);
+  const [customTargetInput, setCustomTargetInput] = useState('');
+
+  // Execution state
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load products
+  useEffect(() => {
+    async function fetchProducts() {
+      setIsLoadingProducts(true);
+      try {
+        const res = await apiClient.listProducts({ limit: 100 });
+        setProducts(res.products || []);
+        if (initialProductId && res.products?.some((p) => p.id === initialProductId)) {
+          setSelectedProductId(initialProductId);
+          setSelectedProductMode('catalog');
+          const found = res.products.find((p) => p.id === initialProductId);
+          if (found) {
+            setMissionName(`Distribute ${found.name} in ${targetMarket}`);
+          }
+        }
+      } catch (err: any) {
+        console.warn('Could not load products', err);
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    }
+    fetchProducts();
+  }, [initialProductId]);
+
+  const activeProductName =
+    selectedProductMode === 'catalog'
+      ? products.find((p) => p.id === selectedProductId)?.name || ''
+      : manualProduct.name;
+
+  const activeProductDesc =
+    selectedProductMode === 'catalog'
+      ? products.find((p) => p.id === selectedProductId)?.description || ''
+      : manualProduct.description;
+
+  const activeProductCategory =
+    selectedProductMode === 'catalog'
+      ? products.find((p) => p.id === selectedProductId)?.category || undefined
+      : manualProduct.category || undefined;
+
+  // Step 1 -> Step 2 validation
+  const handleProceedToConfig = () => {
+    if (selectedProductMode === 'catalog' && !selectedProductId) {
+      setError('Please select a product from the catalog, or switch to manual entry');
+      return;
+    }
+    if (selectedProductMode === 'manual') {
+      if (!manualProduct.name.trim() || !manualProduct.description.trim()) {
+        setError('Product name and description are required for manual products');
+        return;
+      }
+    }
+    setError(null);
+
+    if (!missionName) {
+      setMissionName(`Find ${goal.toLowerCase()} buyers for ${activeProductName} in ${targetMarket}`);
+    }
+    setStep(2);
+  };
+
+  // Step 2 -> Step 3: Run AI Product Analysis
+  const handleRunAiAnalysis = async () => {
+    if (!targetMarket.trim()) {
+      setError('Target market is required');
+      return;
+    }
+    setError(null);
+    setIsAnalyzing(true);
+    setStep(3);
+
+    try {
+      const result = await apiClient.analyzeProductDirect({
+        productName: activeProductName,
+        productDescription: activeProductDesc,
+        category: activeProductCategory,
+        goal,
+        targetMarket,
+        buyerType: 'AI_DECIDE'
+      });
+      setAnalysisResult(result);
+      setSelectedBuyerTargets(result.searchTerms || result.buyerTargets.map((b) => b.category));
+    } catch (err: any) {
+      setError(err?.message || 'AI product analysis failed');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const toggleBuyerTarget = (target: string) => {
+    if (selectedBuyerTargets.includes(target)) {
+      if (selectedBuyerTargets.length > 1) {
+        setSelectedBuyerTargets((prev) => prev.filter((t) => t !== target));
+      }
+    } else {
+      setSelectedBuyerTargets((prev) => [...prev, target]);
+    }
+  };
+
+  const addCustomTarget = () => {
+    const trimmed = customTargetInput.trim();
+    if (trimmed && !selectedBuyerTargets.includes(trimmed)) {
+      setSelectedBuyerTargets((prev) => [...prev, trimmed]);
+      setCustomTargetInput('');
+    }
+  };
+
+  // Step 4: Execute Discovery & Save Mission
+  const handleLaunchDiscovery = async () => {
+    if (selectedBuyerTargets.length === 0) {
+      setError('Please select at least one buyer target category');
+      return;
+    }
+
+    setError(null);
+    setIsDiscovering(true);
+    setStep(4);
+
+    try {
+      let createdProdId = selectedProductId;
+
+      // If manual mode, create product first in catalog
+      if (selectedProductMode === 'manual') {
+        const prod = await apiClient.createProduct({
+          name: manualProduct.name,
+          description: manualProduct.description,
+          category: manualProduct.category || undefined,
+          stockQuantity: manualProduct.stockQuantity || 100,
+          currency: 'BDT'
+        });
+        createdProdId = prod.id;
+      }
+
+      // 1. Create Mission
+      const mission = await apiClient.createSalesMission({
+        productId: createdProdId || undefined,
+        name: missionName.trim() || `Sales Mission: ${activeProductName}`,
+        goal,
+        targetMarket: targetMarket.trim(),
+        buyerType: 'AI_DECIDE',
+        resultTarget: resultTarget || 50,
+        productAnalysisSnapshot: analysisResult || undefined,
+        selectedBuyerTargets
+      });
+
+      // 2. Execute discovery using existing business search
+      await apiClient.discoverMissionBuyers(mission.id, selectedBuyerTargets);
+
+      // 3. Redirect to Mission Detail
+      router.push(`/sales-missions/${mission.id}`);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to execute sales mission discovery');
+      setIsDiscovering(false);
+      setStep(3);
+    }
+  };
+
+  return (
+    <AppShell>
+      <div className="p-6 max-w-4xl mx-auto space-y-6">
+        {/* Back Link & Header */}
+        <div className="flex items-center justify-between">
+          <Link
+            href="/sales-missions"
+            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Sales Missions</span>
+          </Link>
+
+          {/* Stepper Indicator */}
+          <div className="flex items-center gap-2 text-xs font-medium">
+            <span
+              className={`px-2.5 py-1 rounded-full ${
+                step === 1 ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              1. Product
+            </span>
+            <span className="text-slate-600">→</span>
+            <span
+              className={`px-2.5 py-1 rounded-full ${
+                step === 2 ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              2. Goals
+            </span>
+            <span className="text-slate-600">→</span>
+            <span
+              className={`px-2.5 py-1 rounded-full ${
+                step >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              3. AI Analysis
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-6 space-y-6">
+          {error && (
+            <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-sm flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* STEP 1: PRODUCT SELECTION */}
+          {step === 1 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-100">Step 1: Select or Add a Product</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  Choose a product from your catalog or enter details for a new item.
+                </p>
+              </div>
+
+              {/* Mode Toggle */}
+              <div className="flex p-1 bg-slate-900 border border-slate-800 rounded-xl max-w-sm">
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductMode('catalog')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition ${
+                    selectedProductMode === 'catalog'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Select from Catalog ({products.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedProductMode('manual')}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition ${
+                    selectedProductMode === 'manual'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Manual Product Entry
+                </button>
+              </div>
+
+              {selectedProductMode === 'catalog' ? (
+                <div>
+                  {isLoadingProducts ? (
+                    <div className="py-8 flex justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+                    </div>
+                  ) : products.length === 0 ? (
+                    <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-xl text-center space-y-3">
+                      <p className="text-sm text-slate-400">Catalog is currently empty.</p>
+                      <button
+                        onClick={() => setSelectedProductMode('manual')}
+                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg"
+                      >
+                        Enter Product Manually
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                      {products.map((p) => {
+                        const isSelected = selectedProductId === p.id;
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => setSelectedProductId(p.id)}
+                            className={`p-4 rounded-xl border cursor-pointer transition text-left flex flex-col justify-between space-y-2 ${
+                              isSelected
+                                ? 'bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-500/10'
+                                : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="font-semibold text-slate-200 text-sm">{p.name}</h4>
+                              {isSelected && <Check className="w-4 h-4 text-indigo-400 flex-shrink-0" />}
+                            </div>
+                            <p className="text-xs text-slate-400 line-clamp-2">{p.description}</p>
+                            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/60">
+                              <span>Stock: {p.stockQuantity}</span>
+                              <span className="text-indigo-300 font-medium">{p.category || 'General'}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Product Name <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={manualProduct.name}
+                      onChange={(e) => setManualProduct({ ...manualProduct, name: e.target.value })}
+                      placeholder="e.g. Diamum, Portable Mini Blender, High-grade Cotton Fabric"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Description <span className="text-rose-400">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={manualProduct.description}
+                      onChange={(e) => setManualProduct({ ...manualProduct, description: e.target.value })}
+                      placeholder="Describe target use case, specs, material, or application..."
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1">Category</label>
+                      <input
+                        type="text"
+                        value={manualProduct.category}
+                        onChange={(e) => setManualProduct({ ...manualProduct, category: e.target.value })}
+                        placeholder="e.g. Healthcare, Kitchenware, Textiles"
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1">Available Stock Units</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={manualProduct.stockQuantity}
+                        onChange={(e) =>
+                          setManualProduct({ ...manualProduct, stockQuantity: Number(e.target.value) })
+                        }
+                        className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={handleProceedToConfig}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition"
+                >
+                  <span>Continue to Mission Config</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: MISSION PARAMETERS */}
+          {step === 2 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-100">Step 2: Mission Goals & Target Market</h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  Define the sales strategy and target geography for {activeProductName}.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Mission Name <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={missionName}
+                    onChange={(e) => setMissionName(e.target.value)}
+                    placeholder="e.g. Distribute Diamum in Dhaka Pharmacies"
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Sales Goal</label>
+                    <select
+                      value={goal}
+                      onChange={(e) => setGoal(e.target.value as SalesMissionGoal)}
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                    >
+                      {Object.entries(SALES_MISSION_GOAL_LABELS).map(([k, label]) => (
+                        <option key={k} value={k}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Target Market / Location <span className="text-rose-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={targetMarket}
+                      onChange={(e) => setTargetMarket(e.target.value)}
+                      placeholder="e.g. Dhanmondi, Dhaka or Chittagong or Bangladesh"
+                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Target Discovered Businesses Count
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={10}
+                      max={50}
+                      step={5}
+                      value={resultTarget}
+                      onChange={(e) => setResultTarget(Number(e.target.value))}
+                      className="flex-1 accent-indigo-500"
+                    />
+                    <span className="w-12 text-center text-sm font-semibold text-slate-200 bg-slate-900 border border-slate-800 py-1 rounded">
+                      {resultTarget}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Max businesses to discover through verified directory providers
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-medium transition"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRunAiAnalysis}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-200" />
+                  <span>Analyze Product with AI</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: AI PRODUCT ANALYSIS & BUYER TARGETS */}
+          {step === 3 && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-indigo-400" />
+                  <span>AI Product Analysis & Buyer Strategy</span>
+                </h2>
+                <p className="text-sm text-slate-400 mt-1">
+                  Gemini analyzed your product and generated high-probability commercial buyer categories.
+                </p>
+              </div>
+
+              {isAnalyzing ? (
+                <div className="py-16 flex flex-col items-center justify-center space-y-4 text-center">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center animate-pulse">
+                      <Sparkles className="w-6 h-6 text-indigo-400" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-200 text-sm">Analyzing Product Attributes</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                      Evaluating commercial buyers, B2B purchasing channels, and authentic search terms...
+                    </p>
+                  </div>
+                </div>
+              ) : analysisResult ? (
+                <div className="space-y-6">
+                  {/* Summary Card */}
+                  <div className="p-4 rounded-xl bg-indigo-950/30 border border-indigo-500/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">
+                        AI Categorization
+                      </span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                        {analysisResult.productCategory}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 leading-relaxed">
+                      {analysisResult.productSummary}
+                    </p>
+                  </div>
+
+                  {/* Buyer Targets Identified */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-slate-200">
+                        Target Commercial Buyer Segments
+                      </h4>
+                      <span className="text-xs text-slate-400">
+                        {analysisResult.buyerTargets.length} segments identified
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {analysisResult.buyerTargets.map((target, idx) => (
+                        <div
+                          key={idx}
+                          className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-200 text-xs">
+                              {target.category}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                target.confidence === 'HIGH'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              }`}
+                            >
+                              {target.confidence} FIT
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 leading-snug">{target.reason}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Active Search Chips */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-200">
+                        Directory Search Terms (Click to toggle)
+                      </label>
+                      <span className="text-xs text-indigo-400 font-medium">
+                        {selectedBuyerTargets.length} selected for query
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {selectedBuyerTargets.map((term) => (
+                        <button
+                          key={term}
+                          type="button"
+                          onClick={() => toggleBuyerTarget(term)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 text-white border border-indigo-500 shadow-sm transition hover:bg-indigo-700"
+                        >
+                          <span>{term}</span>
+                          <X className="w-3 h-3 text-indigo-200" />
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Add Custom Search Term */}
+                    <div className="flex gap-2 max-w-sm pt-1">
+                      <input
+                        type="text"
+                        value={customTargetInput}
+                        onChange={(e) => setCustomTargetInput(e.target.value)}
+                        placeholder="Add another category..."
+                        className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addCustomTarget();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addCustomTarget}
+                        className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-lg transition"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setStep(2)}
+                      className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 text-sm font-medium transition"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLaunchDiscovery}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition shadow-lg shadow-indigo-600/20"
+                    >
+                      <Compass className="w-4 h-4 text-indigo-200" />
+                      <span>Launch Business Discovery</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {/* STEP 4: DISCOVERING BUSINESSES */}
+          {step === 4 && (
+            <div className="py-20 flex flex-col items-center justify-center space-y-4 text-center">
+              <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+              <div>
+                <h3 className="text-lg font-bold text-slate-100">Discovering Authentic Buyers</h3>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                  Connecting to Google Places & OpenStreetMap directory providers to find real businesses in {targetMarket}...
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </AppShell>
+  );
+}

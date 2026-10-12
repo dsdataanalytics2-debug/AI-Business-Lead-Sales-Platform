@@ -15,7 +15,9 @@ import {
   Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Package,
+  Target
 } from 'lucide-react';
 import { Permissions, type Permission } from '@leadmate/shared';
 import { useAuth } from '@/lib/auth-context';
@@ -31,6 +33,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Products', href: '/products', icon: Package, permission: Permissions.LEADS_READ },
+  { label: 'Sales Missions', href: '/sales-missions', icon: Target, permission: Permissions.LEADS_READ },
   { label: 'Leads', href: '/leads', icon: Users, permission: Permissions.LEADS_READ },
   { label: 'Business Search', href: '/business-search', icon: Search, permission: Permissions.LEADS_READ },
   { label: 'Campaigns', href: '/campaigns', icon: Megaphone, permission: Permissions.CAMPAIGNS_MANAGE },

@@ -222,8 +222,14 @@ export class GeminiProvider implements AIProvider {
     const response = await this.executeRequest(endpoint, apiKey, body, options?.signal);
     const payload = (await response.json()) as any;
 
+    const textCandidate = payload?.candidates?.[0];
+    const textFinishReason = textCandidate?.finishReason;
+    if (textFinishReason && textFinishReason !== 'STOP' && textFinishReason !== 'MAX_TOKENS') {
+      console.warn(`[GeminiProvider] generateText blocked: finishReason=${textFinishReason}`);
+    }
+
     const candidateText =
-      payload?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+      textCandidate?.content?.parts?.[0]?.text?.trim() || '';
 
     const inputTokens = payload?.usageMetadata?.promptTokenCount;
     const outputTokens = payload?.usageMetadata?.candidatesTokenCount;
@@ -270,7 +276,16 @@ export class GeminiProvider implements AIProvider {
     const response = await this.executeRequest(endpoint, apiKey, body, options?.signal);
     const payload = (await response.json()) as any;
 
-    const rawText = payload?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    const candidate = payload?.candidates?.[0];
+    const finishReason = candidate?.finishReason;
+    if (finishReason && finishReason !== 'STOP' && finishReason !== 'MAX_TOKENS') {
+      throw new AIStructuredOutputError(
+        this.name,
+        `Gemini generation blocked (finishReason: ${finishReason}). Check your prompt for policy-sensitive content.`
+      );
+    }
+
+    const rawText = candidate?.content?.parts?.[0]?.text?.trim();
     if (!rawText) {
       throw new AIStructuredOutputError(this.name, 'Gemini returned an empty candidate payload');
     }
@@ -346,10 +361,19 @@ export class GeminiProvider implements AIProvider {
       if (response.status === 404) {
         throw new AIModelUnavailableError(this.name, 'model', 'Requested Gemini model was not found');
       }
+      // Attempt to read error detail from the body (e.g. "model output must contain either output text or tool calls")
+      let geminiErrorDetail = '';
+      try {
+        const errBody = (await response.json()) as any;
+        geminiErrorDetail = errBody?.error?.message || errBody?.message || '';
+      } catch {
+        // ignore JSON parse failure for error body
+      }
+      const baseMsg = `Gemini API returned error HTTP ${response.status}`;
       throw new AIProviderError(
         this.name,
         `HTTP_${response.status}`,
-        `Gemini API returned error HTTP ${response.status}`,
+        geminiErrorDetail ? `${baseMsg}: ${geminiErrorDetail}` : baseMsg,
         response.status >= 500
       );
     }

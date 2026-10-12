@@ -21,6 +21,8 @@ import { resendEmailWebhookRouter } from './routes/resend-webhook.routes.js';
 import { locationRouter } from './routes/location.routes.js';
 import { aiSettingsRouter } from './routes/ai-settings.routes.js';
 import { aiRouter } from './routes/ai.routes.js';
+import { productRouter } from './routes/product.routes.js';
+import { salesMissionRouter } from './routes/sales-mission.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -54,6 +56,8 @@ export function createApp(): Express {
   app.use('/api/v1/users', userRouter);
   app.use('/api/v1/team', teamRouter);
   app.use('/api/v1/dashboard', dashboardRouter);
+  app.use('/api/v1/products', productRouter);
+  app.use('/api/v1/sales-missions', salesMissionRouter);
   app.use('/api/v1/business-search', businessSearchRouter);
   app.use('/api/v1/leads', leadRouter);
   app.use('/api/v1/demos', demoRouter);
