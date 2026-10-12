@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { SalesMissionGoal, SalesMissionStatus, MissionBuyerStatus } from '../enums.js';
+import {
+  SalesMissionGoal,
+  SalesMissionStatus,
+  MissionBuyerStatus,
+  SalesMissionBuyerStrategy
+} from '../enums.js';
 import type { ProductDto } from './product.js';
 
 export const aiBuyerTargetItemSchema = z.object({
@@ -19,19 +24,48 @@ export const aiProductAnalysisSchema = z.object({
 
 export type AiProductAnalysisResult = z.infer<typeof aiProductAnalysisSchema>;
 
-export const createSalesMissionSchema = z.object({
+export const createSalesMissionObjectSchema = z.object({
   productId: z.string().uuid().optional().nullable(),
   name: z.string().trim().min(1, 'Mission name is required').max(200),
-  goal: z.nativeEnum(SalesMissionGoal).default(SalesMissionGoal.WHOLESALE),
+  missionName: z.string().trim().min(1).max(200).optional(),
+  goal: z.nativeEnum(SalesMissionGoal).or(z.string().trim().min(1)).default(SalesMissionGoal.WHOLESALE),
+  salesGoal: z.string().trim().optional(),
   targetMarket: z.string().trim().min(1, 'Target market is required').max(200),
-  buyerType: z.string().trim().default('AI_DECIDE'),
+  location: z.string().trim().max(200).optional(),
+  buyerType: z.nativeEnum(SalesMissionBuyerStrategy).or(z.string().trim().min(1)).default(SalesMissionBuyerStrategy.AI_DECIDE),
+  buyerStrategy: z.string().trim().optional(),
   resultTarget: z.coerce.number().int().min(5).max(100).default(50),
+  targetCount: z.coerce.number().int().optional(),
   productAnalysisSnapshot: aiProductAnalysisSchema.optional().nullable(),
   selectedBuyerTargets: z.array(z.string().trim()).optional().nullable()
 });
 
-export type CreateSalesMissionInput = z.input<typeof createSalesMissionSchema>;
-export type CreateSalesMissionParsed = z.output<typeof createSalesMissionSchema>;
+export const createSalesMissionSchema = z.preprocess(
+  (raw: any) => {
+    if (typeof raw !== 'object' || raw === null) return raw;
+    const normalized: Record<string, any> = { ...raw };
+    if (!normalized.name && normalized.missionName) {
+      normalized.name = normalized.missionName;
+    }
+    if (!normalized.targetMarket && normalized.location) {
+      normalized.targetMarket = normalized.location;
+    }
+    if (!normalized.goal && normalized.salesGoal) {
+      normalized.goal = normalized.salesGoal;
+    }
+    if (!normalized.buyerType && normalized.buyerStrategy) {
+      normalized.buyerType = normalized.buyerStrategy;
+    }
+    if (normalized.resultTarget === undefined && normalized.targetCount !== undefined) {
+      normalized.resultTarget = normalized.targetCount;
+    }
+    return normalized;
+  },
+  createSalesMissionObjectSchema
+);
+
+export type CreateSalesMissionInput = z.input<typeof createSalesMissionObjectSchema>;
+export type CreateSalesMissionParsed = z.output<typeof createSalesMissionObjectSchema>;
 
 export const updateSalesMissionSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -107,13 +141,58 @@ export interface SalesMissionDetailDto {
   };
 }
 
-export const analyzeProductInputSchema = z.object({
-  productName: z.string().trim().min(1, 'Product name is required').max(200),
-  productDescription: z.string().trim().min(1, 'Product description is required').max(2000),
+export const analyzeProductObjectSchema = z.object({
+  productId: z.string().uuid().optional().nullable(),
+  productName: z.string().trim().min(1, 'Product name is required').max(200, 'Product name must be 200 characters or fewer'),
+  name: z.string().trim().min(1).max(200).optional(),
+  productDescription: z.string().trim().min(1, 'Product description is required').max(4000, 'Product description must be 4000 characters or fewer'),
+  description: z.string().trim().min(1).max(4000, 'Product description must be 4000 characters or fewer').optional(),
   category: z.string().trim().max(100).optional().nullable(),
-  goal: z.string().trim().default('WHOLESALE'),
-  targetMarket: z.string().trim().default('Bangladesh'),
-  buyerType: z.string().trim().default('AI_DECIDE')
+  goal: z.nativeEnum(SalesMissionGoal).or(z.string().trim().min(1)).default(SalesMissionGoal.WHOLESALE),
+  salesGoal: z.string().trim().optional(),
+  targetMarket: z.string().trim().min(1, 'Target market is required').max(200).default('Bangladesh'),
+  location: z.string().trim().max(200).optional(),
+  buyerType: z.nativeEnum(SalesMissionBuyerStrategy).or(z.string().trim().min(1)).default(SalesMissionBuyerStrategy.AI_DECIDE),
+  buyerStrategy: z.string().trim().optional(),
+  resultTarget: z.coerce.number().int().min(5).max(100).optional().nullable(),
+  targetCount: z.coerce.number().int().optional()
 });
 
-export type AnalyzeProductInput = z.infer<typeof analyzeProductInputSchema>;
+export const AnalyzeProductRequestSchema = z.preprocess(
+  (raw: any) => {
+    if (typeof raw !== 'object' || raw === null) return raw;
+    const normalized: Record<string, any> = { ...raw };
+
+    // Support field aliases from different frontend versions or payloads
+    if (!normalized.productName && normalized.name) {
+      normalized.productName = normalized.name;
+    }
+    if (!normalized.productDescription && normalized.description) {
+      normalized.productDescription = normalized.description;
+    }
+    if (!normalized.targetMarket && normalized.location) {
+      normalized.targetMarket = normalized.location;
+    }
+    if (!normalized.goal && normalized.salesGoal) {
+      normalized.goal = normalized.salesGoal;
+    }
+    if (!normalized.buyerType && normalized.buyerStrategy) {
+      normalized.buyerType = normalized.buyerStrategy;
+    }
+    if (normalized.resultTarget === undefined && normalized.targetCount !== undefined) {
+      normalized.resultTarget = normalized.targetCount;
+    }
+
+    // Convert empty string to null/undefined where appropriate
+    if (normalized.category === '') {
+      normalized.category = null;
+    }
+
+    return normalized;
+  },
+  analyzeProductObjectSchema
+);
+
+export type AnalyzeProductRequest = z.output<typeof analyzeProductObjectSchema>;
+export const analyzeProductInputSchema = AnalyzeProductRequestSchema;
+export type AnalyzeProductInput = AnalyzeProductRequest;

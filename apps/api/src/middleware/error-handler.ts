@@ -47,13 +47,23 @@ export function errorHandler(
       code: issue.code
     }));
 
+    const fields: Record<string, string> = {};
+    for (const issue of err.issues) {
+      const fieldPath = issue.path.join('.') || '_root';
+      if (!fields[fieldPath]) {
+        fields[fieldPath] = issue.message;
+      }
+    }
+
     res.status(422).json({
       error: {
         code: ErrorCodes.VALIDATION_ERROR,
         message: 'Input validation failed',
+        fields,
         details,
         requestId
-      }
+      },
+      fields
     });
     return;
   }

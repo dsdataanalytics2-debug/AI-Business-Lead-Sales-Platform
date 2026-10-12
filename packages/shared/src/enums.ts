@@ -599,17 +599,45 @@ export enum SalesPriority {
 export enum SalesMissionGoal {
   WHOLESALE = 'WHOLESALE',
   RETAIL_DISTRIBUTION = 'RETAIL_DISTRIBUTION',
+  RETAIL_STOCKIST = 'RETAIL_STOCKIST',
   DISTRIBUTOR_SEARCH = 'DISTRIBUTOR_SEARCH',
   CORPORATE_SALES = 'CORPORATE_SALES',
+  CORPORATE_GIFTING = 'CORPORATE_GIFTING',
+  RAW_MATERIAL_SUPPLY = 'RAW_MATERIAL_SUPPLY',
+  DIRECT_BUSINESS_SALE = 'DIRECT_BUSINESS_SALE',
   GENERAL_BUYER_DISCOVERY = 'GENERAL_BUYER_DISCOVERY'
 }
 
 export const SALES_MISSION_GOAL_LABELS: Record<SalesMissionGoal, string> = {
   [SalesMissionGoal.WHOLESALE]: 'Wholesale',
   [SalesMissionGoal.RETAIL_DISTRIBUTION]: 'Retail Distribution',
+  [SalesMissionGoal.RETAIL_STOCKIST]: 'Retail Stockist',
   [SalesMissionGoal.DISTRIBUTOR_SEARCH]: 'Distributor Search',
   [SalesMissionGoal.CORPORATE_SALES]: 'Corporate Sales',
+  [SalesMissionGoal.CORPORATE_GIFTING]: 'Corporate Gifting',
+  [SalesMissionGoal.RAW_MATERIAL_SUPPLY]: 'Raw Material Supply',
+  [SalesMissionGoal.DIRECT_BUSINESS_SALE]: 'Direct Business Sale',
   [SalesMissionGoal.GENERAL_BUYER_DISCOVERY]: 'General Buyer Discovery'
+};
+
+export enum SalesMissionBuyerStrategy {
+  AI_DECIDE = 'AI_DECIDE',
+  RETAILER = 'RETAILER',
+  WHOLESALER = 'WHOLESALER',
+  DISTRIBUTOR = 'DISTRIBUTOR',
+  CORPORATE = 'CORPORATE',
+  ECOMMERCE = 'ECOMMERCE',
+  CUSTOM = 'CUSTOM'
+}
+
+export const SALES_MISSION_BUYER_STRATEGY_LABELS: Record<SalesMissionBuyerStrategy, string> = {
+  [SalesMissionBuyerStrategy.AI_DECIDE]: 'AI Decide',
+  [SalesMissionBuyerStrategy.RETAILER]: 'Retailer',
+  [SalesMissionBuyerStrategy.WHOLESALER]: 'Wholesaler',
+  [SalesMissionBuyerStrategy.DISTRIBUTOR]: 'Distributor',
+  [SalesMissionBuyerStrategy.CORPORATE]: 'Corporate',
+  [SalesMissionBuyerStrategy.ECOMMERCE]: 'E-commerce',
+  [SalesMissionBuyerStrategy.CUSTOM]: 'Custom'
 };
 
 export enum SalesMissionStatus {

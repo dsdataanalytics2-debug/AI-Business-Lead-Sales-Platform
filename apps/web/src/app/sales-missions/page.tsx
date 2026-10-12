@@ -120,7 +120,7 @@ export default function SalesMissionsPage() {
               <Target className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Sales Missions</h1>
+              <h1 className="text-2xl font-bold text-slate-100 tracking-tight">AI Sales Engine</h1>
               <p className="text-sm text-slate-400">
                 Autonomous AI Sales Operator finding ready buyers and closing pipelines
               </p>
@@ -213,7 +213,7 @@ export default function SalesMissionsPage() {
               <Target className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-200">No Sales Missions yet</h3>
+              <h3 className="text-lg font-semibold text-slate-200">No AI Sales Missions yet</h3>
               <p className="text-sm text-slate-400 mt-1">
                 Start a mission to let AI analyze your product, identify target buyer segments, and discover authentic businesses.
               </p>

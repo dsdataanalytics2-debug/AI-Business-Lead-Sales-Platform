@@ -53,7 +53,8 @@ import {
   type CreateSalesMissionInput,
   type UpdateSalesMissionInput,
   type AiProductAnalysisResult,
-  type AnalyzeProductInput
+  type AnalyzeProductInput,
+  type AnalyzeProductRequest
 } from '@leadmate/shared';
 
 
@@ -65,14 +66,23 @@ export class ApiClientError extends Error {
   public readonly code: string;
   public readonly statusCode: number;
   public readonly details?: unknown;
+  public readonly fields?: Record<string, string>;
   public readonly requestId?: string;
 
-  constructor(code: string, message: string, statusCode: number, details?: unknown, requestId?: string) {
+  constructor(
+    code: string,
+    message: string,
+    statusCode: number,
+    details?: unknown,
+    requestId?: string,
+    fields?: Record<string, string>
+  ) {
     super(message);
     this.name = 'ApiClientError';
     this.code = code;
     this.statusCode = statusCode;
     this.details = details;
+    this.fields = fields;
     this.requestId = requestId;
   }
 }
@@ -134,8 +144,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     if (data && (data as ApiErrorResponse).error) {
-      const { code, message, details, requestId } = (data as ApiErrorResponse).error;
-      throw new ApiClientError(code, message, res.status, details, requestId);
+      const { code, message, details, requestId, fields } = (data as any).error;
+      const topFields = (data as any).fields || fields;
+      let displayMessage = message;
+      if (topFields && typeof topFields === 'object' && Object.keys(topFields).length > 0) {
+        const firstKey = Object.keys(topFields)[0];
+        displayMessage = topFields[firstKey] || message;
+      } else if (Array.isArray(details) && details.length > 0 && details[0]?.message) {
+        displayMessage = details[0].message;
+      }
+      throw new ApiClientError(code, displayMessage, res.status, details, requestId, topFields);
     }
     throw new ApiClientError('HTTP_ERROR', res.statusText || 'An error occurred', res.status);
   }
@@ -823,7 +841,7 @@ export const apiClient = {
     request(`/sales-missions/${encodeURIComponent(id)}/analyze`, {
       method: 'POST'
     }),
-  analyzeProductDirect: (data: AnalyzeProductInput): Promise<AiProductAnalysisResult> =>
+  analyzeProductDirect: (data: AnalyzeProductRequest | AnalyzeProductInput): Promise<AiProductAnalysisResult> =>
     request('/sales-missions/analyze-product', {
       method: 'POST',
       body: JSON.stringify(data)

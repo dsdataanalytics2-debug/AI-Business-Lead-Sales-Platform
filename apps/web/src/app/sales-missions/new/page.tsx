@@ -118,6 +118,10 @@ export default function NewSalesMissionPage() {
         setError('Product name and description are required for manual products');
         return;
       }
+      if (manualProduct.description.trim().length > 4000) {
+        setError('Product description must be 4000 characters or fewer.');
+        return;
+      }
     }
     setError(null);
 
@@ -129,8 +133,17 @@ export default function NewSalesMissionPage() {
 
   // Step 2 -> Step 3: Run AI Product Analysis
   const handleRunAiAnalysis = async () => {
+    if (!activeProductName.trim() || !activeProductDesc.trim()) {
+      setError('Product name and product description are required');
+      setStep(1);
+      return;
+    }
+    if (activeProductDesc.trim().length > 4000) {
+      setError('Product description must be 4000 characters or fewer.');
+      return;
+    }
     if (!targetMarket.trim()) {
-      setError('Target market is required');
+      setError('Please provide a valid Target Market location');
       return;
     }
     setError(null);
@@ -139,17 +152,25 @@ export default function NewSalesMissionPage() {
 
     try {
       const result = await apiClient.analyzeProductDirect({
-        productName: activeProductName,
-        productDescription: activeProductDesc,
-        category: activeProductCategory,
+        productName: activeProductName.trim(),
+        productDescription: activeProductDesc.trim(),
+        category: activeProductCategory?.trim() || null,
         goal,
-        targetMarket,
-        buyerType: 'AI_DECIDE'
+        targetMarket: targetMarket.trim(),
+        buyerType: 'AI_DECIDE',
+        resultTarget
       });
       setAnalysisResult(result);
       setSelectedBuyerTargets(result.searchTerms || result.buyerTargets.map((b) => b.category));
     } catch (err: any) {
-      setError(err?.message || 'AI product analysis failed');
+      if (err?.fields && typeof err.fields === 'object') {
+        const firstKey = Object.keys(err.fields)[0];
+        setError(err.fields[firstKey] || err.message || 'AI product analysis failed');
+      } else if (err?.details && Array.isArray(err.details) && err.details.length > 0) {
+        setError(err.details[0].message || err.message || 'AI product analysis failed');
+      } else {
+        setError(err?.message || 'AI product analysis failed');
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -369,16 +390,47 @@ export default function NewSalesMissionPage() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Description <span className="text-rose-400">*</span>
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-300">
+                        Description <span className="text-rose-400">*</span>
+                      </label>
+                      <span
+                        className={`text-[11px] font-mono ${
+                          manualProduct.description.length > 4000
+                            ? 'text-rose-400 font-semibold'
+                            : manualProduct.description.length > 3500
+                            ? 'text-amber-400'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {manualProduct.description.length} / 4000
+                      </span>
+                    </div>
                     <textarea
-                      rows={3}
+                      rows={4}
+                      maxLength={4000}
                       value={manualProduct.description}
-                      onChange={(e) => setManualProduct({ ...manualProduct, description: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setManualProduct({ ...manualProduct, description: val });
+                        if (val.length > 4000) {
+                          setError('Product description must be 4000 characters or fewer.');
+                        } else if (error === 'Product description must be 4000 characters or fewer.') {
+                          setError(null);
+                        }
+                      }}
                       placeholder="Describe target use case, specs, material, or application..."
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+                      className={`w-full px-3 py-2 bg-slate-900 border rounded-lg text-sm text-slate-200 focus:outline-none ${
+                        manualProduct.description.length > 4000
+                          ? 'border-rose-500/80 focus:border-rose-500'
+                          : 'border-slate-800 focus:border-indigo-500'
+                      }`}
                     />
+                    {manualProduct.description.length > 4000 && (
+                      <p className="text-xs text-rose-400 mt-1">
+                        Product description must be 4000 characters or fewer.
+                      </p>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">

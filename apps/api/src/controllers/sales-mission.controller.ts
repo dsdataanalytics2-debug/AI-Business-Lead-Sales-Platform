@@ -3,7 +3,8 @@ import { z } from 'zod';
 import {
   createSalesMissionSchema,
   listSalesMissionsQuerySchema,
-  analyzeProductInputSchema
+  analyzeProductInputSchema,
+  AnalyzeProductRequestSchema
 } from '@leadmate/shared';
 import { salesMissionService } from '../services/sales-mission.service.js';
 import { aiProductAnalysisService } from '../services/ai-product-analysis.service.js';
@@ -76,7 +77,21 @@ export class SalesMissionController {
 
   async analyzeDirect(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const input = analyzeProductInputSchema.parse(req.body);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[DEV analyze-product payload]', {
+          keys: Object.keys(req.body || {}),
+          productName: req.body?.productName,
+          productDescriptionLength: req.body?.productDescription?.length,
+          category: req.body?.category,
+          targetMarket: req.body?.targetMarket,
+          goal: req.body?.goal,
+          buyerType: req.body?.buyerType,
+          resultTarget: req.body?.resultTarget,
+          productId: req.body?.productId
+        });
+      }
+
+      const input = AnalyzeProductRequestSchema.parse(req.body);
       const analysis = await aiProductAnalysisService.analyzeProductForBuyerDiscovery(input, {
         organizationId: req.user!.organizationId,
         userId: req.user!.id,
@@ -87,6 +102,9 @@ export class SalesMissionController {
         data: analysis
       });
     } catch (err) {
+      if (process.env.NODE_ENV === 'development' && err instanceof z.ZodError) {
+        console.error('[DEV analyze-product Zod issues]', JSON.stringify(err.issues, null, 2));
+      }
       next(err);
     }
   }

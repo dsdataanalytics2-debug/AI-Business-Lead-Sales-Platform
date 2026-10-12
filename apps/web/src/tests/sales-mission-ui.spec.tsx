@@ -155,7 +155,7 @@ describe('LeadAtlas Sales Mission Frontend UI', () => {
   it('2. Sales Missions list page renders mission title, goal filter, and New Sales Mission CTA', () => {
     const html = renderToStaticMarkup(<SalesMissionsPage />);
 
-    expect(html).toContain('Sales Missions');
+    expect(html).toContain('AI Sales Engine');
     expect(html).toContain('New Sales Mission');
     expect(html).toContain('href="/sales-missions/new"');
     expect(html).toContain('Total Missions');
