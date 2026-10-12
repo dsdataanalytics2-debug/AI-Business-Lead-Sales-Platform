@@ -89,6 +89,10 @@ export default function ProductsPage() {
       setFormError('Product description is required');
       return;
     }
+    if (formData.description.trim().length > 4000) {
+      setFormError('Product description must be 4000 characters or fewer.');
+      return;
+    }
 
     setIsSubmitting(true);
     setFormError(null);
@@ -366,17 +370,36 @@ export default function ProductsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Description <span className="text-rose-400">*</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-slate-300">
+                      Description <span className="text-rose-400">*</span>
+                    </label>
+                    <span
+                      className={`text-[11px] font-mono ${
+                        formData.description.length > 4000
+                          ? 'text-rose-400 font-semibold'
+                          : formData.description.length > 3500
+                          ? 'text-amber-400'
+                          : 'text-slate-500'
+                      }`}
+                    >
+                      {formData.description.length} / 4000
+                    </span>
+                  </div>
                   <textarea
                     required
                     rows={3}
+                    maxLength={4000}
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     placeholder="e.g. High-demand kitchenware blender with rechargeable battery..."
                     className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                   />
+                  {formData.description.length > 4000 && (
+                    <p className="text-xs text-rose-400 mt-1">
+                      Product description must be 4000 characters or fewer.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

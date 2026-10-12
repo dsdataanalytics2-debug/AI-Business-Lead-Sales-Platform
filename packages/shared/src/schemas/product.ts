@@ -3,7 +3,7 @@ import { ProductSourceType, ProductStatus, SalesPriority } from '../enums.js';
 
 export const createProductSchema = z.object({
   name: z.string().trim().min(1, 'Product name is required').max(200, 'Name must be 200 characters or fewer'),
-  description: z.string().trim().min(1, 'Product description is required').max(2000, 'Description must be 2000 characters or fewer'),
+  description: z.string().trim().min(1, 'Product description is required').max(4000, 'Description must be 4000 characters or fewer'),
   category: z.string().trim().max(100).optional().nullable(),
   sku: z.string().trim().max(100).optional().nullable(),
   stockQuantity: z.coerce.number().int().min(0, 'Stock quantity cannot be negative').default(0),
