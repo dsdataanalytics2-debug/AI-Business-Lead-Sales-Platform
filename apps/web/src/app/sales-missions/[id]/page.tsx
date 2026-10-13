@@ -23,7 +23,11 @@ import {
   Download,
   ShieldCheck,
   HelpCircle,
-  BookmarkPlus
+  BookmarkPlus,
+  Award,
+  History,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import {
   type SalesMissionDetailDto,
@@ -54,6 +58,8 @@ export default function SalesMissionDetailPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [discoveryFeedback, setDiscoveryFeedback] = useState<DiscoveryRunMetrics | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
+  const [expandedScoreBuyerId, setExpandedScoreBuyerId] = useState<string | null>(null);
+  const [showRunHistory, setShowRunHistory] = useState(true);
 
   const loadMission = async () => {
     if (!missionId) return;
@@ -191,9 +197,10 @@ export default function SalesMissionDetailPage() {
               onClick={handleRefreshDiscovery}
               disabled={isRefreshing}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition disabled:opacity-50"
+              title="Search next untried target categories and sub-areas, returning new buyers only"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>{isRefreshing ? 'Searching for new buyers...' : 'Re-run Discovery'}</span>
+              <span>{isRefreshing ? 'Searching next combinations...' : 'Find More Buyers'}</span>
             </button>
           </div>
         </div>
@@ -224,12 +231,19 @@ export default function SalesMissionDetailPage() {
                 <div className="font-semibold text-sm">
                   {discoveryFeedback.newBuyersAdded > 0
                     ? `${discoveryFeedback.newBuyersAdded} new potential buyers found`
-                    : 'No new buyers were found for the current targets and location.'}
+                    : 'No new buyers were found for the executed search combinations.'}
                 </div>
-                <div className="text-xs opacity-90 mt-0.5">
-                  {discoveryFeedback.newBuyersAdded > 0
-                    ? `${discoveryFeedback.newBuyersAdded} new buyers added · ${discoveryFeedback.previouslyDiscoveredSkipped} previously discovered businesses skipped · Mission total: ${discoveryFeedback.missionTotal} unique buyers`
-                    : `${discoveryFeedback.previouslyDiscoveredSkipped} previously discovered businesses were skipped.`}
+                <div className="text-xs opacity-90 mt-0.5 space-y-0.5">
+                  <div>
+                    {discoveryFeedback.newBuyersAdded > 0
+                      ? `${discoveryFeedback.newBuyersAdded} new buyers added · ${discoveryFeedback.duplicatesSkipped ?? (discoveryFeedback.previouslyDiscoveredSkipped + discoveryFeedback.providerDuplicatesSkipped)} duplicates skipped · Mission total: ${discoveryFeedback.missionTotal} unique buyers`
+                      : `${discoveryFeedback.duplicatesSkipped ?? (discoveryFeedback.previouslyDiscoveredSkipped + discoveryFeedback.providerDuplicatesSkipped)} duplicates were skipped.`}
+                  </div>
+                  {discoveryFeedback.targetsUsed && discoveryFeedback.targetsUsed.length > 0 && (
+                    <div className="text-[11px] opacity-80 pt-0.5">
+                      Targets: {discoveryFeedback.targetsUsed.join(', ')} | Locations: {discoveryFeedback.locationsUsed?.join(', ') || 'Base Market'}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -359,6 +373,69 @@ export default function SalesMissionDetailPage() {
               </div>
             )}
 
+            {/* Discovery Run History Section */}
+            {(() => {
+              const runs = (mission.discoveryRuns || (mission.productAnalysisSnapshot as any)?.discoveryRuns || []) as DiscoveryRunMetrics[];
+              if (runs.length === 0) return null;
+
+              return (
+                <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <History className="w-4 h-4 text-indigo-400" />
+                      <h3 className="text-sm font-semibold text-slate-200">
+                        Discovery Run History ({runs.length} {runs.length === 1 ? 'Run' : 'Runs'})
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRunHistory(!showRunHistory)}
+                      className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1 transition"
+                    >
+                      <span>{showRunHistory ? 'Collapse' : 'Expand'}</span>
+                      {showRunHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+
+                  {showRunHistory && (
+                    <div className="space-y-2 pt-1">
+                      {runs.map((r, i) => (
+                        <div
+                          key={i}
+                          className="p-3 bg-slate-900/80 border border-slate-800/90 rounded-xl text-xs space-y-1.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-200">
+                              Run #{r.runNumber || i + 1}
+                            </span>
+                            <span className="text-emerald-400 font-semibold">
+                              +{r.newBuyersAdded} new buyers
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-400">
+                            <div>
+                              <span className="text-slate-500">Targets:</span>{' '}
+                              <span className="text-slate-300">{r.targetsUsed?.join(', ') || 'General'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Locations:</span>{' '}
+                              <span className="text-slate-300">{r.locationsUsed?.join(', ') || mission.targetMarket}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Duplicates Skipped:</span>{' '}
+                              <span className="text-slate-300">
+                                {r.duplicatesSkipped ?? (r.previouslyDiscoveredSkipped + r.providerDuplicatesSkipped)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Discovered Businesses / Buyers Section */}
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -401,7 +478,7 @@ export default function SalesMissionDetailPage() {
                   <Building2 className="w-8 h-8 text-slate-500 mx-auto" />
                   <p className="text-sm text-slate-300">No businesses match current filters</p>
                   <p className="text-xs text-slate-500">
-                    Try broadening your search or click "Re-run Discovery" to query additional directories.
+                    Try broadening your search or click "Find More Buyers" to query next combinations.
                   </p>
                 </div>
               ) : (
@@ -436,13 +513,72 @@ export default function SalesMissionDetailPage() {
                             <span
                               className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex-shrink-0 ${
                                 isSaved
-                                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                                   : 'bg-slate-800 text-slate-300'
                               }`}
                             >
                               {isSaved ? 'In CRM' : buyer.status}
                             </span>
                           </div>
+
+                          {/* Buyer Score (0-100) Badge & Expandable Breakdown */}
+                          {buyer.buyerScore !== null && buyer.buyerScore !== undefined && (
+                            <div className="pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedScoreBuyerId(expandedScoreBuyerId === buyer.id ? null : buyer.id)}
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                                  buyer.buyerScore >= 85
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                                    : buyer.buyerScore >= 70
+                                    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                                }`}
+                                title="Click to view score breakdown"
+                              >
+                                <Award className="w-3.5 h-3.5" />
+                                <span>Buyer Score: {buyer.buyerScore}</span>
+                                <span className="text-[10px] font-normal opacity-70">/100</span>
+                                {expandedScoreBuyerId === buyer.id ? (
+                                  <ChevronUp className="w-3 h-3 ml-0.5" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3 ml-0.5" />
+                                )}
+                              </button>
+
+                              {expandedScoreBuyerId === buyer.id && buyer.scoreBreakdown && (
+                                <div className="mt-2 p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5 text-[11px] animate-in fade-in duration-150">
+                                  <div className="flex items-center justify-between font-semibold text-slate-300 border-b border-slate-800 pb-1">
+                                    <span>Score Component</span>
+                                    <span>Rating</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-slate-400">
+                                    <span>Product Fit</span>
+                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.productFit}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-slate-400">
+                                    <span>Category Match</span>
+                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.categoryMatch}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-slate-400">
+                                    <span>Location Fit</span>
+                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.locationFit}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-slate-400">
+                                    <span>Contactability</span>
+                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.contactability}%</span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-slate-400">
+                                    <span>Source Confidence</span>
+                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.sourceConfidence}%</span>
+                                  </div>
+                                  <div className="pt-1 text-[10px] text-slate-500 italic">
+                                    Advisory AI evaluation · Facts verified via public records
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Address / Location */}
                           {(buyer.address || buyer.city) && (

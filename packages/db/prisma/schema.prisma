@@ -977,6 +977,8 @@ model SalesMissionBuyer {
   longitude            Float?
   website              String?
   phone                String?
+  buyerScore           Int?     @map("buyer_score")
+  scoreBreakdown       Json?    @map("score_breakdown")
   matchedBuyerCategory String?  @map("matched_buyer_category")
   searchTargetUsed     String?  @map("search_target_used")
   sourceData           Json?    @map("source_data")
@@ -993,5 +995,6 @@ model SalesMissionBuyer {
   @@unique([salesMissionId, provider, externalBusinessId])
   @@index([organizationId, salesMissionId])
   @@index([organizationId, status])
+  @@index([organizationId, buyerScore])
   @@map("sales_mission_buyers")
 }

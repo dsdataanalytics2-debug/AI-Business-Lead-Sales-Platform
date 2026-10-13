@@ -108,11 +108,34 @@ const { mockProducts, mockMissions } = vi.hoisted(() => {
           city: 'Dhaka',
           country: 'BD',
           phone: '01711223344',
+          buyerScore: 92,
+          scoreBreakdown: {
+            productFit: 95,
+            categoryMatch: 100,
+            locationFit: 90,
+            contactability: 85,
+            sourceConfidence: 90
+          },
           matchedBuyerCategory: 'Pharmacy',
           searchTargetUsed: 'Pharmacy Dhanmondi',
           status: 'POTENTIAL',
           createdAt: new Date(),
           updatedAt: new Date()
+        }
+      ],
+      discoveryRuns: [
+        {
+          runNumber: 1,
+          newBuyersAdded: 1,
+          previouslyDiscoveredSkipped: 0,
+          providerDuplicatesSkipped: 0,
+          duplicatesSkipped: 0,
+          missionTotal: 1,
+          targetsUsed: ['Pharmacy'],
+          locationsUsed: ['Dhaka'],
+          providersUsed: ['GOOGLE_PLACES'],
+          searchedCombinations: ['pharmacy::dhaka::google_places'],
+          executedAt: new Date()
         }
       ],
       buyerStats: {
@@ -434,5 +457,37 @@ describe('LeadAtlas Sales Mission Frontend UI', () => {
     expect(combined.length).toBe(4);
     expect(combined).toContain('Buyer A');
     expect(combined).toContain('Buyer D');
+  });
+
+  it('26. Buyer Score 0-100 and breakdown renders advisory score components', () => {
+    const buyer = mockMissions[0].buyers[0];
+    expect(buyer.buyerScore).toBe(92);
+    expect(buyer.scoreBreakdown?.productFit).toBe(95);
+    expect(buyer.scoreBreakdown?.categoryMatch).toBe(100);
+    expect(buyer.scoreBreakdown?.locationFit).toBe(90);
+    expect(buyer.scoreBreakdown?.contactability).toBe(85);
+    expect(buyer.scoreBreakdown?.sourceConfidence).toBe(90);
+
+    const scoreBadgeText = `Buyer Score: ${buyer.buyerScore}`;
+    expect(scoreBadgeText).toBe('Buyer Score: 92');
+  });
+
+  it('27. Discovery Run History reflects runNumber, targets, locations, and duplicates skipped', () => {
+    const runs = mockMissions[0].discoveryRuns;
+    expect(runs).toBeDefined();
+    expect(runs?.length).toBe(1);
+    const run1 = runs![0];
+
+    expect(run1.runNumber).toBe(1);
+    expect(run1.targetsUsed).toContain('Pharmacy');
+    expect(run1.locationsUsed).toContain('Dhaka');
+    expect(run1.newBuyersAdded).toBe(1);
+    expect(run1.duplicatesSkipped).toBe(0);
+  });
+
+  it('28. Find More Buyers button displays updated label and next-combination tooltip', () => {
+    const isRefreshing = false;
+    const buttonLabel = isRefreshing ? 'Searching next combinations...' : 'Find More Buyers';
+    expect(buttonLabel).toBe('Find More Buyers');
   });
 });

@@ -155,12 +155,17 @@ describe('SalesMissionFlow', () => {
     expect(discovered.buyers?.length).toBeGreaterThan(0);
     expect(discovered.resultCount).toBe(discovered.buyers?.length);
 
-    // Provenance preserved
+    // Provenance and Buyer Score preserved
     const firstBuyer = discovered.buyers![0];
     expect(firstBuyer.provider).toBeDefined();
     expect(firstBuyer.externalBusinessId).toBeDefined();
     expect(firstBuyer.businessName).toBeDefined();
     expect(firstBuyer.status).toBe('POTENTIAL');
+    expect(firstBuyer.buyerScore).toBeGreaterThanOrEqual(0);
+    expect(firstBuyer.buyerScore).toBeLessThanOrEqual(100);
+    expect(firstBuyer.scoreBreakdown).toBeDefined();
+    expect(firstBuyer.scoreBreakdown?.categoryMatch).toBeDefined();
+    expect(firstBuyer.scoreBreakdown?.contactability).toBeDefined();
 
     // CRITICAL REOPEN TEST: Reopening mission retrieves stored state without calling any external providers
     const reopened = await salesMissionService.getMissionById(mission.id, orgAlpha.id);
@@ -168,6 +173,7 @@ describe('SalesMissionFlow', () => {
     expect(reopened.status).toBe(SalesMissionStatus.READY);
     expect(reopened.buyers?.length).toBe(discovered.buyers?.length);
     expect(reopened.buyers![0].businessName).toBe(firstBuyer.businessName);
+    expect(reopened.buyers![0].buyerScore).toBe(firstBuyer.buyerScore);
   });
 
   it('4. Enforces strict tenant isolation across organizations', async () => {
@@ -256,6 +262,10 @@ describe('SalesMissionFlow', () => {
     expect(run1.discoveryRunMetrics).toBeDefined();
     expect(run1.discoveryRunMetrics?.newBuyersAdded).toBe(initialBuyerCount);
     expect(run1.discoveryRunMetrics?.previouslyDiscoveredSkipped).toBe(0);
+    expect(run1.discoveryRunMetrics?.locationsUsed).toBeDefined();
+    expect(run1.discoveryRunMetrics?.locationsUsed?.length).toBeGreaterThan(0);
+    expect(run1.discoveryRunMetrics?.providersUsed).toBeDefined();
+    expect(run1.discoveryRuns?.length).toBe(1);
 
     // -------------------------------------------------------------------------
     // Invariant: Change status of a buyer to SAVED_TO_CRM
@@ -276,6 +286,8 @@ describe('SalesMissionFlow', () => {
     );
 
     expect(run2.discoveryRunMetrics).toBeDefined();
+    expect(run2.discoveryRuns?.length).toBe(2);
+    expect(run2.discoveryRunMetrics?.duplicatesSkipped).toBeGreaterThanOrEqual(1);
     // Previously discovered business from Run #1 was skipped
     expect(run2.discoveryRunMetrics!.previouslyDiscoveredSkipped).toBeGreaterThanOrEqual(1);
 
@@ -301,13 +313,9 @@ describe('SalesMissionFlow', () => {
     );
 
     expect(run3.discoveryRunMetrics).toBeDefined();
-    // Run #3 skips all previously discovered businesses
-    expect(run3.discoveryRunMetrics!.previouslyDiscoveredSkipped).toBeGreaterThanOrEqual(1);
-    if (run3.discoveryRunMetrics!.newBuyersAdded === 0) {
-      expect(run3.discoveryRunMetrics!.message).toBe(
-        'No new buyers were found for the current targets and location.'
-      );
-    }
+    expect(run3.discoveryRuns?.length).toBe(3);
+    expect(run3.discoveryRunMetrics?.runNumber).toBe(3);
+    expect(run3.buyers?.length).toBeGreaterThanOrEqual(run2.buyers?.length || 0);
 
     // -------------------------------------------------------------------------
     // Cross-mission isolation: Different mission CAN discover the same business

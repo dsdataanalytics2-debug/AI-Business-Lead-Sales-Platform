@@ -28,7 +28,12 @@ import {
 import {
   normalizeBusinessName,
   normalizeWebsite,
-  normalizePhone
+  normalizePhone,
+  computeBuyerScore,
+  planSearchCombinations,
+  serializeCoordinate,
+  getSubAreasForMarket,
+  type ProductContextInput
 } from '@leadmate/core';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
 import { aiProductAnalysisService } from './ai-product-analysis.service.js';
@@ -165,6 +170,8 @@ export class SalesMissionService {
       longitude: b.longitude,
       website: b.website,
       phone: b.phone,
+      buyerScore: b.buyerScore !== null && b.buyerScore !== undefined ? Number(b.buyerScore) : null,
+      scoreBreakdown: b.scoreBreakdown || null,
       matchedBuyerCategory: b.matchedBuyerCategory,
       searchTargetUsed: b.searchTargetUsed,
       sourceData: b.sourceData,
@@ -217,7 +224,8 @@ export class SalesMissionService {
         found: formattedBuyers.length,
         savedToCrm: formattedBuyers.filter((b) => b.status === MissionBuyerStatus.SAVED_TO_CRM).length
       },
-      discoveryRunMetrics: fallbackMetrics
+      discoveryRunMetrics: fallbackMetrics,
+      discoveryRuns: Array.isArray(existingSnapshot?.discoveryRuns) ? existingSnapshot.discoveryRuns : []
     };
   }
 
@@ -491,7 +499,7 @@ export class SalesMissionService {
       }
     }
 
-    // 2. Determine pool of approved candidate categories
+    // 2. Determine pool of approved candidate categories (Primary vs Secondary)
     const approvedTargets: string[] = [];
     if (targetCategoriesOverride && targetCategoriesOverride.length > 0) {
       approvedTargets.push(...targetCategoriesOverride.map((s) => s.trim()).filter(Boolean));
@@ -527,6 +535,10 @@ export class SalesMissionService {
       candidateCategories = analysis.searchTerms;
     }
 
+    // Partition candidate categories into Primary (top 2-3) and Secondary (remaining)
+    const primaryTargets = candidateCategories.slice(0, 3);
+    const secondaryTargets = candidateCategories.slice(3);
+
     await prisma.salesMission.update({
       where: { id: missionId },
       data: {
@@ -536,41 +548,89 @@ export class SalesMissionService {
       }
     });
 
+    // 3. Load previously searched coordinates to prevent duplicate search work
+    const existingSnapshot = (mission.productAnalysisSnapshot as any) || {};
+    const previousRuns: DiscoveryRunMetrics[] = Array.isArray(existingSnapshot.discoveryRuns)
+      ? existingSnapshot.discoveryRuns
+      : [];
+
+    const searchedCoordinates = new Set<string>();
+    if (Array.isArray(existingSnapshot.searchedCoordinates)) {
+      for (const c of existingSnapshot.searchedCoordinates) {
+        searchedCoordinates.add(String(c).toLowerCase().trim());
+      }
+    }
+    for (const run of previousRuns) {
+      if (Array.isArray(run.searchedCombinations)) {
+        for (const sc of run.searchedCombinations) {
+          searchedCoordinates.add(String(sc).toLowerCase().trim());
+        }
+      }
+    }
+
+    const providerKey = process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO';
+
+    // 4. Plan the next 2-3 NEW search combinations (Deep Coverage Engine)
+    let plannedCombinations = planSearchCombinations({
+      primaryTargets,
+      secondaryTargets,
+      baseMarket: mission.targetMarket,
+      provider: providerKey,
+      searchedCombinations: searchedCoordinates,
+      maxCombinations: 3
+    });
+
+    // Fallback if all standard category combinations were exhausted: search product name in base market or sub-areas
+    if (plannedCombinations.length === 0) {
+      const productName = mission.product ? mission.product.name : mission.name;
+      const subAreas = getSubAreasForMarket(mission.targetMarket);
+      const fallbackLocs = [mission.targetMarket, ...subAreas];
+      for (const loc of fallbackLocs) {
+        const key = serializeCoordinate(productName, loc, providerKey);
+        if (!searchedCoordinates.has(key)) {
+          plannedCombinations.push({
+            target: productName,
+            location: loc,
+            provider: providerKey,
+            tier: 'PRIMARY_BASE',
+            coordinateKey: key
+          });
+          if (plannedCombinations.length >= 2) break;
+        }
+      }
+    }
+
     const targetNewCount = mission.resultTarget || 20;
     const newDiscoveredItems: BusinessSearchResult[] = [];
     const newRunSeenKeys = new Set<string>();
     let previouslyDiscoveredSkipped = 0;
     let providerDuplicatesSkipped = 0;
-    const targetsUsed: string[] = [];
-
     const runStartedAt = new Date();
-    const providerKey = process.env.NODE_ENV === 'test' ? 'MOCK' : 'AUTO';
 
-    // 3. Search approved target categories in sequence until targetNewCount new buyers are found
-    for (const cat of candidateCategories) {
+    // 5. Execute planned combinations (Strictly bounded to planned combinations, max 2-3)
+    for (const combo of plannedCombinations) {
       if (newDiscoveredItems.length >= targetNewCount) {
         break;
       }
-      targetsUsed.push(cat);
+      searchedCoordinates.add(combo.coordinateKey);
 
       const needed = targetNewCount - newDiscoveredItems.length;
-      // Request depth (at least 20, max 50) so skipping previously-seen businesses still yields new results
-      const queryLimit = Math.min(Math.max(needed * 2, 20), 50);
+      const queryLimit = Math.min(Math.max(needed * 2, 15), 35);
 
       try {
         const results = await businessSearchService.search(
           {
-            q: cat,
-            location: mission.targetMarket,
+            q: combo.target,
+            location: combo.location,
             limit: queryLimit,
-            provider: providerKey,
-            targetCategories: [cat],
+            provider: combo.provider,
+            targetCategories: [combo.target],
             buyerType: mission.buyerType !== 'AI_DECIDE' ? (mission.buyerType as any) : undefined
           },
           {
             organizationId: mission.organizationId,
             userId: context?.userId || mission.createdByUserId,
-            correlationId: context?.correlationId || `mission-${mission.id}-${cat}`
+            correlationId: context?.correlationId || `mission-${mission.id}-${combo.target}-${combo.location}`
           }
         );
 
@@ -606,8 +666,8 @@ export class SalesMissionService {
 
           newDiscoveredItems.push({
             ...item,
-            matchedBuyerCategory: item.matchedBuyerCategory || cat,
-            searchTargetUsed: item.searchTargetUsed || `${cat} in ${mission.targetMarket}`
+            matchedBuyerCategory: item.matchedBuyerCategory || combo.target,
+            searchTargetUsed: item.searchTargetUsed || `${combo.target} in ${combo.location} (${combo.provider})`
           });
 
           if (newDiscoveredItems.length >= targetNewCount) {
@@ -615,78 +675,39 @@ export class SalesMissionService {
           }
         }
       } catch (err) {
-        console.warn(`Category discovery query for "${cat}" failed:`, err);
+        console.warn(`Discovery combination query for "${combo.target}" in "${combo.location}" failed:`, err);
       }
     }
 
-    // 4. Fallback search with product name if target categories were exhausted before reaching targetNewCount
-    if (newDiscoveredItems.length < targetNewCount) {
-      const searchQuery = mission.product ? mission.product.name : mission.name;
-      if (!targetsUsed.includes(searchQuery)) {
-        targetsUsed.push(searchQuery);
-        const needed = targetNewCount - newDiscoveredItems.length;
+    // 6. Compute Advisory Buyer Score (0-100) & Persist ONLY new buyers
+    const productContext: ProductContextInput = {
+      productName: mission.product ? mission.product.name : mission.name,
+      productDescription: mission.product ? mission.product.description : mission.name,
+      productCategory: mission.product?.category || undefined,
+      targetMarket: mission.targetMarket,
+      primaryCategories: primaryTargets,
+      secondaryCategories: secondaryTargets
+    };
 
-        try {
-          const results = await businessSearchService.search(
-            {
-              q: searchQuery,
-              location: mission.targetMarket,
-              limit: Math.min(Math.max(needed * 2, 20), 50),
-              provider: providerKey,
-              buyerType: mission.buyerType !== 'AI_DECIDE' ? (mission.buyerType as any) : undefined
-            },
-            {
-              organizationId: mission.organizationId,
-              userId: context?.userId || mission.createdByUserId,
-              correlationId: context?.correlationId || `mission-${mission.id}-raw`
-            }
-          );
-
-          for (const item of results) {
-            const keys = this.extractDedupeKeys({
-              provider: item.provider,
-              externalId: item.externalId,
-              name: item.name,
-              address: item.address,
-              locality: item.locality,
-              city: item.city,
-              contacts: item.contacts,
-              website: item.website
-            });
-
-            if (keys.some((k) => existingExclusionKeys.has(k))) {
-              previouslyDiscoveredSkipped++;
-              continue;
-            }
-            if (keys.some((k) => newRunSeenKeys.has(k))) {
-              providerDuplicatesSkipped++;
-              continue;
-            }
-
-            for (const k of keys) {
-              newRunSeenKeys.add(k);
-            }
-
-            newDiscoveredItems.push({
-              ...item,
-              matchedBuyerCategory: item.matchedBuyerCategory || 'General',
-              searchTargetUsed: item.searchTargetUsed || `${searchQuery} in ${mission.targetMarket}`
-            });
-
-            if (newDiscoveredItems.length >= targetNewCount) {
-              break;
-            }
-          }
-        } catch {
-          // Ignore fallback query failure
-        }
-      }
-    }
-
-    // 5. Persist ONLY new buyers (never overwrite or delete older records)
     const newlyCreatedBuyerIds = new Set<string>();
 
     for (const item of newDiscoveredItems) {
+      const phoneVal = item.contacts?.find((c) => c.type === 'PHONE')?.rawValue || null;
+      const scoreResult = computeBuyerScore(
+        {
+          businessName: item.name,
+          category: item.category,
+          matchedBuyerCategory: item.matchedBuyerCategory,
+          address: item.address,
+          city: item.city,
+          phone: phoneVal,
+          website: item.website,
+          provider: item.provider,
+          externalBusinessId: item.externalId
+        },
+        productContext
+      );
+
       try {
         const created = await prisma.salesMissionBuyer.create({
           data: {
@@ -702,7 +723,9 @@ export class SalesMissionService {
             latitude: item.latitude || null,
             longitude: item.longitude || null,
             website: item.website || null,
-            phone: item.contacts?.find((c) => c.type === 'PHONE')?.rawValue || null,
+            phone: phoneVal,
+            buyerScore: scoreResult.buyerScore,
+            scoreBreakdown: scoreResult.breakdown as any,
             matchedBuyerCategory: item.matchedBuyerCategory || null,
             searchTargetUsed: item.searchTargetUsed || null,
             sourceData: item as any,
@@ -716,7 +739,7 @@ export class SalesMissionService {
       }
     }
 
-    // 6. Fetch cumulative buyers
+    // 7. Fetch cumulative buyers
     const allBuyers = await prisma.salesMissionBuyer.findMany({
       where: {
         salesMissionId: mission.id,
@@ -725,28 +748,35 @@ export class SalesMissionService {
       orderBy: { createdAt: 'desc' }
     });
 
-    // 7. Calculate run metrics & persist in run history
-    const existingSnapshot = (mission.productAnalysisSnapshot as any) || {};
-    const previousRuns = Array.isArray(existingSnapshot.discoveryRuns) ? existingSnapshot.discoveryRuns : [];
+    // 8. Calculate run metrics & persist in run history
     const runNumber = previousRuns.length + 1;
+    const targetsUsed = Array.from(new Set(plannedCombinations.map((c) => c.target)));
+    const locationsUsed = Array.from(new Set(plannedCombinations.map((c) => c.location)));
+    const providersUsed = Array.from(new Set(plannedCombinations.map((c) => c.provider)));
 
     const runMetrics: DiscoveryRunMetrics = {
       runNumber,
       newBuyersAdded: newlyCreatedBuyerIds.size,
       previouslyDiscoveredSkipped,
       providerDuplicatesSkipped,
+      duplicatesSkipped: previouslyDiscoveredSkipped + providerDuplicatesSkipped,
       missionTotal: allBuyers.length,
       targetsUsed,
+      locationsUsed,
+      providersUsed,
+      searchedCombinations: plannedCombinations.map((c) => c.coordinateKey),
+      executedAt: runStartedAt,
       message:
         newlyCreatedBuyerIds.size > 0
-          ? `${newlyCreatedBuyerIds.size} new potential buyers found`
-          : 'No new buyers were found for the current targets and location.'
+          ? `${newlyCreatedBuyerIds.size} new potential buyers found across ${plannedCombinations.length} combination(s)`
+          : 'No new buyers were found for the current search combinations.'
     };
 
     const updatedSnapshot = {
       ...existingSnapshot,
       discoveryRuns: [...previousRuns, runMetrics],
-      latestRunMetrics: runMetrics
+      latestRunMetrics: runMetrics,
+      searchedCoordinates: Array.from(searchedCoordinates)
     };
 
     const updated = await prisma.salesMission.update({

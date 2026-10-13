@@ -91,13 +91,26 @@ export const listSalesMissionsQuerySchema = z.object({
 
 export type ListSalesMissionsQuery = z.infer<typeof listSalesMissionsQuerySchema>;
 
+export interface BuyerScoreBreakdown {
+  productFit: number;
+  categoryMatch: number;
+  locationFit: number;
+  contactability: number;
+  sourceConfidence: number;
+}
+
 export interface DiscoveryRunMetrics {
   runNumber: number;
   newBuyersAdded: number;
   previouslyDiscoveredSkipped: number;
   providerDuplicatesSkipped: number;
+  duplicatesSkipped?: number;
   missionTotal: number;
   targetsUsed?: string[];
+  locationsUsed?: string[];
+  providersUsed?: string[];
+  searchedCombinations?: string[];
+  executedAt?: string | Date;
   message?: string;
 }
 
@@ -116,6 +129,8 @@ export interface SalesMissionBuyerDto {
   longitude?: number | null;
   website?: string | null;
   phone?: string | null;
+  buyerScore?: number | null;
+  scoreBreakdown?: BuyerScoreBreakdown | null;
   matchedBuyerCategory?: string | null;
   searchTargetUsed?: string | null;
   sourceData?: any;
@@ -151,6 +166,7 @@ export interface SalesMissionDetailDto {
     savedToCrm: number;
   };
   discoveryRunMetrics?: DiscoveryRunMetrics | null;
+  discoveryRuns?: DiscoveryRunMetrics[];
 }
 
 export const analyzeProductObjectSchema = z.object({
