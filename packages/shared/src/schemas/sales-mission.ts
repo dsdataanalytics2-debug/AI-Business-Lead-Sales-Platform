@@ -91,6 +91,16 @@ export const listSalesMissionsQuerySchema = z.object({
 
 export type ListSalesMissionsQuery = z.infer<typeof listSalesMissionsQuerySchema>;
 
+export interface DiscoveryRunMetrics {
+  runNumber: number;
+  newBuyersAdded: number;
+  previouslyDiscoveredSkipped: number;
+  providerDuplicatesSkipped: number;
+  missionTotal: number;
+  targetsUsed?: string[];
+  message?: string;
+}
+
 export interface SalesMissionBuyerDto {
   id: string;
   organizationId: string;
@@ -111,6 +121,7 @@ export interface SalesMissionBuyerDto {
   sourceData?: any;
   leadId?: string | null;
   status: MissionBuyerStatus | string;
+  isNew?: boolean;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -139,6 +150,7 @@ export interface SalesMissionDetailDto {
     found: number;
     savedToCrm: number;
   };
+  discoveryRunMetrics?: DiscoveryRunMetrics | null;
 }
 
 export const analyzeProductObjectSchema = z.object({

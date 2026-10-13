@@ -28,6 +28,7 @@ import {
 import {
   type SalesMissionDetailDto,
   type SalesMissionBuyerDto,
+  type DiscoveryRunMetrics,
   SalesMissionStatus,
   SalesMissionGoal,
   MissionBuyerStatus,
@@ -51,6 +52,7 @@ export default function SalesMissionDetailPage() {
 
   // Action states
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [discoveryFeedback, setDiscoveryFeedback] = useState<DiscoveryRunMetrics | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
 
   const loadMission = async () => {
@@ -74,9 +76,13 @@ export default function SalesMissionDetailPage() {
   const handleRefreshDiscovery = async () => {
     if (!missionId) return;
     setIsRefreshing(true);
+    setError(null);
     try {
       const updated = await apiClient.refreshMission(missionId);
       setMission(updated);
+      if (updated.discoveryRunMetrics) {
+        setDiscoveryFeedback(updated.discoveryRunMetrics);
+      }
     } catch (err: any) {
       setError(err?.message || 'Failed to refresh buyer discovery');
     } finally {
@@ -181,12 +187,13 @@ export default function SalesMissionDetailPage() {
             </button>
 
             <button
+              id="rerun-discovery-btn"
               onClick={handleRefreshDiscovery}
               disabled={isRefreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>Re-run Discovery</span>
+              <span>{isRefreshing ? 'Searching for new buyers...' : 'Re-run Discovery'}</span>
             </button>
           </div>
         </div>
@@ -195,6 +202,43 @@ export default function SalesMissionDetailPage() {
           <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-300 text-sm flex items-center gap-3">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             <span>{error}</span>
+          </div>
+        )}
+
+        {discoveryFeedback && (
+          <div
+            id="discovery-feedback-banner"
+            className={`p-4 rounded-xl border text-sm flex items-start justify-between gap-3 ${
+              discoveryFeedback.newBuyersAdded > 0
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+                : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {discoveryFeedback.newBuyersAdded > 0 ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+              )}
+              <div>
+                <div className="font-semibold text-sm">
+                  {discoveryFeedback.newBuyersAdded > 0
+                    ? `${discoveryFeedback.newBuyersAdded} new potential buyers found`
+                    : 'No new buyers were found for the current targets and location.'}
+                </div>
+                <div className="text-xs opacity-90 mt-0.5">
+                  {discoveryFeedback.newBuyersAdded > 0
+                    ? `${discoveryFeedback.newBuyersAdded} new buyers added · ${discoveryFeedback.previouslyDiscoveredSkipped} previously discovered businesses skipped · Mission total: ${discoveryFeedback.missionTotal} unique buyers`
+                    : `${discoveryFeedback.previouslyDiscoveredSkipped} previously discovered businesses were skipped.`}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setDiscoveryFeedback(null)}
+              className="text-xs opacity-60 hover:opacity-100"
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -374,9 +418,16 @@ export default function SalesMissionDetailPage() {
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div>
-                              <h3 className="font-semibold text-slate-100 text-base">
-                                {buyer.businessName}
-                              </h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-semibold text-slate-100 text-base">
+                                  {buyer.businessName}
+                                </h3>
+                                {buyer.isNew && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase tracking-wide">
+                                    NEW
+                                  </span>
+                                )}
+                              </div>
                               {buyer.category && (
                                 <span className="text-xs text-slate-400">{buyer.category}</span>
                               )}

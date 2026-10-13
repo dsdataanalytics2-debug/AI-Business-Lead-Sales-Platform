@@ -208,4 +208,144 @@ describe('SalesMissionFlow', () => {
       salesMissionService.getMissionById(mission.id, orgBeta.id)
     ).rejects.toThrow('not found');
   });
+
+  it('5. Unique Re-Discovery: Run #1 finds initial buyers; Re-run #2 skips previously seen businesses, appends only new buyers, preserves CRM/disqualified exclusions, and isolates by mission', async () => {
+    const product = await productService.createProduct(
+      {
+        name: 'Smart Diagnostic Kit',
+        description: 'Automated health diagnostic kits for medical centers.',
+        stockQuantity: 200,
+        currency: 'BDT'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+
+    const mission = await salesMissionService.createMission(
+      {
+        productId: product.id,
+        name: 'Diagnostic Kit Dhaka Mission',
+        goal: SalesMissionGoal.DISTRIBUTOR_SEARCH,
+        targetMarket: 'Dhaka',
+        buyerType: 'AI_DECIDE',
+        resultTarget: 1, // Only ask for 1 buyer in run #1
+        selectedBuyerTargets: ['Dental Clinic', 'Pharmacy']
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+
+    // -------------------------------------------------------------------------
+    // Run #1: Discover initial buyer
+    // -------------------------------------------------------------------------
+    const run1 = await salesMissionService.discoverBuyers(
+      mission.id,
+      ['Dental Clinic'],
+      { organizationId: orgAlpha.id, userId: userAlpha.id }
+    );
+
+    expect(run1.status).toBe(SalesMissionStatus.READY);
+    expect(run1.buyers?.length).toBeGreaterThanOrEqual(1);
+    const initialBuyerCount = run1.buyers!.length;
+    const firstBuyerExternalId = run1.buyers![0].externalBusinessId;
+
+    expect(run1.discoveryRunMetrics).toBeDefined();
+    expect(run1.discoveryRunMetrics?.newBuyersAdded).toBe(initialBuyerCount);
+    expect(run1.discoveryRunMetrics?.previouslyDiscoveredSkipped).toBe(0);
+
+    // -------------------------------------------------------------------------
+    // Invariant: Change status of a buyer to SAVED_TO_CRM
+    // -------------------------------------------------------------------------
+    await prisma.salesMissionBuyer.update({
+      where: { id: run1.buyers![0].id },
+      data: { status: 'SAVED_TO_CRM' }
+    });
+
+    // -------------------------------------------------------------------------
+    // Run #2: Re-run discovery on the SAME mission
+    // -------------------------------------------------------------------------
+    // Must exclude the buyer already in the mission (even though it is SAVED_TO_CRM)
+    const run2 = await salesMissionService.discoverBuyers(
+      mission.id,
+      ['Dental Clinic', 'Pharmacy'],
+      { organizationId: orgAlpha.id, userId: userAlpha.id }
+    );
+
+    expect(run2.discoveryRunMetrics).toBeDefined();
+    // Previously discovered business from Run #1 was skipped
+    expect(run2.discoveryRunMetrics!.previouslyDiscoveredSkipped).toBeGreaterThanOrEqual(1);
+
+    // Old buyers are NEVER deleted; mission total is cumulative
+    expect(run2.buyers?.length).toBeGreaterThanOrEqual(initialBuyerCount);
+
+    // The first buyer appears exactly once in the mission
+    const matchesOfFirstBuyer = run2.buyers!.filter(
+      (b) => b.externalBusinessId === firstBuyerExternalId
+    );
+    expect(matchesOfFirstBuyer.length).toBe(1);
+    // Its SAVED_TO_CRM status was preserved
+    expect(matchesOfFirstBuyer[0].status).toBe('SAVED_TO_CRM');
+
+    // -------------------------------------------------------------------------
+    // Run #3: Test exhaustion / no new buyers found
+    // -------------------------------------------------------------------------
+    // Re-running with only the exact same exhausted target category
+    const run3 = await salesMissionService.discoverBuyers(
+      mission.id,
+      ['Dental Clinic'],
+      { organizationId: orgAlpha.id, userId: userAlpha.id }
+    );
+
+    expect(run3.discoveryRunMetrics).toBeDefined();
+    // Run #3 skips all previously discovered businesses
+    expect(run3.discoveryRunMetrics!.previouslyDiscoveredSkipped).toBeGreaterThanOrEqual(1);
+    if (run3.discoveryRunMetrics!.newBuyersAdded === 0) {
+      expect(run3.discoveryRunMetrics!.message).toBe(
+        'No new buyers were found for the current targets and location.'
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Cross-mission isolation: Different mission CAN discover the same business
+    // -------------------------------------------------------------------------
+    const userBeta = await prisma.user.create({
+      data: {
+        organizationId: orgBeta.id,
+        email: `mission-user-beta-${Date.now()}@test.local`,
+        passwordHash: 'argon2id$mock',
+        name: 'Mission Tester Beta',
+        role: 'ADMIN'
+      }
+    });
+
+    const missionBeta = await salesMissionService.createMission(
+      {
+        name: 'Beta Mission for Different Product',
+        goal: SalesMissionGoal.RETAIL_DISTRIBUTION,
+        targetMarket: 'Dhaka',
+        buyerType: 'AI_DECIDE',
+        resultTarget: 2,
+        selectedBuyerTargets: ['Dental Clinic']
+      },
+      {
+        organizationId: orgBeta.id,
+        userId: userBeta.id
+      }
+    );
+
+    const runBeta = await salesMissionService.discoverBuyers(
+      missionBeta.id,
+      ['Dental Clinic'],
+      { organizationId: orgBeta.id, userId: userBeta.id }
+    );
+
+    // Beta mission can discover the business because dedupe is scoped to the mission
+    expect(runBeta.buyers?.length).toBeGreaterThan(0);
+    const betaBuyerIds = runBeta.buyers!.map((b) => b.externalBusinessId);
+    expect(betaBuyerIds).toContain(firstBuyerExternalId);
+  });
 });

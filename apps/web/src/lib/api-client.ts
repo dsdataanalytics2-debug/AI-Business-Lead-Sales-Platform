@@ -854,7 +854,19 @@ export const apiClient = {
   refreshMission: (id: string): Promise<SalesMissionDetailDto> =>
     request(`/sales-missions/${encodeURIComponent(id)}/refresh`, {
       method: 'POST'
-    })
+    }),
+
+  // Location autocomplete — reuses GET /api/v1/locations/suggest
+  suggestLocations: async (
+    q: string,
+    limit = 6,
+    options: RequestInit = {}
+  ): Promise<{ data: LocationSuggestionItem[] }> => {
+    const params = new URLSearchParams({ q, limit: String(limit) });
+    const res = await request<any>(`/locations/suggest?${params.toString()}`, options);
+    const items = Array.isArray(res) ? res : (res?.data || []);
+    return { data: items };
+  }
 };
 
 
