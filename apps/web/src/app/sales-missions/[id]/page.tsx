@@ -26,6 +26,7 @@ import {
   BookmarkPlus,
   Award,
   History,
+  Mail,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -590,7 +591,7 @@ export default function SalesMissionDetailPage() {
                             </div>
                           )}
 
-                          {/* Provenance Tags */}
+                          {/* Provenance Tags & Multi-Source Badges */}
                           <div className="flex flex-wrap gap-1.5 pt-1">
                             {buyer.matchedBuyerCategory && (
                               <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
@@ -600,6 +601,24 @@ export default function SalesMissionDetailPage() {
                             <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-900 border border-slate-800 text-slate-400">
                               via {buyer.provider}
                             </span>
+                            {buyer.sourceConfidence && (
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  buyer.sourceConfidence === 'VERY_HIGH'
+                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                    : buyer.sourceConfidence === 'HIGH'
+                                    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                }`}
+                              >
+                                Confidence: {buyer.sourceConfidence}
+                              </span>
+                            )}
+                            {buyer.sourceEvidences && buyer.sourceEvidences.length > 1 && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-600/30">
+                                {buyer.sourceEvidences.length} Verified Sources
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -615,6 +634,21 @@ export default function SalesMissionDetailPage() {
                               <span className="text-slate-500 text-[11px]">No phone listed</span>
                             )}
 
+                            {/* Enriched Email if available */}
+                            {(() => {
+                              const email = buyer.enrichedContacts?.find((c) => c.type === 'EMAIL')?.value;
+                              if (!email) return null;
+                              return (
+                                <a
+                                  href={`mailto:${email}`}
+                                  className="flex items-center gap-1 text-slate-300 hover:text-slate-100"
+                                >
+                                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span>{email}</span>
+                                </a>
+                              );
+                            })()}
+
                             {buyer.website ? (
                               <a
                                 href={buyer.website}
@@ -629,12 +663,21 @@ export default function SalesMissionDetailPage() {
                             ) : null}
 
                             {/* PHONE != WHATSAPP Invariant Display */}
-                            <span
-                              className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800"
-                              title="Phone numbers are not assumed to have WhatsApp without explicit evidence"
-                            >
-                              WhatsApp: Unverified
-                            </span>
+                            {buyer.whatsappStatus === 'EXPLICIT_VERIFIED' ? (
+                              <span
+                                className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold"
+                                title="Explicit WhatsApp link verified on official company listing"
+                              >
+                                WhatsApp: Verified (wa.me)
+                              </span>
+                            ) : (
+                              <span
+                                className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-500 border border-slate-800"
+                                title="Phone numbers are not assumed to have WhatsApp without explicit evidence"
+                              >
+                                WhatsApp: Unverified
+                              </span>
+                            )}
                           </div>
 
                           {/* CTA */}

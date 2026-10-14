@@ -11,6 +11,9 @@ import { MockDataSourceProvider } from './providers/mock-provider.js';
 import { CsvDataSourceProvider, CSV_PROVIDER_KEY } from './providers/csv-provider.js';
 import { OpenStreetMapProvider, OPENSTREETMAP_PROVIDER_KEY } from './providers/openstreetmap-provider.js';
 import { GooglePlacesProvider, GOOGLE_PLACES_PROVIDER_KEY } from './providers/google-places-provider.js';
+import { FacebookBusinessProvider, FACEBOOK_BUSINESS_PROVIDER_KEY } from './providers/facebook-business-provider.js';
+import { TikTokBusinessProvider, TIKTOK_BUSINESS_PROVIDER_KEY } from './providers/tiktok-business-provider.js';
+import { PublicDirectoryProvider, PUBLIC_DIRECTORY_PROVIDER_KEY } from './providers/public-directory-provider.js';
 
 export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
   mock: {
@@ -52,6 +55,36 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
     costType: 'PAID'
+  },
+  'facebook-business': {
+    key: 'facebook-business',
+    displayName: 'Facebook Business Pages & Leads',
+    description: 'Compliant discovery across authorized connected Facebook business accounts and public pages.',
+    requiresCredential: true,
+    supportsBuyerSearch: true,
+    supportsContactEnrichment: true,
+    supportsConnectionTest: true,
+    costType: 'FREE'
+  },
+  'tiktok-business': {
+    key: 'tiktok-business',
+    displayName: 'TikTok Business Profile & Leads',
+    description: 'Compliant discovery across authorized TikTok business accounts and lead generation webhooks.',
+    requiresCredential: true,
+    supportsBuyerSearch: true,
+    supportsContactEnrichment: true,
+    supportsConnectionTest: true,
+    costType: 'FREE'
+  },
+  'public-directory': {
+    key: 'public-directory',
+    displayName: 'Public Trade & Yellow Pages Directory',
+    description: 'Comprehensive commercial listings, yellow pages, and wholesale trade directories.',
+    requiresCredential: false,
+    supportsBuyerSearch: true,
+    supportsContactEnrichment: true,
+    supportsConnectionTest: true,
+    costType: 'FREE'
   }
 };
 
@@ -70,6 +103,9 @@ export class DataSourceRegistry {
     this.register(new CsvDataSourceProvider());
     this.register(new OpenStreetMapProvider());
     this.register(new GooglePlacesProvider());
+    this.register(new FacebookBusinessProvider());
+    this.register(new TikTokBusinessProvider());
+    this.register(new PublicDirectoryProvider());
   }
 
   /**

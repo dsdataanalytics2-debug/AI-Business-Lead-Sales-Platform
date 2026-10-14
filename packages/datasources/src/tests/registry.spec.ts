@@ -9,12 +9,15 @@ import {
 } from '../index.js';
 
 describe('DataSourceRegistry & Capability Metadata', () => {
-  it('1. Initializes default registry with 4 built-in providers: mock, csv, openstreetmap, google-places', () => {
+  it('1. Initializes default registry with built-in providers: mock, csv, openstreetmap, google-places, facebook-business, tiktok-business, public-directory', () => {
     const providers = listProviders();
     expect(providers).toContain('mock');
     expect(providers).toContain('csv');
     expect(providers).toContain('openstreetmap');
     expect(providers).toContain('google-places');
+    expect(providers).toContain('facebook-business');
+    expect(providers).toContain('tiktok-business');
+    expect(providers).toContain('public-directory');
   });
 
   it('2. Resolves providers case-insensitively and with hyphen/underscore normalization', () => {

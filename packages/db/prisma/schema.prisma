@@ -984,6 +984,10 @@ model SalesMissionBuyer {
   sourceData           Json?    @map("source_data")
   leadId               String?  @map("lead_id")
   status               String   @default("POTENTIAL")
+  sourceEvidences      Json?    @map("source_evidences")
+  enrichedContacts     Json?    @map("enriched_contacts")
+  sourceConfidence     String?  @default("MEDIUM") @map("source_confidence")
+  whatsappStatus       String?  @default("NOT_VERIFIED") @map("whatsapp_status")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 

@@ -27,6 +27,8 @@ export interface BuyerCandidateInput {
   website?: string | null;
   provider?: string | null;
   externalBusinessId?: string | null;
+  sourceEvidences?: Array<{ sourceType?: string; sourceName?: string }> | null;
+  enrichedContacts?: Array<{ type?: string; value?: string }> | null;
 }
 
 export interface ProductContextInput {
@@ -209,10 +211,50 @@ export function computeContactability(buyer: BuyerCandidateInput): number {
 }
 
 /**
+ * Classifies numeric source confidence into canonical categorical level.
+ */
+export function getSourceConfidenceLevel(
+  score: number
+): 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW' {
+  if (score >= 90) return 'VERY_HIGH';
+  if (score >= 80) return 'HIGH';
+  if (score >= 65) return 'MEDIUM';
+  return 'LOW';
+}
+
+/**
  * Computes Source Confidence (0–100)
- * For Batch 1 (public directory providers: Google Places, OSM, Mock).
+ * Evaluates multi-source provenance:
+ * - Single directory source: MEDIUM (65–75)
+ * - Directory + Company Website: HIGH (85)
+ * - Directory + Website + Social / Multi-Source: VERY_HIGH (95)
  */
 export function computeSourceConfidence(buyer: BuyerCandidateInput): number {
+  // If structured source evidences exist, evaluate multi-source provenance
+  if (buyer.sourceEvidences && Array.isArray(buyer.sourceEvidences) && buyer.sourceEvidences.length > 0) {
+    const distinctTypes = new Set<string>();
+    for (const ev of buyer.sourceEvidences) {
+      if (ev.sourceType) {
+        distinctTypes.add(ev.sourceType.toUpperCase().trim());
+      } else if (ev.sourceName) {
+        distinctTypes.add(ev.sourceName.toUpperCase().trim());
+      }
+    }
+
+    if (distinctTypes.size >= 3) {
+      return 95; // VERY_HIGH: 3+ independent sources (e.g., Google Places + Website + Social)
+    }
+    if (distinctTypes.size === 2) {
+      return 85; // HIGH: 2 verified sources (e.g., Directory + Company Website)
+    }
+    // Single source with evidence
+    if (buyer.phone && buyer.website) {
+      return 78;
+    }
+    return 70; // MEDIUM: verified single source
+  }
+
+  // Fallback heuristic for single-source discovery records
   let score = 65; // baseline known provider listing
 
   if (buyer.externalBusinessId) {

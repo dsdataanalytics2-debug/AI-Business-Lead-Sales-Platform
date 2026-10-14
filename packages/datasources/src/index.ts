@@ -14,4 +14,7 @@ export * from './providers/mock-provider.js';
 export * from './providers/csv-provider.js';
 export * from './providers/openstreetmap-provider.js';
 export * from './providers/google-places-provider.js';
+export * from './providers/facebook-business-provider.js';
+export * from './providers/tiktok-business-provider.js';
+export * from './providers/public-directory-provider.js';
 export * from './registry.js';

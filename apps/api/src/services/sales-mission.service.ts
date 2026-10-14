@@ -30,14 +30,21 @@ import {
   normalizeWebsite,
   normalizePhone,
   computeBuyerScore,
+  computeSourceConfidence,
+  getSourceConfidenceLevel,
+  checkBusinessMatch,
+  mergeBusinessRecords,
+  inspectWebsiteContacts,
   planSearchCombinations,
   serializeCoordinate,
   getSubAreasForMarket,
+  type MergedBusinessRecord,
   type ProductContextInput
 } from '@leadmate/core';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
 import { aiProductAnalysisService } from './ai-product-analysis.service.js';
 import { businessSearchService } from './business-search.service.js';
+import { datasourceSettingsService } from './datasource-settings.service.js';
 
 export interface MissionRequestContext {
   organizationId: string;
@@ -178,6 +185,10 @@ export class SalesMissionService {
       leadId: b.leadId,
       status: b.status,
       isNew: isNew || Boolean(b.isNew),
+      sourceEvidences: b.sourceEvidences || null,
+      enrichedContacts: b.enrichedContacts || null,
+      sourceConfidence: b.sourceConfidence || null,
+      whatsappStatus: b.whatsappStatus || null,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt
     };
@@ -601,13 +612,202 @@ export class SalesMissionService {
     }
 
     const targetNewCount = mission.resultTarget || 20;
-    const newDiscoveredItems: BusinessSearchResult[] = [];
+    const newDiscoveredItems: MergedBusinessRecord[] = [];
     const newRunSeenKeys = new Set<string>();
     let previouslyDiscoveredSkipped = 0;
     let providerDuplicatesSkipped = 0;
     const runStartedAt = new Date();
 
-    // 5. Execute planned combinations (Strictly bounded to planned combinations, max 2-3)
+    // 5. Evaluate Multi-Source Provider Capabilities & Configuration Status
+    const providerStatuses: Record<string, string> = {
+      openstreetmap: 'ACTIVE',
+      'google-places': 'NOT_CONFIGURED',
+      'website-enrichment': 'ACTIVE',
+      'public-directory': 'ACTIVE',
+      'facebook-business': 'NOT_CONFIGURED',
+      'tiktok-business': 'NOT_CONFIGURED'
+    };
+
+    try {
+      const gContext = await datasourceSettingsService.getActiveProviderContext(mission.organizationId);
+      if (gContext.apiKey) {
+        providerStatuses['google-places'] = 'ACTIVE';
+      }
+    } catch {
+      // Safe non-blocking fallback
+    }
+
+    try {
+      const socialConfigs = await prisma.dataSourceConfig.findMany({
+        where: {
+          organizationId: mission.organizationId,
+          isEnabled: true,
+          provider: { in: ['facebook-business', 'tiktok-business'] }
+        }
+      });
+      for (const sc of socialConfigs) {
+        if (sc.encryptedCredential) {
+          providerStatuses[sc.provider] = 'ACTIVE';
+        }
+      }
+    } catch {
+      // Safe non-blocking fallback
+    }
+
+    const productContext: ProductContextInput = {
+      productName: mission.product ? mission.product.name : mission.name,
+      productDescription: mission.product ? mission.product.description : mission.name,
+      productCategory: mission.product?.category || undefined,
+      targetMarket: mission.targetMarket,
+      primaryCategories: primaryTargets,
+      secondaryCategories: secondaryTargets
+    };
+
+    // Helper to process, deduplicate, and merge candidates from any provider
+    const ingestCandidateResults = (results: BusinessSearchResult[], comboTarget: string, comboLocation: string, comboProvider: string) => {
+      for (const item of results) {
+        const keys = this.extractDedupeKeys({
+          provider: item.provider,
+          externalId: item.externalId,
+          name: item.name,
+          address: item.address,
+          locality: item.locality,
+          city: item.city,
+          contacts: item.contacts,
+          website: item.website
+        });
+
+        // 1. Check against already-existing buyers for this mission (Cumulative Exclusion)
+        const isPreviouslySeen = keys.some((k) => existingExclusionKeys.has(k));
+        if (isPreviouslySeen) {
+          previouslyDiscoveredSkipped++;
+          continue;
+        }
+
+        // 2. Check if candidate matches an existing candidate already in this run (Multi-Source Dedupe & Merge)
+        const candidateRecord = {
+          provider: item.provider,
+          externalBusinessId: item.externalId,
+          businessName: item.name,
+          address: item.address || null,
+          city: item.city || null,
+          phone: item.contacts?.find((c) => c.type === 'PHONE')?.rawValue || null,
+          website: item.website || null
+        };
+
+        const existingCandidateIndex = newDiscoveredItems.findIndex((existing) => {
+          const matchResult = checkBusinessMatch(existing, candidateRecord);
+          return matchResult.isMatch;
+        });
+
+        if (existingCandidateIndex !== -1) {
+          // Merge into existing candidate record
+          providerDuplicatesSkipped++;
+          const targetCandidate = newDiscoveredItems[existingCandidateIndex];
+          const merged = mergeBusinessRecords(
+            targetCandidate,
+            {
+              phone: candidateRecord.phone,
+              website: candidateRecord.website,
+              address: candidateRecord.address,
+              city: candidateRecord.city,
+              newEvidence: {
+                sourceType: item.provider.toUpperCase().replace(/-/g, '_'),
+                sourceName: `${item.provider} (${comboTarget})`,
+                observedAt: new Date(),
+                evidenceType: 'DISCOVERY_SEARCH'
+              },
+              newContacts: item.contacts?.map((c) => ({
+                type: c.type as any,
+                value: c.rawValue,
+                source: item.provider,
+                verifiedAt: new Date(),
+                confidence: 'MEDIUM' as const
+              }))
+            },
+            productContext
+          );
+          newDiscoveredItems[existingCandidateIndex] = merged;
+          continue;
+        }
+
+        // Check key-level duplicates in run
+        const isDuplicateInRun = keys.some((k) => newRunSeenKeys.has(k));
+        if (isDuplicateInRun) {
+          providerDuplicatesSkipped++;
+          continue;
+        }
+
+        for (const k of keys) {
+          newRunSeenKeys.add(k);
+        }
+
+        const phoneVal = candidateRecord.phone;
+        const initialEvidences = [
+          {
+            sourceType: item.provider.toUpperCase().replace(/-/g, '_'),
+            sourceName: `${item.provider} (${comboTarget})`,
+            observedAt: new Date(),
+            evidenceType: 'DISCOVERY_SEARCH'
+          }
+        ];
+        const initialContacts = item.contacts?.map((c) => ({
+          type: c.type as any,
+          value: c.rawValue,
+          source: item.provider,
+          verifiedAt: new Date(),
+          confidence: 'MEDIUM' as const
+        })) || [];
+
+        const scoreResult = computeBuyerScore(
+          {
+            businessName: item.name,
+            category: item.category,
+            matchedBuyerCategory: item.matchedBuyerCategory || comboTarget,
+            address: item.address,
+            city: item.city,
+            phone: phoneVal,
+            website: item.website,
+            provider: item.provider,
+            externalBusinessId: item.externalId,
+            sourceEvidences: initialEvidences,
+            enrichedContacts: initialContacts
+          },
+          productContext
+        );
+
+        newDiscoveredItems.push({
+          externalBusinessId: item.externalId,
+          provider: item.provider,
+          businessName: item.name,
+          category: item.category || null,
+          address: item.address || null,
+          city: item.city || null,
+          country: item.country || 'BD',
+          latitude: item.latitude || null,
+          longitude: item.longitude || null,
+          website: item.website || null,
+          phone: phoneVal,
+          sourceEvidences: initialEvidences,
+          enrichedContacts: initialContacts,
+          sourceConfidence: 'MEDIUM',
+          whatsappStatus: 'NOT_VERIFIED',
+          buyerScore: scoreResult.buyerScore,
+          scoreBreakdown: scoreResult.breakdown as any,
+          ...( {
+            matchedBuyerCategory: item.matchedBuyerCategory || comboTarget,
+            searchTargetUsed: item.searchTargetUsed || `${comboTarget} in ${comboLocation} (${comboProvider})`,
+            sourceData: item
+          } as any)
+        });
+
+        if (newDiscoveredItems.length >= targetNewCount) {
+          break;
+        }
+      }
+    };
+
+    // 6. Safe Progression Step 1 & 2: Primary Planned Combinations (OSM + Google Places)
     for (const combo of plannedCombinations) {
       if (newDiscoveredItems.length >= targetNewCount) {
         break;
@@ -634,88 +834,81 @@ export class SalesMissionService {
           }
         );
 
-        for (const item of results) {
-          const keys = this.extractDedupeKeys({
-            provider: item.provider,
-            externalId: item.externalId,
-            name: item.name,
-            address: item.address,
-            locality: item.locality,
-            city: item.city,
-            contacts: item.contacts,
-            website: item.website
-          });
-
-          // Check against already-existing buyers for this mission
-          const isPreviouslySeen = keys.some((k) => existingExclusionKeys.has(k));
-          if (isPreviouslySeen) {
-            previouslyDiscoveredSkipped++;
-            continue;
-          }
-
-          // Check against duplicates already found within this new run
-          const isDuplicateInRun = keys.some((k) => newRunSeenKeys.has(k));
-          if (isDuplicateInRun) {
-            providerDuplicatesSkipped++;
-            continue;
-          }
-
-          for (const k of keys) {
-            newRunSeenKeys.add(k);
-          }
-
-          newDiscoveredItems.push({
-            ...item,
-            matchedBuyerCategory: item.matchedBuyerCategory || combo.target,
-            searchTargetUsed: item.searchTargetUsed || `${combo.target} in ${combo.location} (${combo.provider})`
-          });
-
-          if (newDiscoveredItems.length >= targetNewCount) {
-            break;
-          }
-        }
+        ingestCandidateResults(results, combo.target, combo.location, combo.provider);
       } catch (err) {
         console.warn(`Discovery combination query for "${combo.target}" in "${combo.location}" failed:`, err);
       }
     }
 
-    // 6. Compute Advisory Buyer Score (0-100) & Persist ONLY new buyers
-    const productContext: ProductContextInput = {
-      productName: mission.product ? mission.product.name : mission.name,
-      productDescription: mission.product ? mission.product.description : mission.name,
-      productCategory: mission.product?.category || undefined,
-      targetMarket: mission.targetMarket,
-      primaryCategories: primaryTargets,
-      secondaryCategories: secondaryTargets
-    };
+    // 7. Safe Progression Step 4: Public Directory Fallback if needed
+    if (newDiscoveredItems.length < targetNewCount) {
+      for (const combo of plannedCombinations) {
+        if (newDiscoveredItems.length >= targetNewCount) break;
+        try {
+          const dirResults = await businessSearchService.search(
+            {
+              q: combo.target,
+              location: combo.location,
+              limit: Math.min(targetNewCount - newDiscoveredItems.length, 10),
+              provider: 'PUBLIC_DIRECTORY',
+              targetCategories: [combo.target]
+            },
+            {
+              organizationId: mission.organizationId,
+              userId: context?.userId || mission.createdByUserId,
+              correlationId: `dir-${mission.id}-${combo.target}`
+            }
+          );
+          ingestCandidateResults(dirResults, combo.target, combo.location, 'public-directory');
+        } catch {
+          // Non-blocking
+        }
+      }
+    }
 
+    // 8. Safe Progression Step 3: Company Website Contact Enrichment (SSRF-Safe, Evidence-Backed)
+    for (let i = 0; i < newDiscoveredItems.length; i++) {
+      const candidate = newDiscoveredItems[i];
+      if (candidate.website) {
+        try {
+          const enrichResult = await inspectWebsiteContacts(candidate.website);
+          if (!enrichResult.isSsrfBlocked && (enrichResult.contacts.length > 0 || enrichResult.evidences.length > 0)) {
+            const merged = mergeBusinessRecords(
+              candidate,
+              {
+                newEvidence: {
+                  sourceType: 'COMPANY_WEBSITE',
+                  sourceName: 'Official Website Inspection',
+                  sourceUrl: candidate.website,
+                  observedAt: new Date(),
+                  evidenceType: enrichResult.hasExplicitWhatsApp ? 'EXPLICIT_WA_ME_LINK' : 'WEBSITE_CONTACTS'
+                },
+                newContacts: enrichResult.contacts
+              },
+              productContext
+            );
+            newDiscoveredItems[i] = merged;
+          }
+        } catch {
+          // Bounded & non-blocking
+        }
+      }
+    }
+
+    // 9. Persist ONLY new buyers with complete multi-source provenance
     const newlyCreatedBuyerIds = new Set<string>();
 
     for (const item of newDiscoveredItems) {
-      const phoneVal = item.contacts?.find((c) => c.type === 'PHONE')?.rawValue || null;
-      const scoreResult = computeBuyerScore(
-        {
-          businessName: item.name,
-          category: item.category,
-          matchedBuyerCategory: item.matchedBuyerCategory,
-          address: item.address,
-          city: item.city,
-          phone: phoneVal,
-          website: item.website,
-          provider: item.provider,
-          externalBusinessId: item.externalId
-        },
-        productContext
-      );
+      const phoneVal = item.phone || item.enrichedContacts?.find((c) => c.type === 'PHONE')?.value || null;
 
       try {
         const created = await prisma.salesMissionBuyer.create({
           data: {
             organizationId: mission.organizationId,
             salesMissionId: mission.id,
-            externalBusinessId: item.externalId,
+            externalBusinessId: item.externalBusinessId,
             provider: item.provider,
-            businessName: item.name,
+            businessName: item.businessName,
             category: item.category || null,
             address: item.address || null,
             city: item.city || null,
@@ -724,22 +917,25 @@ export class SalesMissionService {
             longitude: item.longitude || null,
             website: item.website || null,
             phone: phoneVal,
-            buyerScore: scoreResult.buyerScore,
-            scoreBreakdown: scoreResult.breakdown as any,
-            matchedBuyerCategory: item.matchedBuyerCategory || null,
-            searchTargetUsed: item.searchTargetUsed || null,
-            sourceData: item as any,
-            status: MissionBuyerStatus.POTENTIAL
+            buyerScore: item.buyerScore,
+            scoreBreakdown: item.scoreBreakdown as any,
+            matchedBuyerCategory: (item as any).matchedBuyerCategory || null,
+            searchTargetUsed: (item as any).searchTargetUsed || null,
+            sourceData: (item as any).sourceData || (item as any),
+            status: MissionBuyerStatus.POTENTIAL,
+            sourceEvidences: item.sourceEvidences as any,
+            enrichedContacts: item.enrichedContacts as any,
+            sourceConfidence: item.sourceConfidence || 'MEDIUM',
+            whatsappStatus: item.whatsappStatus || 'NOT_VERIFIED'
           }
         });
         newlyCreatedBuyerIds.add(created.id);
       } catch (err) {
-        // Safe skip if database uniqueness constraint caught a race condition
         console.warn('Skipped duplicate database insert for buyer:', err);
       }
     }
 
-    // 7. Fetch cumulative buyers
+    // 10. Fetch cumulative buyers
     const allBuyers = await prisma.salesMissionBuyer.findMany({
       where: {
         salesMissionId: mission.id,
@@ -766,6 +962,7 @@ export class SalesMissionService {
       providersUsed,
       searchedCombinations: plannedCombinations.map((c) => c.coordinateKey),
       executedAt: runStartedAt,
+      providerStatuses,
       message:
         newlyCreatedBuyerIds.size > 0
           ? `${newlyCreatedBuyerIds.size} new potential buyers found across ${plannedCombinations.length} combination(s)`

@@ -111,7 +111,47 @@ export interface DiscoveryRunMetrics {
   providersUsed?: string[];
   searchedCombinations?: string[];
   executedAt?: string | Date;
+  providerStatuses?: Record<string, string>;
   message?: string;
+}
+
+export type SourceEvidenceType =
+  | 'GOOGLE_PLACES'
+  | 'OPENSTREETMAP'
+  | 'COMPANY_WEBSITE'
+  | 'PUBLIC_DIRECTORY'
+  | 'FACEBOOK_BUSINESS_PAGE'
+  | 'TIKTOK_BUSINESS'
+  | 'PUBLIC_RFQ';
+
+export interface SourceEvidence {
+  sourceType: SourceEvidenceType | string;
+  sourceName: string;
+  sourceUrl?: string | null;
+  externalId?: string | null;
+  observedAt: string | Date;
+  evidenceType: string;
+  snippet?: string | null;
+  confidence?: 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW' | number;
+}
+
+export type EnrichedContactType =
+  | 'PHONE'
+  | 'EMAIL'
+  | 'WEBSITE'
+  | 'CONTACT_PAGE'
+  | 'FACEBOOK_PAGE'
+  | 'INSTAGRAM_PAGE'
+  | 'WHATSAPP'
+  | 'ADDRESS';
+
+export interface EnrichedContact {
+  value: string;
+  type: EnrichedContactType;
+  source: string;
+  verifiedAt: string | Date;
+  confidence: 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW';
+  sourceUrl?: string | null;
 }
 
 export interface SalesMissionBuyerDto {
@@ -137,6 +177,10 @@ export interface SalesMissionBuyerDto {
   leadId?: string | null;
   status: MissionBuyerStatus | string;
   isNew?: boolean;
+  sourceEvidences?: SourceEvidence[] | null;
+  enrichedContacts?: EnrichedContact[] | null;
+  sourceConfidence?: string | null;
+  whatsappStatus?: 'EXPLICIT_VERIFIED' | 'NO_WHATSAPP' | 'NOT_VERIFIED' | string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
