@@ -28,7 +28,8 @@ import {
   History,
   Mail,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Flame
 } from 'lucide-react';
 import {
   type SalesMissionDetailDto,
@@ -371,6 +372,63 @@ export default function SalesMissionDetailPage() {
                     ))}
                   </div>
                 </div>
+
+                {/* Sub-Phase B: Ideal Buyer Profile (Strict schema) */}
+                {mission.productAnalysisSnapshot.idealBuyerProfile && (
+                  <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-200">Ideal Buyer Profile (Targeting Blueprint)</span>
+                      <span className="text-[10px] text-indigo-400 font-mono">Gemini Strategic ICP</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                      <div>
+                        <div className="text-[11px] text-slate-400 mb-1">Primary Buyer Types:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {mission.productAnalysisSnapshot.idealBuyerProfile.primaryBuyerTypes.map((t, idx) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-medium">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-slate-400 mb-1">Secondary Buyer Types:</div>
+                        <div className="flex flex-wrap gap-1">
+                          {mission.productAnalysisSnapshot.idealBuyerProfile.secondaryBuyerTypes.map((t, idx) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] text-slate-400 mb-1">Recommended Pitch Angles:</div>
+                        <ul className="list-disc list-inside text-[11px] text-slate-300 space-y-0.5">
+                          {mission.productAnalysisSnapshot.idealBuyerProfile.recommendedPitchAngles.slice(0, 2).map((a, idx) => (
+                            <li key={idx} className="truncate">{a}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-Phase B: Product-Level AI Suggested Related Needs */}
+                {mission.productAnalysisSnapshot.suggestedRelatedNeeds && mission.productAnalysisSnapshot.suggestedRelatedNeeds.length > 0 && (
+                  <div className="p-3 rounded-xl bg-indigo-950/20 border border-indigo-500/20 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-indigo-300">AI Suggested Related Needs</span>
+                      <span className="text-[10px] text-slate-400 italic">Prediction only — not verified commercial demand.</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {mission.productAnalysisSnapshot.suggestedRelatedNeeds.map((need, ni) => (
+                        <span key={ni} className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[11px]">
+                          {need}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -522,9 +580,38 @@ export default function SalesMissionDetailPage() {
                             </span>
                           </div>
 
-                          {/* Buyer Score (0-100) Badge & Expandable Breakdown */}
-                          {buyer.buyerScore !== null && buyer.buyerScore !== undefined && (
-                            <div className="pt-0.5">
+                          {/* Buyer Score (0-100) Badge, Priority Badge & Expandable Breakdown */}
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                            {buyer.priority && (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                                  buyer.priority === 'HOT'
+                                    ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                                    : buyer.priority === 'WARM'
+                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                                }`}
+                                title={
+                                  buyer.priority === 'HOT'
+                                    ? 'HOT PRIORITY: High commercial qualification match based on intent and fit. Not a guaranteed buyer.'
+                                    : `Priority: ${buyer.priority}`
+                                }
+                              >
+                                {buyer.priority === 'HOT' && <Flame className="w-3.5 h-3.5 text-rose-400" />}
+                                <span>{buyer.priority}</span>
+                              </span>
+                            )}
+
+                            {buyer.wholesaleIntent && buyer.wholesaleIntent !== 'NONE' && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30"
+                                title={`Evidence-backed intent signals: ${buyer.wholesaleIntentSignals?.join(', ') || 'verified'}`}
+                              >
+                                <span>Intent: {buyer.wholesaleIntent}</span>
+                              </span>
+                            )}
+
+                            {buyer.buyerScore !== null && buyer.buyerScore !== undefined && (
                               <button
                                 type="button"
                                 onClick={() => setExpandedScoreBuyerId(expandedScoreBuyerId === buyer.id ? null : buyer.id)}
@@ -546,38 +633,42 @@ export default function SalesMissionDetailPage() {
                                   <ChevronDown className="w-3 h-3 ml-0.5" />
                                 )}
                               </button>
+                            )}
+                          </div>
 
-                              {expandedScoreBuyerId === buyer.id && buyer.scoreBreakdown && (
-                                <div className="mt-2 p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5 text-[11px] animate-in fade-in duration-150">
-                                  <div className="flex items-center justify-between font-semibold text-slate-300 border-b border-slate-800 pb-1">
-                                    <span>Score Component</span>
-                                    <span>Rating</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-slate-400">
-                                    <span>Product Fit</span>
-                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.productFit}%</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-slate-400">
-                                    <span>Category Match</span>
-                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.categoryMatch}%</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-slate-400">
-                                    <span>Location Fit</span>
-                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.locationFit}%</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-slate-400">
-                                    <span>Contactability</span>
-                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.contactability}%</span>
-                                  </div>
-                                  <div className="flex items-center justify-between text-slate-400">
-                                    <span>Source Confidence</span>
-                                    <span className="font-mono text-slate-200">{buyer.scoreBreakdown.sourceConfidence}%</span>
-                                  </div>
-                                  <div className="pt-1 text-[10px] text-slate-500 italic">
-                                    Advisory AI evaluation · Facts verified via public records
-                                  </div>
-                                </div>
-                              )}
+                          {expandedScoreBuyerId === buyer.id && buyer.scoreBreakdown && (
+                            <div className="mt-2 p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-1.5 text-[11px] animate-in fade-in duration-150">
+                              <div className="flex items-center justify-between font-semibold text-slate-300 border-b border-slate-800 pb-1">
+                                <span>Score Component (V2)</span>
+                                <span>Rating</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Product Fit (20%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.productFit}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Category Match (20%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.categoryMatch}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Location Fit (15%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.locationFit}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Contactability (20%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.contactability}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Source Confidence (10%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.sourceConfidence}%</span>
+                              </div>
+                              <div className="flex items-center justify-between text-slate-400">
+                                <span>Intent Strength (15%)</span>
+                                <span className="font-mono text-slate-200">{buyer.scoreBreakdown.intentStrength ?? 0}%</span>
+                              </div>
+                              <div className="pt-1 text-[10px] text-slate-500 italic">
+                                Advisory AI evaluation · Facts verified via public records
+                              </div>
                             </div>
                           )}
 
@@ -620,6 +711,23 @@ export default function SalesMissionDetailPage() {
                               </span>
                             )}
                           </div>
+
+                          {/* Sub-Phase B: AI Suggested Related Needs for this Buyer */}
+                          {buyer.suggestedRelatedNeeds && buyer.suggestedRelatedNeeds.length > 0 && (
+                            <div className="pt-2 border-t border-slate-800/60 space-y-1">
+                              <div className="flex items-center justify-between text-[11px]">
+                                <span className="font-semibold text-slate-300">AI Suggested Related Needs</span>
+                                <span className="text-[10px] text-slate-500 italic">Prediction only — not verified commercial demand.</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {buyer.suggestedRelatedNeeds.map((need, ni) => (
+                                  <span key={ni} className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300 text-[10px]">
+                                    {need}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Contacts & Actions */}

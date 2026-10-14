@@ -15,11 +15,24 @@ export const aiBuyerTargetItemSchema = z.object({
 
 export type AiBuyerTargetItem = z.infer<typeof aiBuyerTargetItemSchema>;
 
+export const idealBuyerProfileSchema = z.object({
+  primaryBuyerTypes: z.array(z.string().trim()),
+  secondaryBuyerTypes: z.array(z.string().trim()),
+  businessSize: z.array(z.string().trim()),
+  targetMarkets: z.array(z.string().trim()),
+  commercialUseCases: z.array(z.string().trim()),
+  recommendedPitchAngles: z.array(z.string().trim())
+});
+
+export type IdealBuyerProfile = z.infer<typeof idealBuyerProfileSchema>;
+
 export const aiProductAnalysisSchema = z.object({
   productCategory: z.string().trim().min(1).max(100),
   productSummary: z.string().trim().min(1).max(500),
   buyerTargets: z.array(aiBuyerTargetItemSchema).min(1).max(10),
-  searchTerms: z.array(z.string().trim().min(1).max(100)).min(1).max(10)
+  searchTerms: z.array(z.string().trim().min(1).max(100)).min(1).max(10),
+  idealBuyerProfile: idealBuyerProfileSchema.optional().nullable(),
+  suggestedRelatedNeeds: z.array(z.string().trim()).optional().nullable()
 });
 
 export type AiProductAnalysisResult = z.infer<typeof aiProductAnalysisSchema>;
@@ -97,6 +110,18 @@ export interface BuyerScoreBreakdown {
   locationFit: number;
   contactability: number;
   sourceConfidence: number;
+  intentStrength?: number;
+}
+
+export type WholesaleIntentLevel = 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+
+export type BuyerPriority = 'HOT' | 'WARM' | 'COLD';
+
+export interface WholesaleIntentEvidence {
+  level: WholesaleIntentLevel;
+  signals: string[];
+  matchedSnippets: string[];
+  evaluatedAt: string | Date;
 }
 
 export interface DiscoveryRunMetrics {
@@ -181,6 +206,10 @@ export interface SalesMissionBuyerDto {
   enrichedContacts?: EnrichedContact[] | null;
   sourceConfidence?: string | null;
   whatsappStatus?: 'EXPLICIT_VERIFIED' | 'NO_WHATSAPP' | 'NOT_VERIFIED' | string | null;
+  priority?: BuyerPriority | string | null;
+  wholesaleIntent?: WholesaleIntentLevel | string | null;
+  wholesaleIntentSignals?: string[] | null;
+  suggestedRelatedNeeds?: string[] | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

@@ -30,6 +30,9 @@ import {
   normalizeWebsite,
   normalizePhone,
   computeBuyerScore,
+  computeBuyerPriority,
+  detectWholesaleIntent,
+  deriveSuggestedRelatedNeeds,
   computeSourceConfidence,
   getSourceConfidenceLevel,
   checkBusinessMatch,
@@ -189,6 +192,10 @@ export class SalesMissionService {
       enrichedContacts: b.enrichedContacts || null,
       sourceConfidence: b.sourceConfidence || null,
       whatsappStatus: b.whatsappStatus || null,
+      priority: b.priority || 'WARM',
+      wholesaleIntent: b.wholesaleIntent || 'NONE',
+      wholesaleIntentSignals: b.wholesaleIntentSignals || null,
+      suggestedRelatedNeeds: b.suggestedRelatedNeeds || null,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt
     };
@@ -901,6 +908,31 @@ export class SalesMissionService {
     for (const item of newDiscoveredItems) {
       const phoneVal = item.phone || item.enrichedContacts?.find((c) => c.type === 'PHONE')?.value || null;
 
+      // Sub-Phase B: Wholesale Intent Detection (evidence-backed only)
+      const intentResult = detectWholesaleIntent({
+        businessName: item.businessName,
+        category: item.category,
+        matchedBuyerCategory: (item as any).matchedBuyerCategory,
+        sourceEvidences: item.sourceEvidences,
+        sourceData: (item as any).sourceData
+      });
+
+      // Sub-Phase B: AI Suggested Related Needs (advisory prediction only)
+      const relatedNeeds = deriveSuggestedRelatedNeeds({
+        productName: productContext.productName,
+        productCategory: productContext.productCategory,
+        buyerCategory: item.category,
+        matchedBuyerCategory: (item as any).matchedBuyerCategory
+      });
+
+      // Sub-Phase B: Buyer Score V2 & Deterministic Priority
+      const scoringCandidate = {
+        ...item,
+        phone: phoneVal,
+        wholesaleIntent: intentResult.level
+      };
+      const scoreResult = computeBuyerScore(scoringCandidate, productContext);
+
       try {
         const created = await prisma.salesMissionBuyer.create({
           data: {
@@ -917,8 +949,8 @@ export class SalesMissionService {
             longitude: item.longitude || null,
             website: item.website || null,
             phone: phoneVal,
-            buyerScore: item.buyerScore,
-            scoreBreakdown: item.scoreBreakdown as any,
+            buyerScore: scoreResult.buyerScore,
+            scoreBreakdown: scoreResult.breakdown as any,
             matchedBuyerCategory: (item as any).matchedBuyerCategory || null,
             searchTargetUsed: (item as any).searchTargetUsed || null,
             sourceData: (item as any).sourceData || (item as any),
@@ -926,7 +958,11 @@ export class SalesMissionService {
             sourceEvidences: item.sourceEvidences as any,
             enrichedContacts: item.enrichedContacts as any,
             sourceConfidence: item.sourceConfidence || 'MEDIUM',
-            whatsappStatus: item.whatsappStatus || 'NOT_VERIFIED'
+            whatsappStatus: item.whatsappStatus || 'NOT_VERIFIED',
+            priority: scoreResult.priority,
+            wholesaleIntent: intentResult.level,
+            wholesaleIntentSignals: intentResult.signals as any,
+            suggestedRelatedNeeds: relatedNeeds as any
           }
         });
         newlyCreatedBuyerIds.add(created.id);

@@ -29,6 +29,8 @@ import {
   type BuyerCandidateInput,
   type ProductContextInput
 } from '../scoring/buyer-score.js';
+import { detectWholesaleIntent } from '../intent/wholesale-intent-detector.js';
+import { deriveSuggestedRelatedNeeds } from '../analysis/related-needs-advisor.js';
 
 export interface MergedBusinessRecord {
   id?: string;
@@ -49,6 +51,10 @@ export interface MergedBusinessRecord {
   whatsappStatus: 'EXPLICIT_VERIFIED' | 'NO_WHATSAPP' | 'NOT_VERIFIED';
   buyerScore?: number | null;
   scoreBreakdown?: any;
+  priority?: string | null;
+  wholesaleIntent?: string | null;
+  wholesaleIntentSignals?: string[] | null;
+  suggestedRelatedNeeds?: string[] | null;
 }
 
 export type MatchTier = 'PROVIDER_ID' | 'WEBSITE_DOMAIN' | 'VERIFIED_PHONE' | 'NAME_LOCATION' | 'NONE';
@@ -248,14 +254,37 @@ export function mergeBusinessRecords(
   const confidenceScore = computeSourceConfidence(buyerForScoring);
   const sourceConfidence = getSourceConfidenceLevel(confidenceScore);
 
+  const intentResult = detectWholesaleIntent({
+    businessName: target.businessName,
+    category: target.category,
+    sourceEvidences: evidences,
+    sourceData: (target as any).sourceData
+  });
+
   let buyerScore = target.buyerScore;
   let scoreBreakdown = target.scoreBreakdown;
+  let priority = target.priority || 'WARM';
 
   if (productContext) {
-    const scored = computeBuyerScore(buyerForScoring, productContext);
+    const scored = computeBuyerScore(
+      {
+        ...buyerForScoring,
+        wholesaleIntent: intentResult.level
+      },
+      productContext
+    );
     buyerScore = scored.buyerScore;
     scoreBreakdown = scored.breakdown;
+    priority = scored.priority;
   }
+
+  const relatedNeeds = productContext
+    ? deriveSuggestedRelatedNeeds({
+        productName: productContext.productName,
+        productCategory: productContext.productCategory,
+        buyerCategory: target.category
+      })
+    : target.suggestedRelatedNeeds;
 
   return {
     ...target,
@@ -268,6 +297,10 @@ export function mergeBusinessRecords(
     sourceConfidence,
     whatsappStatus,
     buyerScore,
-    scoreBreakdown
+    scoreBreakdown,
+    priority,
+    wholesaleIntent: intentResult.level,
+    wholesaleIntentSignals: intentResult.signals,
+    suggestedRelatedNeeds: relatedNeeds
   };
 }

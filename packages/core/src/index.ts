@@ -12,3 +12,4 @@ export * from './analysis/index.js';
 export * from './outreach/index.js';
 export * from './scoring/index.js';
 export * from './discovery/index.js';
+export * from './intent/index.js';

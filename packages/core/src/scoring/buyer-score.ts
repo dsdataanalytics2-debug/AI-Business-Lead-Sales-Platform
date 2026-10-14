@@ -17,6 +17,9 @@
  * - PHONE != WHATSAPP: Contactability evaluates phone presence without WhatsApp inference.
  */
 
+import type { WholesaleIntentLevel, BuyerPriority } from '@leadmate/shared';
+import { detectWholesaleIntent } from '../intent/wholesale-intent-detector.js';
+
 export interface BuyerCandidateInput {
   businessName: string;
   category?: string | null;
@@ -27,8 +30,10 @@ export interface BuyerCandidateInput {
   website?: string | null;
   provider?: string | null;
   externalBusinessId?: string | null;
-  sourceEvidences?: Array<{ sourceType?: string; sourceName?: string }> | null;
+  sourceEvidences?: Array<{ sourceType?: string; sourceName?: string; snippet?: string | null; evidenceType?: string }> | null;
   enrichedContacts?: Array<{ type?: string; value?: string }> | null;
+  sourceData?: any;
+  wholesaleIntent?: WholesaleIntentLevel | string | null;
 }
 
 export interface ProductContextInput {
@@ -46,12 +51,14 @@ export interface BuyerScoreBreakdown {
   locationFit: number;
   contactability: number;
   sourceConfidence: number;
+  intentStrength: number;
 }
 
 export interface BuyerScoreResult {
   buyerScore: number;
   breakdown: BuyerScoreBreakdown;
   advisoryNote: string;
+  priority: BuyerPriority;
 }
 
 /**
@@ -271,14 +278,81 @@ export function computeSourceConfidence(buyer: BuyerCandidateInput): number {
 }
 
 /**
- * Computes the overall composite Buyer Score (0–100) and structured breakdown.
+ * Computes Intent Strength (0–100) based strictly on evidence-backed wholesale intent.
  *
- * Weightings:
- * - Product Fit: 30%
- * - Category Match: 25%
- * - Contactability: 20%
+ * Scoring:
+ * - HIGH (RFQ, tender, wholesale price, bulk price, dealer inquiry): 100
+ * - MEDIUM (wholesaler, distributor, reseller wanted, stock inquiry): 70
+ * - LOW (broad trade/commercial mention): 40
+ * - NONE (no evidence): 0
+ */
+export function computeIntentStrength(buyer: BuyerCandidateInput): number {
+  let level = (buyer.wholesaleIntent || '').toUpperCase() as WholesaleIntentLevel;
+  if (!level || !['HIGH', 'MEDIUM', 'LOW', 'NONE'].includes(level)) {
+    const detected = detectWholesaleIntent({
+      businessName: buyer.businessName,
+      category: buyer.category,
+      matchedBuyerCategory: buyer.matchedBuyerCategory,
+      sourceEvidences: buyer.sourceEvidences,
+      sourceData: buyer.sourceData
+    });
+    level = detected.level;
+  }
+
+  switch (level) {
+    case 'HIGH':
+      return 100;
+    case 'MEDIUM':
+      return 70;
+    case 'LOW':
+      return 40;
+    case 'NONE':
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Computes deterministic Buyer Priority (HOT / WARM / COLD).
+ *
+ * Deterministic Rules:
+ * - HOT: High score (>= 70) + Strong Intent (HIGH or MEDIUM) + Contactable (>= 50).
+ *   IMPORTANT: HOT denotes strong commercial fit, NEVER guaranteed buyer or sale.
+ * - COLD: Weak score (< 45) OR low contactability (< 30).
+ * - WARM: Balanced commercial fit with moderate signals/contactability.
+ */
+export function computeBuyerPriority(
+  buyerScore: number,
+  intentLevel: WholesaleIntentLevel | string | null | undefined,
+  contactabilityScore: number
+): BuyerPriority {
+  const normIntent = (intentLevel || 'NONE').toUpperCase();
+
+  if (
+    buyerScore >= 70 &&
+    (normIntent === 'HIGH' || normIntent === 'MEDIUM') &&
+    contactabilityScore >= 50
+  ) {
+    return 'HOT';
+  }
+
+  if (buyerScore < 50 || contactabilityScore <= 35) {
+    return 'COLD';
+  }
+
+  return 'WARM';
+}
+
+/**
+ * Computes the overall composite Buyer Score V2 (0–100) and structured breakdown.
+ *
+ * V2 Weights:
+ * - Product Fit: 20%
+ * - Category Match: 20%
  * - Location Fit: 15%
+ * - Contactability: 20%
  * - Source Confidence: 10%
+ * - Intent Strength: 15%
  */
 export function computeBuyerScore(
   buyer: BuyerCandidateInput,
@@ -289,13 +363,15 @@ export function computeBuyerScore(
   const locationFit = computeLocationFit(buyer, context);
   const contactability = computeContactability(buyer);
   const sourceConfidence = computeSourceConfidence(buyer);
+  const intentStrength = computeIntentStrength(buyer);
 
   const rawWeightedScore =
-    productFit * 0.3 +
-    categoryMatch * 0.25 +
-    contactability * 0.2 +
+    productFit * 0.2 +
+    categoryMatch * 0.2 +
     locationFit * 0.15 +
-    sourceConfidence * 0.1;
+    contactability * 0.2 +
+    sourceConfidence * 0.1 +
+    intentStrength * 0.15;
 
   const buyerScore = Math.min(100, Math.max(0, Math.round(rawWeightedScore)));
 
@@ -304,21 +380,26 @@ export function computeBuyerScore(
     categoryMatch,
     locationFit,
     contactability,
-    sourceConfidence
+    sourceConfidence,
+    intentStrength
   };
 
-  let advisoryNote = 'Standard buyer fit';
-  if (buyerScore >= 85) {
-    advisoryNote = 'Strong commercial fit with high contactability';
-  } else if (buyerScore >= 70) {
-    advisoryNote = 'Moderate wholesale fit; review contact details';
+  const detectedIntent = buyer.wholesaleIntent || (intentStrength >= 100 ? 'HIGH' : intentStrength >= 70 ? 'MEDIUM' : intentStrength >= 40 ? 'LOW' : 'NONE');
+  const priority = computeBuyerPriority(buyerScore, detectedIntent, contactability);
+
+  let advisoryNote = 'Standard commercial fit';
+  if (priority === 'HOT') {
+    advisoryNote = 'Strong commercial fit with verified intent signals and contactability (advisory)';
+  } else if (buyerScore >= 60) {
+    advisoryNote = 'Solid category alignment; review contact channels';
   } else {
-    advisoryNote = 'Low match or incomplete business profile';
+    advisoryNote = 'Low qualification fit or limited public contact presence';
   }
 
   return {
     buyerScore,
     breakdown,
-    advisoryNote
+    advisoryNote,
+    priority
   };
 }

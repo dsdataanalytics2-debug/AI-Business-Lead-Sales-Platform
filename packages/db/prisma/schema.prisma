@@ -988,6 +988,10 @@ model SalesMissionBuyer {
   enrichedContacts     Json?    @map("enriched_contacts")
   sourceConfidence     String?  @default("MEDIUM") @map("source_confidence")
   whatsappStatus       String?  @default("NOT_VERIFIED") @map("whatsapp_status")
+  priority             String?  @default("WARM") @map("priority")
+  wholesaleIntent      String?  @default("NONE") @map("wholesale_intent")
+  wholesaleIntentSignals Json?  @map("wholesale_intent_signals")
+  suggestedRelatedNeeds Json?   @map("suggested_related_needs")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
@@ -1000,5 +1004,6 @@ model SalesMissionBuyer {
   @@index([organizationId, salesMissionId])
   @@index([organizationId, status])
   @@index([organizationId, buyerScore])
+  @@index([organizationId, priority])
   @@map("sales_mission_buyers")
 }

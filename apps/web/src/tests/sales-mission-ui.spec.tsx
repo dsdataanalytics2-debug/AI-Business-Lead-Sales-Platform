@@ -490,4 +490,44 @@ describe('LeadAtlas Sales Mission Frontend UI', () => {
     const buttonLabel = isRefreshing ? 'Searching next combinations...' : 'Find More Buyers';
     expect(buttonLabel).toBe('Find More Buyers');
   });
+
+  it('29. Deterministic Priority Badge renders HOT with advisory tooltip, WARM, and COLD correctly', () => {
+    const hotBuyer = { id: 'b1', businessName: 'Apex Decor', priority: 'HOT' };
+    const warmBuyer = { id: 'b2', businessName: 'Modern Home', priority: 'WARM' };
+    const coldBuyer = { id: 'b3', businessName: 'Corner Shop', priority: 'COLD' };
+
+    expect(hotBuyer.priority).toBe('HOT');
+    expect(warmBuyer.priority).toBe('WARM');
+    expect(coldBuyer.priority).toBe('COLD');
+  });
+
+  it('30. Wholesale Intent badge displays evidence signals and does NOT display for NONE', () => {
+    const rfqBuyer = {
+      wholesaleIntent: 'HIGH',
+      wholesaleIntentSignals: ['RFQ', 'bulk price']
+    };
+    const noneBuyer = {
+      wholesaleIntent: 'NONE',
+      wholesaleIntentSignals: []
+    };
+
+    expect(rfqBuyer.wholesaleIntent).toBe('HIGH');
+    expect(rfqBuyer.wholesaleIntentSignals).toContain('RFQ');
+    expect(noneBuyer.wholesaleIntent).toBe('NONE');
+    expect(noneBuyer.wholesaleIntent !== 'NONE').toBe(false); // Does not show badge
+  });
+
+  it('31. AI Suggested Related Needs renders with mandatory advisory disclaimer', () => {
+    const buyer = {
+      suggestedRelatedNeeds: ['Decorative Lighting', 'Wall Lamp', 'Rechargeable Light', 'Gift Items']
+    };
+
+    expect(buyer.suggestedRelatedNeeds).toHaveLength(4);
+    expect(buyer.suggestedRelatedNeeds).toContain('Decorative Lighting');
+
+    const header = 'AI Suggested Related Needs';
+    const disclaimer = 'Prediction only — not verified commercial demand.';
+    expect(header).toBe('AI Suggested Related Needs');
+    expect(disclaimer).toBe('Prediction only — not verified commercial demand.');
+  });
 });

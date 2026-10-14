@@ -112,6 +112,18 @@ STRICT INVARIANTS:
   "searchTerms": [
     "Search Term 1",
     "Search Term 2"
+  ],
+  "idealBuyerProfile": {
+    "primaryBuyerTypes": ["Type 1", "Type 2"],
+    "secondaryBuyerTypes": ["Type 3", "Type 4"],
+    "businessSize": ["SMB", "DISTRIBUTOR"],
+    "targetMarkets": ["Target City / Region"],
+    "commercialUseCases": ["Use Case 1", "Use Case 2"],
+    "recommendedPitchAngles": ["Pitch Angle 1", "Pitch Angle 2"]
+  },
+  "suggestedRelatedNeeds": [
+    "Suggested Inventory Need 1",
+    "Suggested Inventory Need 2"
   ]
 }
 `.trim();
@@ -147,7 +159,18 @@ STRICT INVARIANTS:
           category: b.category,
           reason: b.reason,
           confidence: (b.confidence || 'HIGH') as 'HIGH' | 'MEDIUM' | 'LOW'
-        }))
+        })),
+        idealBuyerProfile: result.data.idealBuyerProfile
+          ? {
+              primaryBuyerTypes: result.data.idealBuyerProfile.primaryBuyerTypes || [],
+              secondaryBuyerTypes: result.data.idealBuyerProfile.secondaryBuyerTypes || [],
+              businessSize: result.data.idealBuyerProfile.businessSize || [],
+              targetMarkets: result.data.idealBuyerProfile.targetMarkets || [],
+              commercialUseCases: result.data.idealBuyerProfile.commercialUseCases || [],
+              recommendedPitchAngles: result.data.idealBuyerProfile.recommendedPitchAngles || []
+            }
+          : null,
+        suggestedRelatedNeeds: result.data.suggestedRelatedNeeds || null
       };
     } catch (err: any) {
       console.warn('AI product analysis call failed or malformed, falling back to deterministic heuristic:', err?.message || err);
@@ -164,6 +187,39 @@ STRICT INVARIANTS:
     }
   }
 
+  private enrichFallbackWithProfile(
+    base: {
+      productCategory: string;
+      productSummary: string;
+      buyerTargets: Array<{ category: string; reason: string; confidence: 'HIGH' | 'MEDIUM' | 'LOW' }>;
+      searchTerms: string[];
+    },
+    input: AnalyzeProductInput
+  ): AiProductAnalysisResult {
+    const primaryBuyerTypes = base.buyerTargets.slice(0, 3).map((b) => b.category);
+    const secondaryBuyerTypes = base.buyerTargets.slice(3).map((b) => b.category);
+    return {
+      ...base,
+      idealBuyerProfile: {
+        primaryBuyerTypes,
+        secondaryBuyerTypes: secondaryBuyerTypes.length > 0 ? secondaryBuyerTypes : [primaryBuyerTypes[0] || 'Wholesale Buyer'],
+        businessSize: ['SMB', 'DISTRIBUTOR'],
+        targetMarkets: [input.targetMarket || 'Bangladesh'],
+        commercialUseCases: ['Commercial stock resale', 'Wholesale redistribution'],
+        recommendedPitchAngles: [
+          `High-margin ${base.productCategory} line for regional distribution`,
+          'Consistent wholesale availability with fast stock turnaround'
+        ]
+      },
+      suggestedRelatedNeeds: [
+        `${base.productCategory} Accessories`,
+        'Bulk Packaging Stock',
+        'Display Merchandise',
+        'Fast-moving Complementary Items'
+      ]
+    };
+  }
+
   /**
    * Deterministic heuristic analysis when AI is disabled, unconfigured, or fails safely.
    */
@@ -172,44 +228,47 @@ STRICT INVARIANTS:
 
     // 1. Diabetes care detection (evidence-based from product text, never hardcoding brand names)
     if (text.includes('diabet')) {
-      return {
-        productCategory: 'Healthcare / Diabetes Care',
-        productSummary: `Commercial diabetes-care product (${input.productName}) suitable for pharmaceutical retail and medical distribution.`,
-        buyerTargets: [
-          {
-            category: 'Pharmacy',
-            reason: 'Primary retail dispensary for diabetes care supplies and OTC healthcare products.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Medicine Shop',
-            reason: 'Community pharmaceutical retailer providing daily healthcare and diagnostic supplies.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Medical Distributor',
-            reason: 'Wholesale distributor supplying community pharmacies, clinics, and medical outlets.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Hospital Pharmacy',
-            reason: 'Institutional healthcare pharmacy sourcing specialized wellness and patient care lines.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Health Supplement Store',
-            reason: 'Wellness and health product store stocking diabetic nutrition and self-care items.',
-            confidence: 'MEDIUM'
-          }
-        ],
-        searchTerms: [
-          'Pharmacy',
-          'Medicine Shop',
-          'Medical Distributor',
-          'Hospital Pharmacy',
-          'Health Supplement Store'
-        ]
-      };
+      return this.enrichFallbackWithProfile(
+        {
+          productCategory: 'Healthcare / Diabetes Care',
+          productSummary: `Commercial diabetes-care product (${input.productName}) suitable for pharmaceutical retail and medical distribution.`,
+          buyerTargets: [
+            {
+              category: 'Pharmacy',
+              reason: 'Primary retail dispensary for diabetes care supplies and OTC healthcare products.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Medicine Shop',
+              reason: 'Community pharmaceutical retailer providing daily healthcare and diagnostic supplies.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Medical Distributor',
+              reason: 'Wholesale distributor supplying community pharmacies, clinics, and medical outlets.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Hospital Pharmacy',
+              reason: 'Institutional healthcare pharmacy sourcing specialized wellness and patient care lines.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Health Supplement Store',
+              reason: 'Wellness and health product store stocking diabetic nutrition and self-care items.',
+              confidence: 'MEDIUM'
+            }
+          ],
+          searchTerms: [
+            'Pharmacy',
+            'Medicine Shop',
+            'Medical Distributor',
+            'Hospital Pharmacy',
+            'Health Supplement Store'
+          ]
+        },
+        input
+      );
     }
 
     // 2. General Healthcare / Medical / Pharmaceutical detection
@@ -221,44 +280,47 @@ STRICT INVARIANTS:
       text.includes('clinic') ||
       text.includes('supplement')
     ) {
-      return {
-        productCategory: 'Healthcare / Medical Supplies',
-        productSummary: `Commercial healthcare product (${input.productName}) suitable for pharmaceutical retail and distribution.`,
-        buyerTargets: [
-          {
-            category: 'Pharmacy',
-            reason: 'Primary retail point for health, wellness, and medical products.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Medicine Shop',
-            reason: 'Local neighborhood dispensary and retail pharmaceutical supplier.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Medical Distributor',
-            reason: 'Wholesale distributor supplying community pharmacies and clinics.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Hospital Pharmacy',
-            reason: 'Institutional healthcare pharmacy sourcing patient wellness products.',
-            confidence: 'MEDIUM'
-          },
-          {
-            category: 'Health Supplement Store',
-            reason: 'Specialized wellness retailer stocking nutrition and healthcare lines.',
-            confidence: 'MEDIUM'
-          }
-        ],
-        searchTerms: [
-          'Pharmacy',
-          'Medicine Shop',
-          'Medical Distributor',
-          'Hospital Pharmacy',
-          'Health Supplement Store'
-        ]
-      };
+      return this.enrichFallbackWithProfile(
+        {
+          productCategory: 'Healthcare / Medical Supplies',
+          productSummary: `Commercial healthcare product (${input.productName}) suitable for pharmaceutical retail and distribution.`,
+          buyerTargets: [
+            {
+              category: 'Pharmacy',
+              reason: 'Primary retail point for health, wellness, and medical products.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Medicine Shop',
+              reason: 'Local neighborhood dispensary and retail pharmaceutical supplier.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Medical Distributor',
+              reason: 'Wholesale distributor supplying community pharmacies and clinics.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Hospital Pharmacy',
+              reason: 'Institutional healthcare pharmacy sourcing patient wellness products.',
+              confidence: 'MEDIUM'
+            },
+            {
+              category: 'Health Supplement Store',
+              reason: 'Specialized wellness retailer stocking nutrition and healthcare lines.',
+              confidence: 'MEDIUM'
+            }
+          ],
+          searchTerms: [
+            'Pharmacy',
+            'Medicine Shop',
+            'Medical Distributor',
+            'Hospital Pharmacy',
+            'Health Supplement Store'
+          ]
+        },
+        input
+      );
     }
 
     // Kitchenware / Appliances / Gadgets detection (e.g. Mini Blender)
@@ -270,44 +332,47 @@ STRICT INVARIANTS:
       text.includes('home') ||
       text.includes('usb')
     ) {
-      return {
-        productCategory: 'Kitchenware & Small Appliances',
-        productSummary: `Portable lifestyle and home appliance product (${input.productName}) suitable for consumer retail.`,
-        buyerTargets: [
-          {
-            category: 'Kitchenware Store',
-            reason: 'Specialty retailer selling cookware, food prep gadgets, and kitchen tools.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Gadget Store',
-            reason: 'Electronics and lifestyle gadget shop stocking smart home tools.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Lifestyle Store',
-            reason: 'Department and lifestyle store retailing modern consumer conveniences.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Home Appliance Store',
-            reason: 'Retailer dedicated to household appliances and portable kitchen electrics.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'E-commerce Seller',
-            reason: 'Online merchant retailing trending lifestyle and kitchenware products.',
-            confidence: 'MEDIUM'
-          }
-        ],
-        searchTerms: [
-          'Kitchenware Store',
-          'Gadget Store',
-          'Lifestyle Store',
-          'Home Appliance Store',
-          'Electronics Shop'
-        ]
-      };
+      return this.enrichFallbackWithProfile(
+        {
+          productCategory: 'Kitchenware & Small Appliances',
+          productSummary: `Portable lifestyle and home appliance product (${input.productName}) suitable for consumer retail.`,
+          buyerTargets: [
+            {
+              category: 'Kitchenware Store',
+              reason: 'Specialty retailer selling cookware, food prep gadgets, and kitchen tools.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Gadget Store',
+              reason: 'Electronics and lifestyle gadget shop stocking smart home tools.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Lifestyle Store',
+              reason: 'Department and lifestyle store retailing modern consumer conveniences.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Home Appliance Store',
+              reason: 'Retailer dedicated to household appliances and portable kitchen electrics.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'E-commerce Seller',
+              reason: 'Online merchant retailing trending lifestyle and kitchenware products.',
+              confidence: 'MEDIUM'
+            }
+          ],
+          searchTerms: [
+            'Kitchenware Store',
+            'Gadget Store',
+            'Lifestyle Store',
+            'Home Appliance Store',
+            'Electronics Shop'
+          ]
+        },
+        input
+      );
     }
 
     // Electronics / Tech detection
@@ -319,74 +384,80 @@ STRICT INVARIANTS:
       text.includes('charger') ||
       text.includes('smart')
     ) {
-      return {
-        productCategory: 'Consumer Electronics & Gadgets',
-        productSummary: `Consumer electronics product (${input.productName}) suitable for technology retail.`,
-        buyerTargets: [
-          {
-            category: 'Electronics Retailer',
-            reason: 'Retail outlet selling consumer electronics and device accessories.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Mobile Accessories Shop',
-            reason: 'Specialty shop retailing personal tech accessories and gadgets.',
-            confidence: 'HIGH'
-          },
-          {
-            category: 'Computer & Tech Shop',
-            reason: 'Hardware retailer distributing peripherals and gadgets.',
-            confidence: 'MEDIUM'
-          },
-          {
-            category: 'Electronics Wholesaler',
-            reason: 'Wholesale distributor supplying local gadget and repair shops.',
-            confidence: 'HIGH'
-          }
-        ],
-        searchTerms: [
-          'Electronics Retailer',
-          'Mobile Accessories Shop',
-          'Computer Shop',
-          'Electronics Wholesaler'
-        ]
-      };
+      return this.enrichFallbackWithProfile(
+        {
+          productCategory: 'Consumer Electronics & Gadgets',
+          productSummary: `Consumer electronics product (${input.productName}) suitable for technology retail.`,
+          buyerTargets: [
+            {
+              category: 'Electronics Retailer',
+              reason: 'Retail outlet selling consumer electronics and device accessories.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Mobile Accessories Shop',
+              reason: 'Specialty shop retailing personal tech accessories and gadgets.',
+              confidence: 'HIGH'
+            },
+            {
+              category: 'Computer & Tech Shop',
+              reason: 'Hardware retailer distributing peripherals and gadgets.',
+              confidence: 'MEDIUM'
+            },
+            {
+              category: 'Electronics Wholesaler',
+              reason: 'Wholesale distributor supplying local gadget and repair shops.',
+              confidence: 'HIGH'
+            }
+          ],
+          searchTerms: [
+            'Electronics Retailer',
+            'Mobile Accessories Shop',
+            'Computer Shop',
+            'Electronics Wholesaler'
+          ]
+        },
+        input
+      );
     }
 
     // Default general commercial trade fallback
     const categoryName = input.category || 'General Merchandise';
-    return {
-      productCategory: categoryName,
-      productSummary: `Commercial product (${input.productName}) for wholesale and retail distribution.`,
-      buyerTargets: [
-        {
-          category: 'Retail Store',
-          reason: 'General retail channel selling consumer products in the local market.',
-          confidence: 'HIGH'
-        },
-        {
-          category: 'Wholesale Distributor',
-          reason: 'Bulk distributor supplying regional merchants and retailers.',
-          confidence: 'HIGH'
-        },
-        {
-          category: 'Department Store',
-          reason: 'Multi-category commercial store selling lifestyle and consumer goods.',
-          confidence: 'MEDIUM'
-        },
-        {
-          category: 'Supermarket',
-          reason: 'Large-format grocery and general merchandise retailer.',
-          confidence: 'MEDIUM'
-        }
-      ],
-      searchTerms: [
-        'Retail Store',
-        'Wholesale Distributor',
-        'Department Store',
-        'Supermarket'
-      ]
-    };
+    return this.enrichFallbackWithProfile(
+      {
+        productCategory: categoryName,
+        productSummary: `Commercial product (${input.productName}) for wholesale and retail distribution.`,
+        buyerTargets: [
+          {
+            category: 'Retail Store',
+            reason: 'General retail channel selling consumer products in the local market.',
+            confidence: 'HIGH'
+          },
+          {
+            category: 'Wholesale Distributor',
+            reason: 'Bulk distributor supplying regional merchants and retailers.',
+            confidence: 'HIGH'
+          },
+          {
+            category: 'Department Store',
+            reason: 'Multi-category commercial store selling lifestyle and consumer goods.',
+            confidence: 'MEDIUM'
+          },
+          {
+            category: 'Supermarket',
+            reason: 'Large-format grocery and general merchandise retailer.',
+            confidence: 'MEDIUM'
+          }
+        ],
+        searchTerms: [
+          'Retail Store',
+          'Wholesale Distributor',
+          'Department Store',
+          'Supermarket'
+        ]
+      },
+      input
+    );
   }
 
   private async recordUsage(

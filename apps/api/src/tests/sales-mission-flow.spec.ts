@@ -107,6 +107,9 @@ describe('SalesMissionFlow', () => {
     expect(analyzed.status).toBe(SalesMissionStatus.TARGETING);
     expect(analyzed.productAnalysisSnapshot).toBeDefined();
     expect(analyzed.productAnalysisSnapshot?.productCategory).toBeDefined();
+    expect(analyzed.productAnalysisSnapshot?.idealBuyerProfile).toBeDefined();
+    expect(analyzed.productAnalysisSnapshot?.idealBuyerProfile?.primaryBuyerTypes.length).toBeGreaterThan(0);
+    expect(analyzed.productAnalysisSnapshot?.suggestedRelatedNeeds?.length).toBeGreaterThan(0);
     expect(analyzed.selectedBuyerTargets?.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -155,7 +158,7 @@ describe('SalesMissionFlow', () => {
     expect(discovered.buyers?.length).toBeGreaterThan(0);
     expect(discovered.resultCount).toBe(discovered.buyers?.length);
 
-    // Provenance and Buyer Score preserved
+    // Provenance, Buyer Score V2, Priority, Intent, and Related Needs preserved
     const firstBuyer = discovered.buyers![0];
     expect(firstBuyer.provider).toBeDefined();
     expect(firstBuyer.externalBusinessId).toBeDefined();
@@ -166,6 +169,12 @@ describe('SalesMissionFlow', () => {
     expect(firstBuyer.scoreBreakdown).toBeDefined();
     expect(firstBuyer.scoreBreakdown?.categoryMatch).toBeDefined();
     expect(firstBuyer.scoreBreakdown?.contactability).toBeDefined();
+    expect(firstBuyer.scoreBreakdown?.intentStrength).toBeDefined();
+    expect(firstBuyer.priority).toBeDefined();
+    expect(['HOT', 'WARM', 'COLD']).toContain(firstBuyer.priority);
+    expect(firstBuyer.wholesaleIntent).toBeDefined();
+    expect(['HIGH', 'MEDIUM', 'LOW', 'NONE']).toContain(firstBuyer.wholesaleIntent);
+    expect(firstBuyer.suggestedRelatedNeeds).toBeDefined();
 
     // CRITICAL REOPEN TEST: Reopening mission retrieves stored state without calling any external providers
     const reopened = await salesMissionService.getMissionById(mission.id, orgAlpha.id);
@@ -174,6 +183,8 @@ describe('SalesMissionFlow', () => {
     expect(reopened.buyers?.length).toBe(discovered.buyers?.length);
     expect(reopened.buyers![0].businessName).toBe(firstBuyer.businessName);
     expect(reopened.buyers![0].buyerScore).toBe(firstBuyer.buyerScore);
+    expect(reopened.buyers![0].priority).toBe(firstBuyer.priority);
+    expect(reopened.buyers![0].wholesaleIntent).toBe(firstBuyer.wholesaleIntent);
   });
 
   it('4. Enforces strict tenant isolation across organizations', async () => {
