@@ -61,3 +61,90 @@ salesMissionRouter.post(
   requirePermission(Permissions.LEADS_WRITE),
   salesMissionController.refresh
 );
+
+// ==========================================
+// SUB-PHASE C: OUTREACH GOVERNANCE & CONVERSION
+// ==========================================
+import { outreachGovernanceController } from '../controllers/outreach-governance.controller.js';
+
+// Outreach Drafts
+salesMissionRouter.post(
+  '/:missionId/buyers/:buyerId/drafts',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.generateDraft
+);
+
+salesMissionRouter.get(
+  '/:missionId/buyers/:buyerId/drafts',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  outreachGovernanceController.listDrafts
+);
+
+salesMissionRouter.patch(
+  '/:missionId/drafts/:draftId',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.editDraft
+);
+
+// Human Approval Gate (Approval != Dispatch)
+salesMissionRouter.post(
+  '/:missionId/drafts/:draftId/submit-approval',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.submitForApproval
+);
+
+salesMissionRouter.post(
+  '/:missionId/drafts/:draftId/approve',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.approveDraft
+);
+
+salesMissionRouter.post(
+  '/:missionId/drafts/:draftId/reject',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.rejectDraft
+);
+
+salesMissionRouter.post(
+  '/:missionId/drafts/:draftId/ready-for-dispatch',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.markReadyForDispatch
+);
+
+// Inbound Replies & Classification
+salesMissionRouter.post(
+  '/:missionId/buyers/:buyerId/replies',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.processReply
+);
+
+salesMissionRouter.get(
+  '/:missionId/buyers/:buyerId/interactions',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  outreachGovernanceController.listInteractions
+);
+
+// Conversion Lifecycle
+salesMissionRouter.post(
+  '/:missionId/buyers/:buyerId/conversion-stage',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.transitionConversionStage
+);
+
+// Suppression (Do-Not-Contact)
+salesMissionRouter.post(
+  '/:missionId/buyers/:buyerId/suppress',
+  requireAuth,
+  requirePermission(Permissions.LEADS_WRITE),
+  outreachGovernanceController.suppressBuyer
+);

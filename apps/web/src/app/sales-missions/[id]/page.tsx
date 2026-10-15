@@ -29,7 +29,17 @@ import {
   Mail,
   ChevronDown,
   ChevronUp,
-  Flame
+  Flame,
+  ShieldAlert,
+  Send,
+  FileEdit,
+  ThumbsUp,
+  ThumbsDown,
+  Check,
+  X,
+  MessageSquare,
+  DollarSign,
+  AlertTriangle
 } from 'lucide-react';
 import {
   type SalesMissionDetailDto,
@@ -62,6 +72,184 @@ export default function SalesMissionDetailPage() {
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [expandedScoreBuyerId, setExpandedScoreBuyerId] = useState<string | null>(null);
   const [showRunHistory, setShowRunHistory] = useState(true);
+
+  // Sub-Phase C: Outreach Governance & Conversion State
+  const [activeOutreachBuyer, setActiveOutreachBuyer] = useState<SalesMissionBuyerDto | null>(null);
+  const [buyerDrafts, setBuyerDrafts] = useState<any[]>([]);
+  const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
+  const [draftChannel, setDraftChannel] = useState<string>('EMAIL');
+  const [draftLanguage, setDraftLanguage] = useState<'EN' | 'BN'>('EN');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState<string>('');
+  const [editBody, setEditBody] = useState<string>('');
+  const [rejectingDraftId, setRejectingDraftId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>('');
+  const [stageModalOpen, setStageModalOpen] = useState(false);
+  const [selectedStage, setSelectedStage] = useState<string>('CONTACTED');
+  const [wonDealValue, setWonDealValue] = useState<string>('50000');
+  const [wonCurrency, setWonCurrency] = useState<string>('BDT');
+  const [wonNotes, setWonNotes] = useState<string>('Bulk purchase for commercial retail stocking');
+  const [lostReason, setLostReason] = useState<string>('PRICE_HIGH');
+  const [testReplyText, setTestReplyText] = useState<string>('');
+  const [testReplyResult, setTestReplyResult] = useState<any | null>(null);
+  const [modalFeedback, setModalFeedback] = useState<string | null>(null);
+
+  const openOutreachDrawer = async (b: SalesMissionBuyerDto) => {
+    setActiveOutreachBuyer(b);
+    setModalFeedback(null);
+    setTestReplyResult(null);
+    setEditingDraftId(null);
+    setRejectingDraftId(null);
+    setIsLoadingDrafts(true);
+    try {
+      const res = await apiClient.listOutreachDrafts(missionId, b.id);
+      setBuyerDrafts(res.data || []);
+    } catch {
+      setBuyerDrafts([]);
+    } finally {
+      setIsLoadingDrafts(false);
+    }
+  };
+
+  const handleGenerateDraft = async () => {
+    if (!activeOutreachBuyer) return;
+    setIsDrafting(true);
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.generateOutreachDraft(missionId, activeOutreachBuyer.id, {
+        channel: draftChannel,
+        language: draftLanguage
+      });
+      setBuyerDrafts([res.data, ...buyerDrafts]);
+      setModalFeedback('Personalized draft generated with status DRAFT.');
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to generate draft'}`);
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleApproveDraft = async (draftId: string) => {
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.approveOutreachDraft(missionId, draftId);
+      setBuyerDrafts(buyerDrafts.map((d) => (d.id === draftId ? res.data : d)));
+      setModalFeedback('Draft marked as APPROVED. Invariant verified: Approval != Dispatch (no message sent).');
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to approve draft'}`);
+    }
+  };
+
+  const handleRejectDraft = async (draftId: string) => {
+    if (!rejectReason.trim()) return;
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.rejectOutreachDraft(missionId, draftId, {
+        rejectionReason: rejectReason
+      });
+      setBuyerDrafts(buyerDrafts.map((d) => (d.id === draftId ? res.data : d)));
+      setRejectingDraftId(null);
+      setRejectReason('');
+      setModalFeedback('Draft REJECTED with logged audit reason.');
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to reject draft'}`);
+    }
+  };
+
+  const handleMarkReadyForDispatch = async (draftId: string) => {
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.markDraftReadyForDispatch(missionId, draftId);
+      setBuyerDrafts(buyerDrafts.map((d) => (d.id === draftId ? res.data : d)));
+      setModalFeedback('Draft state set to READY_FOR_DISPATCH.');
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to mark ready for dispatch'}`);
+    }
+  };
+
+  const handleSaveDraftEdit = async (draftId: string) => {
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.editOutreachDraft(missionId, draftId, {
+        subject: editSubject,
+        body: editBody
+      });
+      setBuyerDrafts(buyerDrafts.map((d) => (d.id === draftId ? res.data : d)));
+      setEditingDraftId(null);
+      setModalFeedback('Draft updated and edit history logged to audit trail.');
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to edit draft'}`);
+    }
+  };
+
+  const handleTestInboundReply = async () => {
+    if (!activeOutreachBuyer || !testReplyText.trim()) return;
+    setModalFeedback(null);
+    try {
+      const res = await apiClient.processBuyerReply(missionId, activeOutreachBuyer.id, {
+        content: testReplyText,
+        channel: 'EMAIL'
+      });
+      setTestReplyResult(res.data);
+      if (res.data?.autoSuppressed) {
+        setModalFeedback('Opt-Out detected: UNSUBSCRIBE classification created organization suppression (conversion stage preserved).');
+      } else {
+        setModalFeedback(`Classified as ${res.data?.classification}. Conversion stage updated.`);
+      }
+      loadMission();
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to process reply'}`);
+    }
+  };
+
+  const handleTransitionStage = async () => {
+    if (!activeOutreachBuyer) return;
+    setModalFeedback(null);
+    try {
+      let wonEvidence: any = undefined;
+      let lostReasonVal: any = undefined;
+
+      if (selectedStage === 'WON') {
+        wonEvidence = {
+          dealValue: Number(wonDealValue),
+          currency: wonCurrency,
+          closedAt: new Date(),
+          notes: wonNotes,
+          verifiedByUserId: 'current-user-operator'
+        };
+      } else if (selectedStage === 'LOST') {
+        lostReasonVal = lostReason;
+      }
+
+      const res = await apiClient.transitionBuyerStage(missionId, activeOutreachBuyer.id, {
+        stage: selectedStage,
+        wonEvidence,
+        lostReason: lostReasonVal
+      });
+
+      setActiveOutreachBuyer(res.data.buyer);
+      setStageModalOpen(false);
+      setModalFeedback(`Stage updated to ${selectedStage}. Commercial evidence verified.`);
+      loadMission();
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to transition stage'}`);
+    }
+  };
+
+  const handleManualSuppress = async () => {
+    if (!activeOutreachBuyer) return;
+    if (!confirm('Add this buyer to the Organization Do-Not-Contact registry?')) return;
+    try {
+      await apiClient.suppressBuyer(missionId, activeOutreachBuyer.id, {
+        reason: 'DO_NOT_CONTACT'
+      });
+      setModalFeedback('Buyer added to Organization Do-Not-Contact list.');
+      loadMission();
+    } catch (err: any) {
+      setModalFeedback(`Error: ${err?.message || 'Failed to suppress buyer'}`);
+    }
+  };
 
   const loadMission = async () => {
     if (!missionId) return;
@@ -569,15 +757,31 @@ export default function SalesMissionDetailPage() {
                               )}
                             </div>
 
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase flex-shrink-0 ${
-                                isSaved
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              {buyer.isSuppressed && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                                  title="Hard-blocked from outreach. Do-Not-Contact registry enforced."
+                                >
+                                  <ShieldAlert className="w-3 h-3 text-rose-400" />
+                                  DO NOT CONTACT
+                                </span>
+                              )}
+                              {buyer.conversionStage && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase bg-indigo-950/60 text-indigo-300 border border-indigo-500/30">
+                                  Stage: {buyer.conversionStage}
+                                </span>
+                              )}
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                                  isSaved
                                     ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                  : 'bg-slate-800 text-slate-300'
-                              }`}
-                            >
-                              {isSaved ? 'In CRM' : buyer.status}
-                            </span>
+                                    : 'bg-slate-800 text-slate-300'
+                                }`}
+                              >
+                                {isSaved ? 'In CRM' : buyer.status}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Buyer Score (0-100) Badge, Priority Badge & Expandable Breakdown */}
@@ -790,6 +994,15 @@ export default function SalesMissionDetailPage() {
 
                           {/* CTA */}
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openOutreachDrawer(buyer)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition"
+                            >
+                              <Send className="w-3.5 h-3.5 text-indigo-400" />
+                              <span>Outreach & Stage</span>
+                            </button>
+
                             {isSaved ? (
                               <span className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-medium py-1 px-2 rounded bg-emerald-500/10 border border-emerald-500/20">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -817,6 +1030,457 @@ export default function SalesMissionDetailPage() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Outreach, Governance, Classification & Conversion Modal */}
+        {activeOutreachBuyer && (
+          <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-800 flex items-start justify-between gap-4 bg-slate-950/50">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg font-bold text-slate-100">{activeOutreachBuyer.businessName}</h3>
+                    {activeOutreachBuyer.isSuppressed && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                        DO NOT CONTACT
+                      </span>
+                    )}
+                    <span className="text-xs px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 font-semibold">
+                      Stage: {activeOutreachBuyer.conversionStage || 'DISCOVERED'}
+                    </span>
+                    {activeOutreachBuyer.priority && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-semibold">
+                        {activeOutreachBuyer.priority}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    {activeOutreachBuyer.category || 'Buyer'} · {activeOutreachBuyer.address || activeOutreachBuyer.city || 'Location unverified'}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveOutreachBuyer(null)}
+                  className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-slate-800 rounded-lg transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Invariant Banner */}
+              <div className="bg-indigo-950/30 border-b border-indigo-500/20 px-5 py-2.5 flex items-center gap-2 text-xs text-indigo-300">
+                <ShieldCheck className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <span>
+                  <strong>Governance Invariant:</strong> Approval != Dispatch. Approving an outreach draft records human authorization only. No automated delivery is triggered.
+                </span>
+              </div>
+
+              {/* Feedback Alert */}
+              {modalFeedback && (
+                <div className="px-5 py-2.5 bg-slate-800/80 border-b border-slate-700 text-xs text-slate-200 flex items-center justify-between">
+                  <span>{modalFeedback}</span>
+                  <button type="button" onClick={() => setModalFeedback(null)} className="text-slate-400 hover:text-slate-100 text-xs font-bold">Dismiss</button>
+                </div>
+              )}
+
+              {/* Scrollable Body */}
+              <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-300">
+                {/* 1. Outreach Drafts Section */}
+                <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-4">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-indigo-400" />
+                      <h4 className="font-bold text-slate-100 text-sm">Personalized Outreach Draft</h4>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        value={draftChannel}
+                        onChange={(e) => setDraftChannel(e.target.value)}
+                        className="px-2 py-1 bg-slate-900 border border-slate-800 rounded text-xs text-slate-200"
+                      >
+                        <option value="EMAIL">Email</option>
+                        <option value="WHATSAPP_DRAFT">WhatsApp Draft</option>
+                        <option value="SMS_DRAFT">SMS Draft</option>
+                        <option value="CALL_SCRIPT">Call Script</option>
+                      </select>
+
+                      <select
+                        value={draftLanguage}
+                        onChange={(e) => setDraftLanguage(e.target.value as any)}
+                        className="px-2 py-1 bg-slate-900 border border-slate-800 rounded text-xs text-slate-200"
+                      >
+                        <option value="EN">English</option>
+                        <option value="BN">বাংলা (Bangla)</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        disabled={isDrafting || activeOutreachBuyer.isSuppressed}
+                        onClick={handleGenerateDraft}
+                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded font-semibold transition"
+                      >
+                        {isDrafting ? 'Generating...' : 'Generate New Draft'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Suppression Warning for Drafts */}
+                  {activeOutreachBuyer.isSuppressed && (
+                    <div className="p-3 bg-rose-950/40 border border-rose-500/30 rounded-lg text-rose-300 text-xs flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                      <span>This buyer is in the Organization Do-Not-Contact registry. Draft generation and approval are prohibited.</span>
+                    </div>
+                  )}
+
+                  {/* Existing Drafts List */}
+                  {buyerDrafts.length > 0 ? (
+                    <div className="space-y-4">
+                      {buyerDrafts.map((d) => (
+                        <div key={d.id} className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-200">{d.channel} ({d.language})</span>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                d.status === 'APPROVED'
+                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                  : d.status === 'PENDING_APPROVAL'
+                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                  : d.status === 'REJECTED'
+                                  ? 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                                  : d.status === 'READY_FOR_DISPATCH'
+                                  ? 'bg-purple-500/10 text-purple-300 border-purple-500/30'
+                                  : 'bg-slate-800 text-slate-300 border-slate-700'
+                              }`}>
+                                {d.status}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-500">
+                              Created {new Date(d.createdAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+
+                          {d.rejectionReason && (
+                            <div className="text-[11px] text-rose-400 bg-rose-950/20 px-2.5 py-1 rounded border border-rose-500/20">
+                              Rejection Reason: {d.rejectionReason}
+                            </div>
+                          )}
+
+                          {editingDraftId === d.id ? (
+                            <div className="space-y-2">
+                              {d.channel === 'EMAIL' && (
+                                <input
+                                  type="text"
+                                  value={editSubject}
+                                  onChange={(e) => setEditSubject(e.target.value)}
+                                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded text-slate-200 text-xs"
+                                  placeholder="Email Subject"
+                                />
+                              )}
+                              <textarea
+                                rows={5}
+                                value={editBody}
+                                onChange={(e) => setEditBody(e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded text-slate-200 font-sans text-xs"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveDraftEdit(d.id)}
+                                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-semibold text-xs transition"
+                                >
+                                  Save Edits
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingDraftId(null)}
+                                  className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs transition"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {d.subject && (
+                                <div className="font-semibold text-slate-200 text-xs">
+                                  Subject: {d.subject}
+                                </div>
+                              )}
+                              <div className="p-3 bg-slate-950 rounded border border-slate-800 text-slate-300 whitespace-pre-wrap font-sans text-xs leading-relaxed">
+                                {d.body}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingDraftId(d.id);
+                                  setEditSubject(d.subject || '');
+                                  setEditBody(d.body);
+                                }}
+                                className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                              >
+                                Edit Content
+                              </button>
+                            </div>
+                          )}
+
+                          {/* AI Context snapshot audit note */}
+                          {d.aiContextSnapshot && (
+                            <div className="p-2.5 bg-slate-950/60 rounded border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+                              <span className="font-semibold text-slate-300">Grounding Evidence Snapshot:</span>
+                              <div>Verified Intent: {d.aiContextSnapshot.wholesaleIntentEvidence || 'None'}</div>
+                              {d.aiContextSnapshot.suggestedRelatedNeeds?.length > 0 && (
+                                <div className="italic text-slate-500">
+                                  Related Needs (AI Prediction only): {d.aiContextSnapshot.suggestedRelatedNeeds.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Human Approval Controls */}
+                          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800">
+                            {d.status === 'DRAFT' && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const res = await apiClient.submitDraftForApproval(missionId, d.id);
+                                    setBuyerDrafts(buyerDrafts.map((bd) => (bd.id === d.id ? res.data : bd)));
+                                    setModalFeedback('Draft submitted for approval.');
+                                  } catch (err: any) {
+                                    setModalFeedback(`Error: ${err?.message || 'Failed to submit'}`);
+                                  }
+                                }}
+                                className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold text-xs transition"
+                              >
+                                Submit for Approval
+                              </button>
+                            )}
+
+                            {d.status === 'PENDING_APPROVAL' && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveDraft(d.id)}
+                                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded font-semibold text-xs transition"
+                                >
+                                  Approve Draft (Zero Dispatch)
+                                </button>
+
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Rejection reason..."
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
+                                    className="px-2 py-1 bg-slate-950 border border-slate-800 rounded text-xs text-slate-200 w-36"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectDraft(d.id)}
+                                    className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded font-semibold text-xs transition"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {d.status === 'APPROVED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleMarkReadyForDispatch(d.id)}
+                                className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded font-semibold text-xs transition"
+                              >
+                                Mark Ready for Dispatch
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-xs italic">No drafts generated yet. Choose a channel and language to generate.</p>
+                  )}
+                </div>
+
+                {/* 2. Inbound Reply Classification Simulator */}
+                <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                    <h4 className="font-bold text-slate-100 text-sm">Inbound Reply Classification (English + Bangla)</h4>
+                  </div>
+                  <p className="text-slate-400 text-xs">
+                    Test inbound buyer response classification. Explicit unsubscribe phrases immediately register organization-scoped suppression.
+                  </p>
+
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. 'Price koto?', 'Send catalog', 'What is MOQ?', or 'আর যোগাযোগ করবেন না'..."
+                      value={testReplyText}
+                      onChange={(e) => setTestReplyText(e.target.value)}
+                      className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                    />
+                    <button
+                      type="button"
+                      disabled={!testReplyText.trim()}
+                      onClick={handleTestInboundReply}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded font-semibold transition"
+                    >
+                      Classify & Ingest
+                    </button>
+                  </div>
+
+                  {testReplyResult && (
+                    <div className="p-3 bg-slate-900 rounded-lg border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-slate-200">
+                          Classified Category: <span className="text-emerald-400 font-mono">{testReplyResult.classification}</span>
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          Auto-Suppressed: {testReplyResult.autoSuppressed ? 'YES' : 'NO'}
+                        </span>
+                      </div>
+                      {testReplyResult.autoSuppressed && (
+                        <div className="text-[11px] text-rose-400 font-semibold flex items-center gap-1 pt-1">
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          UNSUBSCRIBE detected: Buyer was immediately added to Organization Do-Not-Contact registry.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Conversion Lifecycle Tracking (WON / LOST Governance) */}
+                <div className="p-4 bg-slate-950/60 border border-slate-800 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="w-4 h-4 text-amber-400" />
+                      <h4 className="font-bold text-slate-100 text-sm">Conversion Lifecycle Governance</h4>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      Current Stage: <strong className="text-indigo-400">{activeOutreachBuyer.conversionStage || 'DISCOVERED'}</strong>
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] text-slate-400 block mb-1">Target Stage</label>
+                      <select
+                        value={selectedStage}
+                        onChange={(e) => setSelectedStage(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                      >
+                        <option value="DISCOVERED">DISCOVERED</option>
+                        <option value="CONTACTED">CONTACTED</option>
+                        <option value="REPLIED">REPLIED</option>
+                        <option value="INTERESTED">INTERESTED</option>
+                        <option value="NOT_INTERESTED">NOT_INTERESTED</option>
+                        <option value="FOLLOW_UP">FOLLOW_UP</option>
+                        <option value="NEGOTIATING">NEGOTIATING</option>
+                        <option value="WON">WON (Commercial Evidence Required)</option>
+                        <option value="LOST">LOST (Reason Required)</option>
+                      </select>
+                    </div>
+
+                    {selectedStage === 'LOST' && (
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Loss Reason</label>
+                        <select
+                          value={lostReason}
+                          onChange={(e) => setLostReason(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                        >
+                          <option value="PRICE_HIGH">PRICE_HIGH</option>
+                          <option value="COMPETITOR_CHOSEN">COMPETITOR_CHOSEN</option>
+                          <option value="NO_BUDGET">NO_BUDGET</option>
+                          <option value="NO_REPLY">NO_REPLY</option>
+                          <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
+                          <option value="NOT_RELEVANT">NOT_RELEVANT</option>
+                          <option value="OTHER">OTHER</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Mandatory WON Evidence Form */}
+                  {selectedStage === 'WON' && (
+                    <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-lg space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-xs">
+                        <AlertCircle className="w-4 h-4 text-amber-400" />
+                        <span>WON Rule Enforced: Explicit commercial evidence is mandatory.</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] text-slate-400 block mb-1">Deal Value (Numeric)</label>
+                          <input
+                            type="text"
+                            value={wonDealValue}
+                            onChange={(e) => setWonDealValue(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] text-slate-400 block mb-1">Currency</label>
+                          <input
+                            type="text"
+                            value={wonCurrency}
+                            onChange={(e) => setWonCurrency(e.target.value)}
+                            className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-slate-400 block mb-1">Verification Notes (Min 10 characters)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Received PO-98214 via WhatsApp invoice confirmation"
+                          value={wonNotes}
+                          onChange={(e) => setWonNotes(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-slate-900 border border-slate-800 rounded text-slate-200 text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={handleTransitionStage}
+                      className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded font-semibold text-xs transition"
+                    >
+                      Update Lifecycle Stage
+                    </button>
+
+                    {!activeOutreachBuyer.isSuppressed && (
+                      <button
+                        type="button"
+                        onClick={handleManualSuppress}
+                        className="px-3 py-1.5 bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 rounded text-xs transition font-semibold"
+                      >
+                        Add to Do-Not-Contact
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 border-t border-slate-800 bg-slate-950/50 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setActiveOutreachBuyer(null)}
+                  className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-semibold"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         )}

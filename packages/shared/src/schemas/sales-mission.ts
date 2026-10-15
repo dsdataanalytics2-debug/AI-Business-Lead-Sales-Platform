@@ -210,6 +210,13 @@ export interface SalesMissionBuyerDto {
   wholesaleIntent?: WholesaleIntentLevel | string | null;
   wholesaleIntentSignals?: string[] | null;
   suggestedRelatedNeeds?: string[] | null;
+  conversionStage?: string | null;
+  conversionWonEvidence?: any;
+  conversionLostReason?: string | null;
+  conversionLostAt?: string | Date | null;
+  outreachDrafts?: any[] | null;
+  isSuppressed?: boolean;
+  suppressionReason?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

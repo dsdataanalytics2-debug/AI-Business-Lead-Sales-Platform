@@ -265,6 +265,10 @@ model Organization {
   products               Product[]
   salesMissions          SalesMission[]
   salesMissionBuyers     SalesMissionBuyer[]
+  outreachDrafts         OutreachDraft[]
+  buyerInteractions      BuyerInteraction[]
+  suppressionRecords     SuppressionRecord[]
+  conversionEvents       ConversionEvent[]
 
   @@map("organizations")
 
@@ -298,6 +302,9 @@ model User {
   businessSearchSessions     BusinessSearchSession[]
   createdProducts            Product[]             @relation("ProductCreatedBy")
   createdSalesMissions       SalesMission[]        @relation("SalesMissionCreatedBy")
+  approvedOutreachDrafts     OutreachDraft[]       @relation("OutreachDraftApprovedBy")
+  rejectedOutreachDrafts     OutreachDraft[]       @relation("OutreachDraftRejectedBy")
+  conversionEvents           ConversionEvent[]
 
   @@unique([id, organizationId])
   @@index([organizationId])
@@ -992,6 +999,10 @@ model SalesMissionBuyer {
   wholesaleIntent      String?  @default("NONE") @map("wholesale_intent")
   wholesaleIntentSignals Json?  @map("wholesale_intent_signals")
   suggestedRelatedNeeds Json?   @map("suggested_related_needs")
+  conversionStage      String   @default("DISCOVERED") @map("conversion_stage")
+  conversionWonEvidence Json?   @map("conversion_won_evidence")
+  conversionLostReason String?  @map("conversion_lost_reason")
+  conversionLostAt     DateTime? @map("conversion_lost_at")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
@@ -999,11 +1010,114 @@ model SalesMissionBuyer {
   salesMission SalesMission @relation(fields: [salesMissionId, organizationId], references: [id, organizationId], onDelete: Cascade)
   lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
+  outreachDrafts     OutreachDraft[]
+  interactions       BuyerInteraction[]
+  conversionEvents   ConversionEvent[]
+  suppressionRecords SuppressionRecord[]
+
   @@unique([id, organizationId])
   @@unique([salesMissionId, provider, externalBusinessId])
   @@index([organizationId, salesMissionId])
   @@index([organizationId, status])
   @@index([organizationId, buyerScore])
   @@index([organizationId, priority])
+  @@index([organizationId, conversionStage])
   @@map("sales_mission_buyers")
+}
+
+model OutreachDraft {
+  id                  String    @id @default(uuid())
+  organizationId      String    @map("organization_id")
+  salesMissionBuyerId String    @map("sales_mission_buyer_id")
+  salesMissionId      String    @map("sales_mission_id")
+  channel             String
+  status              String    @default("DRAFT")
+  subject             String?
+  body                String
+  language            String    @default("EN")
+  aiContextSnapshot   Json?     @map("ai_context_snapshot")
+  editHistory         Json?     @map("edit_history")
+  approvedByUserId    String?   @map("approved_by_user_id")
+  approvedAt          DateTime? @map("approved_at")
+  rejectedByUserId    String?   @map("rejected_by_user_id")
+  rejectedAt          DateTime? @map("rejected_at")
+  rejectionReason     String?   @map("rejection_reason")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesMissionBuyer SalesMissionBuyer @relation(fields: [salesMissionBuyerId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  approvedByUser    User?             @relation("OutreachDraftApprovedBy", fields: [approvedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+  rejectedByUser    User?             @relation("OutreachDraftRejectedBy", fields: [rejectedByUserId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, salesMissionBuyerId])
+  @@index([organizationId, status])
+  @@map("outreach_drafts")
+}
+
+model BuyerInteraction {
+  id                       String   @id @default(uuid())
+  organizationId           String   @map("organization_id")
+  salesMissionBuyerId      String   @map("sales_mission_buyer_id")
+  direction                String
+  channel                  String
+  content                  String
+  rawPayload               Json?    @map("raw_payload")
+  classification           String?
+  classificationConfidence Float?   @map("classification_confidence")
+  classificationSignals    Json?    @map("classification_signals")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesMissionBuyer SalesMissionBuyer @relation(fields: [salesMissionBuyerId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, salesMissionBuyerId])
+  @@index([organizationId, classification])
+  @@map("buyer_interactions")
+}
+
+model SuppressionRecord {
+  id                  String    @id @default(uuid())
+  organizationId      String    @map("organization_id")
+  reason              String    @default("UNSUBSCRIBE")
+  source              String
+  phone               String?
+  email               String?
+  domain              String?
+  salesMissionBuyerId String?   @map("sales_mission_buyer_id")
+  metadata            Json?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesMissionBuyer SalesMissionBuyer? @relation(fields: [salesMissionBuyerId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, phone])
+  @@index([organizationId, email])
+  @@index([organizationId, domain])
+  @@index([organizationId, salesMissionBuyerId])
+  @@map("suppression_records")
+}
+
+model ConversionEvent {
+  id                  String   @id @default(uuid())
+  organizationId      String   @map("organization_id")
+  salesMissionBuyerId String   @map("sales_mission_buyer_id")
+  fromStage           String   @map("from_stage")
+  toStage             String   @map("to_stage")
+  evidence            Json?
+  userId              String?  @map("user_id")
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesMissionBuyer SalesMissionBuyer @relation(fields: [salesMissionBuyerId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  user              User?             @relation(fields: [userId, organizationId], references: [id, organizationId], onDelete: Restrict)
+
+  @@unique([id, organizationId])
+  @@index([organizationId, salesMissionBuyerId, createdAt])
+  @@map("conversion_events")
 }

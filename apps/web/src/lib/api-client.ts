@@ -866,7 +866,53 @@ export const apiClient = {
     const res = await request<any>(`/locations/suggest?${params.toString()}`, options);
     const items = Array.isArray(res) ? res : (res?.data || []);
     return { data: items };
-  }
+  },
+
+  // Sub-Phase C: Outreach Governance & Conversion Tracking
+  generateOutreachDraft: (missionId: string, buyerId: string, input: { channel?: string; language?: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/drafts`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }),
+  listOutreachDrafts: (missionId: string, buyerId: string): Promise<{ data: any[] }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/drafts`),
+  editOutreachDraft: (missionId: string, draftId: string, input: { subject?: string | null; body: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/drafts/${encodeURIComponent(draftId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input)
+    }),
+  submitDraftForApproval: (missionId: string, draftId: string): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/drafts/${encodeURIComponent(draftId)}/submit-approval`, {
+      method: 'POST'
+    }),
+  approveOutreachDraft: (missionId: string, draftId: string): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/drafts/${encodeURIComponent(draftId)}/approve`, {
+      method: 'POST'
+    }),
+  rejectOutreachDraft: (missionId: string, draftId: string, input: { rejectionReason: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/drafts/${encodeURIComponent(draftId)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }),
+  markDraftReadyForDispatch: (missionId: string, draftId: string): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/drafts/${encodeURIComponent(draftId)}/ready-for-dispatch`, {
+      method: 'POST'
+    }),
+  processBuyerReply: (missionId: string, buyerId: string, input: { content: string; channel?: string; senderPhone?: string; senderEmail?: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/replies`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }),
+  transitionBuyerStage: (missionId: string, buyerId: string, input: { stage: string; wonEvidence?: any; lostReason?: string; notes?: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/conversion-stage`, {
+      method: 'POST',
+      body: JSON.stringify(input)
+    }),
+  suppressBuyer: (missionId: string, buyerId: string, input?: { reason?: string }): Promise<{ data: any }> =>
+    request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/suppress`, {
+      method: 'POST',
+      body: JSON.stringify(input || {})
+    })
 };
 
 

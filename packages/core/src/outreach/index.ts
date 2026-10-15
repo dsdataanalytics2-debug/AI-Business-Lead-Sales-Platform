@@ -12,6 +12,11 @@
  * - OutreachDeliveryQueue interface & in-memory test queue
  * - Domain service errors (OutreachServiceError)
  * - OutreachDeliveryService (idempotent request creation, role authorization, suppression Gate A)
+ *
+ * Sub-Phase C: Outreach Governance, Personalization Drafts, Reply Classification & Suppression Matcher:
+ * - PersonalizationComposer
+ * - ReplyClassifier
+ * - SuppressionMatcher
  */
 
 export * from './interfaces.js';
@@ -29,3 +34,8 @@ export * from './meta-whatsapp-provider.js';
 export * from './meta-whatsapp-normalizer.js';
 export * from './resend-email-provider.js';
 export * from './resend-email-normalizer.js';
+
+// Sub-Phase C
+export * from './personalization-composer.js';
+export * from './reply-classifier.js';
+export * from './suppression-matcher.js';

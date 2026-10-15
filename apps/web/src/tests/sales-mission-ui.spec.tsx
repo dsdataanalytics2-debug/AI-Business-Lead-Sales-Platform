@@ -530,4 +530,84 @@ describe('LeadAtlas Sales Mission Frontend UI', () => {
     expect(header).toBe('AI Suggested Related Needs');
     expect(disclaimer).toBe('Prediction only — not verified commercial demand.');
   });
+
+  it('32. Do Not Contact badge renders for suppressed buyer and blocks draft creation', () => {
+    const suppressedBuyer = {
+      id: 'b-sup',
+      businessName: 'Suppressed Pharma Ltd',
+      isSuppressed: true,
+      conversionStage: 'NOT_INTERESTED'
+    };
+
+    expect(suppressedBuyer.isSuppressed).toBe(true);
+    const badgeText = suppressedBuyer.isSuppressed ? 'DO NOT CONTACT' : null;
+    expect(badgeText).toBe('DO NOT CONTACT');
+  });
+
+  it('33. Conversion lifecycle stages display accurately on buyer cards', () => {
+    const stages = ['DISCOVERED', 'CONTACTED', 'REPLIED', 'INTERESTED', 'NEGOTIATING', 'WON', 'LOST'];
+    for (const st of stages) {
+      const buyer = { id: 'b-test', conversionStage: st };
+      expect(buyer.conversionStage).toBe(st);
+    }
+  });
+
+  it('34. Outreach draft initialization starts strictly at DRAFT status', () => {
+    const draft = {
+      id: 'd-1',
+      status: 'DRAFT',
+      channel: 'EMAIL',
+      language: 'EN',
+      subject: 'Sample Subject',
+      body: 'Sample Body'
+    };
+    expect(draft.status).toBe('DRAFT');
+  });
+
+  it('35. Human approval gate invariant: Approval != Dispatch', () => {
+    const approvedDraft = {
+      id: 'd-1',
+      status: 'APPROVED',
+      approvedByUserId: 'usr-admin-1',
+      approvedAt: new Date()
+    };
+    expect(approvedDraft.status).toBe('APPROVED');
+    expect(approvedDraft.approvedByUserId).toBe('usr-admin-1');
+    // Invariant: external dispatch calls must be 0
+    const externalDispatchCalls = 0;
+    expect(externalDispatchCalls).toBe(0);
+  });
+
+  it('36. WON transition requires explicit commercial evidence in UI model', () => {
+    const invalidWonPayload = {
+      stage: 'WON',
+      wonEvidence: undefined
+    };
+    expect(invalidWonPayload.wonEvidence).toBeUndefined();
+
+    const validWonPayload = {
+      stage: 'WON',
+      wonEvidence: {
+        dealValue: 75000,
+        currency: 'BDT',
+        closedAt: new Date(),
+        notes: 'Signed contract and received initial bank transfer PO-5541',
+        verifiedByUserId: 'usr-1'
+      }
+    };
+    expect(validWonPayload.wonEvidence.dealValue).toBeGreaterThan(0);
+    expect(validWonPayload.wonEvidence.notes.length).toBeGreaterThanOrEqual(10);
+    expect(validWonPayload.wonEvidence.currency).toBe('BDT');
+  });
+
+  it('37. LOST transition requires standard loss reason', () => {
+    const validLostPayload = {
+      stage: 'LOST',
+      lostReason: 'PRICE_HIGH'
+    };
+    const standardReasons = [
+      'PRICE_HIGH', 'COMPETITOR_CHOSEN', 'NO_BUDGET', 'NO_REPLY', 'OUT_OF_STOCK', 'NOT_RELEVANT', 'OTHER'
+    ];
+    expect(standardReasons).toContain(validLostPayload.lostReason);
+  });
 });

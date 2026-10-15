@@ -42,7 +42,8 @@ import {
   serializeCoordinate,
   getSubAreasForMarket,
   type MergedBusinessRecord,
-  type ProductContextInput
+  type ProductContextInput,
+  checkSuppression
 } from '@leadmate/core';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
 import { aiProductAnalysisService } from './ai-product-analysis.service.js';
@@ -164,7 +165,7 @@ export class SalesMissionService {
   /**
    * Helper to serialize a SalesMissionBuyer.
    */
-  private serializeBuyer(b: any, isNew = false): SalesMissionBuyerDto {
+  public serializeBuyer(b: any, isNew = false): SalesMissionBuyerDto {
     return {
       id: b.id,
       organizationId: b.organizationId,
@@ -196,6 +197,13 @@ export class SalesMissionService {
       wholesaleIntent: b.wholesaleIntent || 'NONE',
       wholesaleIntentSignals: b.wholesaleIntentSignals || null,
       suggestedRelatedNeeds: b.suggestedRelatedNeeds || null,
+      conversionStage: b.conversionStage || 'DISCOVERED',
+      conversionWonEvidence: b.conversionWonEvidence || null,
+      conversionLostReason: b.conversionLostReason || null,
+      conversionLostAt: b.conversionLostAt || null,
+      outreachDrafts: Array.isArray(b.outreachDrafts) ? b.outreachDrafts : [],
+      isSuppressed: Boolean(b.isSuppressed),
+      suppressionReason: b.suppressionReason || null,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt
     };
@@ -320,24 +328,61 @@ export class SalesMissionService {
    * Retrieves mission details by ID without calling any external providers.
    */
   async getMissionById(id: string, organizationId: string): Promise<SalesMissionDetailDto> {
-    const mission = await prisma.salesMission.findFirst({
-      where: {
-        id,
-        organizationId
-      },
-      include: {
-        product: true,
-        buyers: {
-          orderBy: { createdAt: 'desc' }
+    const [mission, suppressionRecords] = await Promise.all([
+      prisma.salesMission.findFirst({
+        where: {
+          id,
+          organizationId
+        },
+        include: {
+          product: true,
+          buyers: {
+            include: {
+              outreachDrafts: {
+                orderBy: { createdAt: 'desc' }
+              }
+            },
+            orderBy: { createdAt: 'desc' }
+          }
         }
-      }
-    });
+      }),
+      prisma.suppressionRecord.findMany({
+        where: { organizationId }
+      })
+    ]);
 
     if (!mission) {
       throw new NotFoundError(`Sales Mission "${id}" not found`);
     }
 
-    return this.serializeMission(mission, mission.buyers || []);
+    const suppressionCandidates = suppressionRecords.map((r) => ({
+      id: r.id,
+      phone: r.phone,
+      email: r.email,
+      domain: r.domain,
+      salesMissionBuyerId: r.salesMissionBuyerId,
+      reason: r.reason
+    }));
+
+    const annotatedBuyers = (mission.buyers || []).map((b) => {
+      const match = checkSuppression(
+        {
+          id: b.id,
+          phone: b.phone,
+          website: b.website,
+          businessName: b.businessName,
+          city: b.city
+        },
+        suppressionCandidates
+      );
+      return {
+        ...b,
+        isSuppressed: match.isSuppressed,
+        suppressionReason: match.reason || null
+      };
+    });
+
+    return this.serializeMission(mission, annotatedBuyers);
   }
 
   /**
