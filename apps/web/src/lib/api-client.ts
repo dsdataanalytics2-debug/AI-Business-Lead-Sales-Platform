@@ -54,7 +54,11 @@ import {
   type UpdateSalesMissionInput,
   type AiProductAnalysisResult,
   type AnalyzeProductInput,
-  type AnalyzeProductRequest
+  type AnalyzeProductRequest,
+  type DashboardSalesKpisDto,
+  type ProductAnalyticsDto,
+  type SourceEffectivenessDto,
+  type RecommendationResponseDto
 } from '@leadmate/shared';
 
 
@@ -912,7 +916,15 @@ export const apiClient = {
     request(`/sales-missions/${encodeURIComponent(missionId)}/buyers/${encodeURIComponent(buyerId)}/suppress`, {
       method: 'POST',
       body: JSON.stringify(input || {})
-    })
+    }),
+  getSalesDashboardAnalytics: (): Promise<{ data: DashboardSalesKpisDto }> =>
+    request('/sales-missions/analytics/dashboard'),
+  getProductAnalytics: (productId: string): Promise<{ data: ProductAnalyticsDto }> =>
+    request(`/sales-missions/analytics/products/${encodeURIComponent(productId)}`),
+  getSourceAnalytics: (): Promise<{ data: SourceEffectivenessDto[] }> =>
+    request('/sales-missions/analytics/sources'),
+  getDiscoveryRecommendations: (productId?: string): Promise<{ data: RecommendationResponseDto }> =>
+    request(`/sales-missions/analytics/recommendations${productId ? `?productId=${encodeURIComponent(productId)}` : ''}`)
 };
 
 

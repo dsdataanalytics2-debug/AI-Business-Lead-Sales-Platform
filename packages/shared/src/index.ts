@@ -21,3 +21,4 @@ export * from './schemas/ai.js';
 export * from './schemas/product.js';
 export * from './schemas/sales-mission.js';
 export * from './schemas/outreach-governance.js';
+export * from './schemas/sales-analytics.js';

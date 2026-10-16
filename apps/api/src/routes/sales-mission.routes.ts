@@ -30,6 +30,39 @@ salesMissionRouter.post(
   salesMissionController.analyzeDirect
 );
 
+// ==========================================
+// SUB-PHASE D: AI SALES ENGINE ANALYTICS
+// ==========================================
+import { salesAnalyticsController } from '../controllers/sales-analytics.controller.js';
+
+salesMissionRouter.get(
+  '/analytics/dashboard',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAnalyticsController.getDashboard
+);
+
+salesMissionRouter.get(
+  '/analytics/products/:productId',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAnalyticsController.getProductAnalytics
+);
+
+salesMissionRouter.get(
+  '/analytics/sources',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAnalyticsController.getSources
+);
+
+salesMissionRouter.get(
+  '/analytics/recommendations',
+  requireAuth,
+  requirePermission(Permissions.LEADS_READ),
+  salesAnalyticsController.getRecommendations
+);
+
 // GET /api/v1/sales-missions/:id -> Get mission details
 salesMissionRouter.get(
   '/:id',
