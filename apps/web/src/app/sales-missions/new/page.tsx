@@ -29,7 +29,7 @@ import {
 import { AppShell } from '@/components/layout/app-shell';
 import { apiClient, type LocationSuggestionItem } from '@/lib/api-client';
 
-export default function NewSalesMissionPage() {
+function NewSalesMissionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialProductId = searchParams.get('productId');
@@ -1026,5 +1026,22 @@ export default function NewSalesMissionPage() {
         </div>
       </div>
     </AppShell>
+  );
+}
+
+export default function NewSalesMissionPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <AppShell>
+          <div className="py-20 flex flex-col items-center justify-center space-y-4 text-center">
+            <Loader2 className="w-10 h-10 animate-spin text-indigo-400" />
+            <p className="text-sm text-slate-400">Loading Sales Mission Wizard...</p>
+          </div>
+        </AppShell>
+      }
+    >
+      <NewSalesMissionContent />
+    </React.Suspense>
   );
 }
