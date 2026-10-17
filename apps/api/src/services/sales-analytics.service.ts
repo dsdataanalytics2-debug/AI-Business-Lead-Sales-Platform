@@ -33,26 +33,12 @@ import type {
 import { env } from '../config/env.js';
 import { NotFoundError } from '../lib/errors.js';
 
-let redisClient: Redis | null = null;
+import { getRedisClient } from '../lib/redis.js';
+
 const CACHE_TTL_SECONDS = 900; // 15 minutes
 
 function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      redisClient = new Redis(env.REDIS_URL, {
-        maxRetriesPerRequest: null,
-        lazyConnect: true,
-        retryStrategy: () => null,
-        enableOfflineQueue: false
-      });
-      redisClient.on('error', () => {
-        // Suppress unhandled redis errors to allow seamless DB fallback
-      });
-    } catch {
-      redisClient = null;
-    }
-  }
-  return redisClient;
+  return getRedisClient();
 }
 
 async function getFromCache<T>(key: string): Promise<T | null> {

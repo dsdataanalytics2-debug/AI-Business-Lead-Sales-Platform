@@ -1,9 +1,11 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { env } from './config/env.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { httpLogger } from './middleware/logger.js';
+import { originGuard } from './middleware/origin-guard.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { NotFoundError } from './lib/errors.js';
 import { authRouter } from './routes/auth.routes.js';
@@ -27,7 +29,18 @@ import { salesMissionRouter } from './routes/sales-mission.routes.js';
 export function createApp(): Express {
   const app = express();
 
-  // Basic security and parsing middlewares
+  // 1. Production-safe security headers
+  app.use(
+    helmet({
+      contentSecurityPolicy: false, // API responses are JSON; web application CSP managed by Next.js
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      hsts: env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false
+    })
+  );
+
+  // 2. CORS & Cookie parsing
   app.use(
     cors({
       origin: env.APP_BASE_URL,
@@ -35,6 +48,10 @@ export function createApp(): Express {
     })
   );
   app.use(cookieParser());
+
+  // 3. State-changing Origin / Referer Guard (protects cookie sessions; exempts webhooks)
+  app.use(originGuard);
+
   // Request ID & Structured Logging
   app.use(requestIdMiddleware);
   app.use(httpLogger);

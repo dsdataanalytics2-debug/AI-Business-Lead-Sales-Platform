@@ -2,6 +2,12 @@ import { Router } from 'express';
 import { Permissions } from '@leadmate/shared';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission } from '../middleware/rbac.js';
+import {
+  aiProductAnalysisRateLimiter,
+  buyerDiscoveryRateLimiter,
+  buyerRefreshRateLimiter,
+  draftGenerationRateLimiter
+} from '../middleware/rate-limiter.js';
 import { salesMissionController } from '../controllers/sales-mission.controller.js';
 
 export const salesMissionRouter = Router();
@@ -27,6 +33,7 @@ salesMissionRouter.post(
   '/analyze-product',
   requireAuth,
   requirePermission(Permissions.LEADS_READ),
+  aiProductAnalysisRateLimiter,
   salesMissionController.analyzeDirect
 );
 
@@ -76,6 +83,7 @@ salesMissionRouter.post(
   '/:id/analyze',
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
+  aiProductAnalysisRateLimiter,
   salesMissionController.analyze
 );
 
@@ -84,6 +92,7 @@ salesMissionRouter.post(
   '/:id/discover',
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
+  buyerDiscoveryRateLimiter,
   salesMissionController.discover
 );
 
@@ -92,6 +101,7 @@ salesMissionRouter.post(
   '/:id/refresh',
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
+  buyerRefreshRateLimiter,
   salesMissionController.refresh
 );
 
@@ -105,6 +115,7 @@ salesMissionRouter.post(
   '/:missionId/buyers/:buyerId/drafts',
   requireAuth,
   requirePermission(Permissions.LEADS_WRITE),
+  draftGenerationRateLimiter,
   outreachGovernanceController.generateDraft
 );
 
@@ -133,14 +144,14 @@ salesMissionRouter.post(
 salesMissionRouter.post(
   '/:missionId/drafts/:draftId/approve',
   requireAuth,
-  requirePermission(Permissions.LEADS_WRITE),
+  requirePermission(Permissions.OUTREACH_MANAGE),
   outreachGovernanceController.approveDraft
 );
 
 salesMissionRouter.post(
   '/:missionId/drafts/:draftId/reject',
   requireAuth,
-  requirePermission(Permissions.LEADS_WRITE),
+  requirePermission(Permissions.OUTREACH_MANAGE),
   outreachGovernanceController.rejectDraft
 );
 

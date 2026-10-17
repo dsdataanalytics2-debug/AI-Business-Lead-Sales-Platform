@@ -1022,6 +1022,8 @@ model SalesMissionBuyer {
   @@index([organizationId, buyerScore])
   @@index([organizationId, priority])
   @@index([organizationId, conversionStage])
+  @@index([organizationId, provider])
+  @@index([organizationId, createdAt])
   @@map("sales_mission_buyers")
 }
 
@@ -1053,6 +1055,7 @@ model OutreachDraft {
   @@unique([id, organizationId])
   @@index([organizationId, salesMissionBuyerId])
   @@index([organizationId, status])
+  @@index([organizationId, salesMissionId])
   @@map("outreach_drafts")
 }
 
