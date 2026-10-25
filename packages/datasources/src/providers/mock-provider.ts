@@ -15,7 +15,8 @@ import type {
   DataSourceProvider,
   ProviderContext,
   BusinessSearchInput,
-  BusinessSearchResult
+  BusinessSearchResult,
+  ProviderCapability
 } from '../types.js';
 import {
   MOCK_PROVIDER_NAME,
@@ -24,6 +25,7 @@ import {
 
 export class MockDataSourceProvider implements DataSourceProvider {
   public readonly name: string = MOCK_PROVIDER_NAME;
+  public readonly capabilities: ProviderCapability[] = ['DISCOVERY', 'ENRICHMENT'];
 
   /**
    * Deeply clones a BusinessSearchResult object to preserve fixture immutability.

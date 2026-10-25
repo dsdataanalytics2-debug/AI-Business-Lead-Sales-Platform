@@ -39,6 +39,8 @@ export interface SourceEffectivenessDto {
   assistedBuyerCount: number;
   enrichmentContributionCount: number;
   attributionNote: string;
+  sourceType?: 'DISCOVERY' | 'INBOUND_LEADS' | 'ENRICHMENT';
+  inboundLeadsCount?: number;
 }
 
 // ==========================================

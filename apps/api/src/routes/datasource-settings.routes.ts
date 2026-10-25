@@ -34,6 +34,14 @@ datasourceSettingsRouter.post(
   datasourceSettingsController.configureGooglePlaces
 );
 
+// POST /api/v1/settings/data-sources/:provider/configure -> Encrypt and save key for any provider
+datasourceSettingsRouter.post(
+  '/:provider/configure',
+  requireAuth,
+  requirePermission(Permissions.USERS_MANAGE),
+  datasourceSettingsController.configureProvider
+);
+
 // POST /api/v1/settings/data-sources/google-places/test -> Test Google Places connection
 datasourceSettingsRouter.post(
   '/google-places/test',

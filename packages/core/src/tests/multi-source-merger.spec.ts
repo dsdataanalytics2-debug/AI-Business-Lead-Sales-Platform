@@ -42,12 +42,21 @@ describe('Multi-Source Deduplication & Evidence Merger', () => {
       expect(match.matchTier).toBe('VERIFIED_PHONE');
     });
 
-    it('matches by Tier 4 (Normalized Name + Location)', () => {
+    it('matches by Tier 4 (Verified Direct Email)', () => {
+      const b1 = { provider: 'OPENSTREETMAP', email: 'wholesale@rumilighting.bd' };
+      const b2 = { provider: 'FACEBOOK_BUSINESS', email: 'wholesale@rumilighting.bd' };
+      const match = checkBusinessMatch(b1, b2);
+      expect(match.isMatch).toBe(true);
+      expect(match.matchTier).toBe('VERIFIED_EMAIL');
+    });
+
+    it('matches by Tier 5 (Normalized Name + Location as Soft Match)', () => {
       const b1 = { businessName: 'Rumi Lighting & Electricals', address: 'Gulshan 1, Dhaka' };
       const b2 = { businessName: 'rumi lighting & electricals', city: 'Gulshan 1' };
       const match = checkBusinessMatch(b1, b2);
       expect(match.isMatch).toBe(true);
-      expect(match.matchTier).toBe('NAME_LOCATION');
+      expect(match.matchTier).toBe('NAME_LOCATION_SOFT');
+      expect(match.isSoftMatch).toBe(true); // Flagged for review, never silent hard-merge
     });
 
     it('rejects completely different businesses', () => {
@@ -155,6 +164,76 @@ describe('Multi-Source Deduplication & Evidence Merger', () => {
 
       // Buyer score is updated
       expect(mergedWithWebsite.buyerScore).toBeGreaterThan(60);
+    });
+
+    it('merges Facebook Business and TikTok Lead Gen preserving all provenance evidences', () => {
+      const fbBuyer: MergedBusinessRecord = {
+        provider: 'FACEBOOK_BUSINESS',
+        externalBusinessId: 'page_98765',
+        businessName: 'Apex Lighting Hub',
+        category: 'Lighting Store',
+        address: 'Uttara Sector 3, Dhaka',
+        city: 'Dhaka',
+        phone: '01711998877',
+        sourceEvidences: [
+          {
+            sourceType: 'FACEBOOK_BUSINESS',
+            sourceName: 'Facebook Page',
+            externalId: 'page_98765',
+            observedAt: new Date(),
+            evidenceType: 'PUBLIC_BUSINESS_PROFILE'
+          }
+        ],
+        enrichedContacts: [
+          {
+            type: 'PHONE',
+            value: '+8801711998877',
+            source: 'FACEBOOK_BUSINESS',
+            verifiedAt: new Date(),
+            confidence: 'MEDIUM'
+          }
+        ],
+        sourceConfidence: 'MEDIUM',
+        whatsappStatus: 'NOT_VERIFIED'
+      };
+
+      const tiktokCandidate = {
+        provider: 'TIKTOK_LEAD_GEN',
+        externalBusinessId: 'tt_lead_112233',
+        businessName: 'Apex Lighting Hub Uttara',
+        phone: '+880 1711 998877', // Matches Tier 3 (Phone)
+        newEvidence: {
+          sourceType: 'TIKTOK_LEAD_GEN',
+          sourceName: 'TikTok Lead Generation',
+          externalId: 'tt_lead_112233',
+          observedAt: new Date(),
+          evidenceType: 'AUTHORIZED_INBOUND_LEAD'
+        },
+        newContacts: [
+          {
+            type: 'EMAIL' as const,
+            value: 'apex.lighting@gmail.com',
+            source: 'TIKTOK_LEAD_GEN',
+            verifiedAt: new Date(),
+            confidence: 'HIGH' as const
+          }
+        ]
+      };
+
+      const merged = mergeBusinessRecords(fbBuyer, tiktokCandidate, dummyProductContext);
+
+      // Verify both evidences are preserved intact (Section 14)
+      expect(merged.sourceEvidences).toHaveLength(2);
+      expect(merged.sourceEvidences.some(e => e.sourceType === 'FACEBOOK_BUSINESS')).toBe(true);
+      expect(merged.sourceEvidences.some(e => e.sourceType === 'TIKTOK_LEAD_GEN')).toBe(true);
+
+      // Source confidence upgraded to HIGH
+      expect(merged.sourceConfidence).toBe('HIGH');
+
+      // Strict PHONE != WHATSAPP: phone is NOT converted to WhatsApp
+      expect(merged.whatsappStatus).toBe('NOT_VERIFIED');
+      expect(merged.enrichedContacts.some(c => c.type === 'WHATSAPP')).toBe(false);
+      expect(merged.enrichedContacts.some(c => c.type === 'EMAIL')).toBe(true);
     });
   });
 });

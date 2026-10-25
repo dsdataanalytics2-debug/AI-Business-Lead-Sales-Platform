@@ -9,13 +9,15 @@ import type {
   DataSourceProvider,
   ProviderContext,
   BusinessSearchInput,
-  BusinessSearchResult
+  BusinessSearchResult,
+  ProviderCapability
 } from '../types.js';
 
 export const CSV_PROVIDER_KEY = 'csv';
 
 export class CsvDataSourceProvider implements DataSourceProvider {
   public readonly name: string = CSV_PROVIDER_KEY;
+  public readonly capabilities: ProviderCapability[] = ['DISCOVERY'];
 
   public async search(
     query: BusinessSearchInput,

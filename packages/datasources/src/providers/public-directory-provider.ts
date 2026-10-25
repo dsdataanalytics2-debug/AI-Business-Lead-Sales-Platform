@@ -12,7 +12,8 @@
 import type {
   DataSourceProvider,
   ProviderContext,
-  BusinessSearchInput
+  BusinessSearchInput,
+  ProviderCapability
 } from '../types.js';
 import type { BusinessSearchResult } from '@leadmate/shared';
 import { MOCK_BUSINESS_FIXTURES } from '../fixtures/mock-businesses.js';
@@ -21,6 +22,7 @@ export const PUBLIC_DIRECTORY_PROVIDER_KEY = 'public-directory';
 
 export class PublicDirectoryProvider implements DataSourceProvider {
   readonly name = PUBLIC_DIRECTORY_PROVIDER_KEY;
+  readonly capabilities: ProviderCapability[] = ['DISCOVERY'];
 
   async search(
     query: BusinessSearchInput,

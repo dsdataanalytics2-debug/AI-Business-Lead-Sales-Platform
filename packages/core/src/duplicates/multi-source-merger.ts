@@ -57,16 +57,23 @@ export interface MergedBusinessRecord {
   suggestedRelatedNeeds?: string[] | null;
 }
 
-export type MatchTier = 'PROVIDER_ID' | 'WEBSITE_DOMAIN' | 'VERIFIED_PHONE' | 'NAME_LOCATION' | 'NONE';
+export type MatchTier =
+  | 'PROVIDER_ID'
+  | 'WEBSITE_DOMAIN'
+  | 'VERIFIED_PHONE'
+  | 'VERIFIED_EMAIL'
+  | 'NAME_LOCATION_SOFT'
+  | 'NONE';
 
 export interface MultiSourceMatchResult {
   isMatch: boolean;
   matchTier: MatchTier;
   matchedKey?: string;
+  isSoftMatch?: boolean;
 }
 
 /**
- * Extracts candidate matching keys for an item according to the 4-tier hierarchy.
+ * Extracts candidate matching keys for an item according to the 5-tier hierarchy.
  */
 export function getHierarchyMatchKeys(item: {
   provider?: string | null;
@@ -75,12 +82,14 @@ export function getHierarchyMatchKeys(item: {
   address?: string | null;
   city?: string | null;
   phone?: string | null;
+  email?: string | null;
   website?: string | null;
 }): {
   tier1ProviderId: string | null;
   tier2Domain: string | null;
   tier3Phone: string | null;
-  tier4NameLoc: string | null;
+  tier4Email: string | null;
+  tier5NameLoc: string | null;
 } {
   // Tier 1: provider + externalBusinessId
   const provider = (item.provider || '').trim().toUpperCase();
@@ -105,19 +114,31 @@ export function getHierarchyMatchKeys(item: {
     }
   }
 
-  // Tier 4: Normalized business name + normalized address/location
-  let tier4NameLoc: string | null = null;
+  // Tier 4: Verified email
+  let tier4Email: string | null = null;
+  if (item.email && item.email.includes('@')) {
+    tier4Email = `e:${item.email.trim().toLowerCase()}`;
+  }
+
+  // Tier 5: Normalized business name + normalized address/location (Soft Match)
+  let tier5NameLoc: string | null = null;
   const nameNorm = normalizeBusinessName(item.businessName || '');
   if (nameNorm) {
     const locNorm = normalizeBusinessName(item.address || item.city || '');
-    tier4NameLoc = locNorm ? `nl:${nameNorm}:${locNorm}` : `n:${nameNorm}`;
+    tier5NameLoc = locNorm ? `nl:${nameNorm}:${locNorm}` : `n:${nameNorm}`;
   }
 
-  return { tier1ProviderId, tier2Domain, tier3Phone, tier4NameLoc };
+  return { tier1ProviderId, tier2Domain, tier3Phone, tier4Email, tier5NameLoc };
 }
 
 /**
  * Checks if two business items refer to the same commercial entity.
+ * Strict adherence to Priority Hierarchy:
+ * 1. provider + externalBusinessId
+ * 2. canonical website domain
+ * 3. verified phone
+ * 4. verified email
+ * 5. normalized business name + address/city as soft match (flagged for review)
  */
 export function checkBusinessMatch(
   existing: {
@@ -127,6 +148,7 @@ export function checkBusinessMatch(
     address?: string | null;
     city?: string | null;
     phone?: string | null;
+    email?: string | null;
     website?: string | null;
   },
   candidate: {
@@ -136,6 +158,7 @@ export function checkBusinessMatch(
     address?: string | null;
     city?: string | null;
     phone?: string | null;
+    email?: string | null;
     website?: string | null;
   }
 ): MultiSourceMatchResult {
@@ -157,19 +180,34 @@ export function checkBusinessMatch(
     return { isMatch: true, matchTier: 'VERIFIED_PHONE', matchedKey: k1.tier3Phone };
   }
 
-  // Tier 4: Normalized name + location
-  if (k1.tier4NameLoc && k2.tier4NameLoc && k1.tier4NameLoc === k2.tier4NameLoc) {
-    return { isMatch: true, matchTier: 'NAME_LOCATION', matchedKey: k1.tier4NameLoc };
+  // Tier 4: Verified email
+  if (k1.tier4Email && k2.tier4Email && k1.tier4Email === k2.tier4Email) {
+    return { isMatch: true, matchTier: 'VERIFIED_EMAIL', matchedKey: k1.tier4Email };
   }
 
-  // Also check if normalized names match and locations overlap/subsume
+  // Tier 5: Normalized name + location (Soft Match)
+  // Per rule: businessName + locality alone must NOT silently hard-merge. Flag uncertain matches.
+  if (k1.tier5NameLoc && k2.tier5NameLoc && k1.tier5NameLoc === k2.tier5NameLoc) {
+    return {
+      isMatch: true,
+      matchTier: 'NAME_LOCATION_SOFT',
+      matchedKey: k1.tier5NameLoc,
+      isSoftMatch: true
+    };
+  }
+
   const name1 = normalizeBusinessName(existing.businessName || '');
   const name2 = normalizeBusinessName(candidate.businessName || '');
   if (name1 && name2 && name1 === name2) {
     const loc1 = normalizeBusinessName(existing.address || existing.city || '');
     const loc2 = normalizeBusinessName(candidate.address || candidate.city || '');
-    if (!loc1 || !loc2 || loc1 === loc2 || loc1.includes(loc2) || loc2.includes(loc1)) {
-      return { isMatch: true, matchTier: 'NAME_LOCATION', matchedKey: `nl:${name1}` };
+    if (loc1 && loc2 && (loc1 === loc2 || loc1.includes(loc2) || loc2.includes(loc1))) {
+      return {
+        isMatch: true,
+        matchTier: 'NAME_LOCATION_SOFT',
+        matchedKey: `nl:${name1}`,
+        isSoftMatch: true
+      };
     }
   }
 
@@ -261,6 +299,19 @@ export function mergeBusinessRecords(
     sourceData: (target as any).sourceData
   });
 
+  // Preserve stronger historical intent: HIGH > MEDIUM > LOW > NONE
+  const intentHierarchy: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 };
+  const targetIntent = (target.wholesaleIntent as string) || 'NONE';
+  const finalIntentLevel =
+    (intentHierarchy[intentResult.level] ?? 0) >= (intentHierarchy[targetIntent] ?? 0)
+      ? intentResult.level
+      : (targetIntent as any);
+
+  const mergedSignals = Array.from(new Set([
+    ...((target.wholesaleIntentSignals as string[]) || []),
+    ...intentResult.signals
+  ]));
+
   let buyerScore = target.buyerScore;
   let scoreBreakdown = target.scoreBreakdown;
   let priority = target.priority || 'WARM';
@@ -269,7 +320,7 @@ export function mergeBusinessRecords(
     const scored = computeBuyerScore(
       {
         ...buyerForScoring,
-        wholesaleIntent: intentResult.level
+        wholesaleIntent: finalIntentLevel
       },
       productContext
     );
@@ -299,8 +350,8 @@ export function mergeBusinessRecords(
     buyerScore,
     scoreBreakdown,
     priority,
-    wholesaleIntent: intentResult.level,
-    wholesaleIntentSignals: intentResult.signals,
+    wholesaleIntent: finalIntentLevel,
+    wholesaleIntentSignals: mergedSignals,
     suggestedRelatedNeeds: relatedNeeds
   };
 }

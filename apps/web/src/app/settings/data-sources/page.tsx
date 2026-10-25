@@ -16,7 +16,13 @@ import {
   MapPin,
   Lock,
   ExternalLink,
-  X
+  X,
+  Share2,
+  Video,
+  FileText,
+  Building2,
+  Layers,
+  Target
 } from 'lucide-react';
 import {
   type DataSourceCardDTO,
@@ -31,7 +37,13 @@ const PROVIDER_ICONS: Record<string, React.ElementType> = {
   mock: Database,
   csv: FileSpreadsheet,
   openstreetmap: Globe,
-  'google-places': MapPin
+  'google-places': MapPin,
+  'facebook-business': Share2,
+  'facebook-lead-ads': Layers,
+  'tiktok-business': Video,
+  'tiktok-lead-gen': Target,
+  'public-directory': Building2,
+  'public-rfq': FileText
 };
 
 const DEFAULT_DATA_SOURCES: DataSourceCardDTO[] = [
@@ -39,14 +51,19 @@ const DEFAULT_DATA_SOURCES: DataSourceCardDTO[] = [
     id: 'mock',
     provider: 'mock',
     name: 'mock',
-    displayName: 'Mock Provider (Standard)',
-    description: 'Deterministic local business discovery fixtures for development, testing, and offline use.',
-    isEnabled: true,
-    isActive: true,
-    isConfigured: true,
+    displayName: process.env.NODE_ENV === 'production' ? 'Mock Provider (DEV / TEST ONLY)' : 'Mock Provider (Standard)',
+    description: process.env.NODE_ENV === 'production'
+      ? 'Development & test fixture generator. Strictly disabled and blocked in production environment.'
+      : 'Deterministic local business discovery fixtures for development, testing, and offline use.',
+    isEnabled: process.env.NODE_ENV !== 'production',
+    isActive: process.env.NODE_ENV !== 'production',
+    isConfigured: process.env.NODE_ENV !== 'production',
     requiresCredential: false,
     costType: 'FREE',
-    status: 'CONNECTED',
+    status: process.env.NODE_ENV === 'production' ? 'DISABLED' : 'ACTIVE',
+    capabilities: process.env.NODE_ENV === 'production' ? [] : ['DISCOVERY', 'ENRICHMENT'],
+    group: 'DISCOVERY',
+    discoveryStatus: process.env.NODE_ENV === 'production' ? 'DISABLED' : 'ACTIVE',
     lastTestedAt: null
   },
   {
@@ -60,7 +77,10 @@ const DEFAULT_DATA_SOURCES: DataSourceCardDTO[] = [
     isConfigured: true,
     requiresCredential: false,
     costType: 'FREE',
-    status: 'CONNECTED',
+    status: 'ACTIVE',
+    capabilities: ['DISCOVERY'],
+    group: 'DISCOVERY',
+    discoveryStatus: 'ACTIVE',
     lastTestedAt: null
   },
   {
@@ -74,7 +94,44 @@ const DEFAULT_DATA_SOURCES: DataSourceCardDTO[] = [
     isConfigured: true,
     requiresCredential: false,
     costType: 'FREE',
-    status: 'CONNECTED',
+    status: 'ACTIVE',
+    capabilities: ['DISCOVERY'],
+    group: 'DISCOVERY',
+    discoveryStatus: 'ACTIVE',
+    lastTestedAt: null
+  },
+  {
+    id: 'public-directory',
+    provider: 'public-directory',
+    name: 'public-directory',
+    displayName: 'Public Trade & Yellow Pages Directory',
+    description: 'Comprehensive commercial trade listings, yellow pages, and wholesale directories.',
+    isEnabled: true,
+    isActive: false,
+    isConfigured: true,
+    requiresCredential: false,
+    costType: 'FREE',
+    status: 'ACTIVE',
+    capabilities: ['DISCOVERY'],
+    group: 'DISCOVERY',
+    discoveryStatus: 'ACTIVE',
+    lastTestedAt: null
+  },
+  {
+    id: 'public-rfq',
+    provider: 'public-rfq',
+    name: 'public-rfq',
+    displayName: 'Public Procurement & RFQ Notices',
+    description: 'Authorized public procurement portals, open tender notices, and institutional buyer solicitations.',
+    isEnabled: true,
+    isActive: false,
+    isConfigured: true,
+    requiresCredential: false,
+    costType: 'FREE',
+    status: 'ACTIVE',
+    capabilities: ['DISCOVERY', 'PROCUREMENT'],
+    group: 'DISCOVERY',
+    discoveryStatus: 'ACTIVE',
     lastTestedAt: null
   },
   {
@@ -89,6 +146,77 @@ const DEFAULT_DATA_SOURCES: DataSourceCardDTO[] = [
     requiresCredential: true,
     costType: 'PAID',
     status: 'NOT_CONFIGURED',
+    capabilities: ['DISCOVERY'],
+    group: 'DISCOVERY',
+    discoveryStatus: 'NOT_CONFIGURED',
+    lastTestedAt: null
+  },
+  {
+    id: 'facebook-business',
+    provider: 'facebook-business',
+    name: 'facebook-business',
+    displayName: 'Facebook Business Pages & Metadata',
+    description: 'Authorized connected Facebook business accounts, page metadata, and owned asset details.',
+    isEnabled: false,
+    isActive: false,
+    isConfigured: false,
+    requiresCredential: true,
+    costType: 'FREE',
+    status: 'NOT_CONFIGURED',
+    capabilities: ['OWNED_ASSET'],
+    group: 'ENRICHMENT_ACCOUNT',
+    discoveryStatus: 'UNSUPPORTED',
+    lastTestedAt: null
+  },
+  {
+    id: 'facebook-lead-ads',
+    provider: 'facebook-lead-ads',
+    name: 'facebook-lead-ads',
+    displayName: 'Facebook Lead Ads & Inbound Signals',
+    description: 'Ingest authorized commercial lead forms and inbound buyer inquiries from connected Facebook Pages.',
+    isEnabled: false,
+    isActive: false,
+    isConfigured: false,
+    requiresCredential: true,
+    costType: 'FREE',
+    status: 'NOT_CONFIGURED',
+    capabilities: ['INBOUND_LEADS'],
+    group: 'INBOUND_LEADS',
+    discoveryStatus: 'UNSUPPORTED',
+    lastTestedAt: null
+  },
+  {
+    id: 'tiktok-business',
+    provider: 'tiktok-business',
+    name: 'tiktok-business',
+    displayName: 'TikTok Business Profile & Metadata',
+    description: 'Authorized TikTok commercial business accounts, advertiser profiles, and owned asset details.',
+    isEnabled: false,
+    isActive: false,
+    isConfigured: false,
+    requiresCredential: true,
+    costType: 'FREE',
+    status: 'NOT_CONFIGURED',
+    capabilities: ['OWNED_ASSET'],
+    group: 'ENRICHMENT_ACCOUNT',
+    discoveryStatus: 'UNSUPPORTED',
+    lastTestedAt: null
+  },
+  {
+    id: 'tiktok-lead-gen',
+    provider: 'tiktok-lead-gen',
+    name: 'tiktok-lead-gen',
+    displayName: 'TikTok Lead Generation Inbound',
+    description: 'Ingest authorized wholesale buyer leads from connected TikTok Lead Generation advertising campaigns.',
+    isEnabled: false,
+    isActive: false,
+    isConfigured: false,
+    requiresCredential: true,
+    costType: 'FREE',
+    status: 'NOT_CONFIGURED',
+    capabilities: ['INBOUND_LEADS'],
+    group: 'INBOUND_LEADS',
+    discoveryStatus: 'UNSUPPORTED',
     lastTestedAt: null
   }
 ];
@@ -136,23 +264,25 @@ export default function DataSourcesSettingsPage() {
 
   const handleConfigureKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!apiKeyInput.trim()) return;
+    if (!apiKeyInput.trim() || !modalProvider) return;
 
     try {
       setIsSavingKey(true);
-      const res = await apiClient.configureGooglePlaces(apiKeyInput.trim());
+      const res = modalProvider === 'google-places'
+        ? await apiClient.configureGooglePlaces(apiKeyInput.trim())
+        : await apiClient.configureProvider(modalProvider, apiKeyInput.trim());
       setModalProvider(null);
       setApiKeyInput('');
       setFeedback({
         type: 'success',
-        message: `Google Places API key saved and encrypted! Masked: ${res.credentialMasked}`
+        message: `${modalProvider} credential saved and encrypted! Masked: ${res.credentialMasked}`
       });
       fetchDataSources();
       setTimeout(() => setFeedback(null), 4000);
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err?.message || 'Failed to configure API key'
+        message: err?.message || 'Failed to configure credentials'
       });
       setTimeout(() => setFeedback(null), 5000);
     } finally {
@@ -232,6 +362,179 @@ export default function DataSourcesSettingsPage() {
     } finally {
       setTogglingProvider(null);
     }
+  };
+
+  const renderCard = (ds: DataSourceCardDTO) => {
+    const Icon = PROVIDER_ICONS[ds.provider] || Database;
+    const isTesting = testingProvider === ds.provider;
+    const isToggling = togglingProvider === ds.provider;
+    const isConfigured = ds.isConfigured;
+    const isDiscoveryUnsupported = ds.discoveryStatus === 'UNSUPPORTED' || !ds.capabilities?.includes('DISCOVERY');
+
+    return (
+      <div
+        key={ds.provider}
+        className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition shadow-sm space-y-4 flex flex-col justify-between"
+      >
+        <div className="space-y-3">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-indigo-400">
+                <Icon className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">{ds.displayName}</h3>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[11px] font-mono text-slate-400">
+                    provider: {ds.provider}
+                  </span>
+                  <span
+                    className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
+                      ds.costType === 'FREE'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}
+                  >
+                    {ds.costType}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Status Badges */}
+            <div className="flex flex-col items-end gap-1">
+              {ds.provider === 'mock' && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                  DEV / TEST ONLY
+                </span>
+              )}
+              <span
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                  ds.status === 'ACTIVE' || ds.status === 'CONNECTED'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : ds.status === 'DISABLED'
+                    ? 'bg-slate-800 text-slate-400 border-slate-700'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}
+              >
+                {ds.status}
+              </span>
+
+              {isDiscoveryUnsupported ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  DISCOVERY: UNSUPPORTED
+                </span>
+              ) : (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                  DISCOVERY: READY
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Capabilities Chips */}
+          {ds.capabilities && ds.capabilities.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {ds.capabilities.map((cap) => (
+                <span
+                  key={cap}
+                  className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-indigo-300"
+                >
+                  {cap}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Description */}
+          <p className="text-xs text-slate-400 leading-relaxed">
+            {ds.description}
+          </p>
+
+          {ds.provider === 'mock' && (
+            <p className="text-[11px] text-amber-400/90 italic">
+              Notice: Mock data source is strictly for local dev/test simulations. It is disabled in production environments.
+            </p>
+          )}
+
+          {isDiscoveryUnsupported && (
+            <p className="text-[11px] text-amber-400/80 italic">
+              Notice: Generic buyer keyword search is not supported by official API. Restricted to authorized accounts and inbound leads.
+            </p>
+          )}
+
+          {/* Credential & Tested Details */}
+          <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1.5 text-xs">
+            {ds.requiresCredential ? (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-slate-500" />
+                  Stored Credential:
+                </span>
+                <span className="font-mono text-slate-200">
+                  {ds.credentialMasked ? ds.credentialMasked : 'Not Configured'}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Authentication:</span>
+                <span className="text-emerald-400 font-medium">No Key Required (Free Public)</span>
+              </div>
+            )}
+
+            {ds.lastTestedAt && (
+              <div className="flex items-center justify-between text-slate-400">
+                <span>Last Tested:</span>
+                <span>{formatDate(ds.lastTestedAt)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleTestConnection(ds.provider)}
+              disabled={isTesting || (ds.requiresCredential && !isConfigured) || (ds.provider === 'mock' && ds.status === 'DISABLED')}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center gap-1.5 disabled:opacity-50"
+            >
+              <Activity className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
+              {isTesting ? 'Testing...' : 'Test Connection'}
+            </button>
+
+            {ds.requiresCredential && (
+              <button
+                onClick={() => {
+                  setModalProvider(ds.provider);
+                  setApiKeyInput('');
+                }}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1.5"
+              >
+                <Key className="w-3.5 h-3.5" />
+                {isConfigured ? 'Rotate Key' : 'Configure Key'}
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleToggleEnabled(ds.provider, ds.isEnabled)}
+              disabled={isToggling || (ds.provider === 'mock' && ds.status === 'DISABLED')}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition flex items-center gap-1.5 ${
+                ds.isEnabled
+                  ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                  : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              <Power className="w-3.5 h-3.5" />
+              {ds.isEnabled ? 'Disable' : 'Enable'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -350,138 +653,78 @@ export default function DataSourcesSettingsPage() {
             <p className="text-sm text-rose-300">{error}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {dataSources.map((ds) => {
-              const Icon = PROVIDER_ICONS[ds.provider] || Database;
-              const isTesting = testingProvider === ds.provider;
-              const isToggling = togglingProvider === ds.provider;
-              const isConfigured = ds.isConfigured;
-
-              return (
-                <div
-                  key={ds.provider}
-                  className="p-5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition shadow-sm space-y-4 flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-indigo-400">
-                          <Icon className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-base font-bold text-white">{ds.displayName}</h3>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[11px] font-mono text-slate-400">
-                              provider: {ds.provider}
-                            </span>
-                            <span
-                              className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
-                                ds.costType === 'FREE'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                              }`}
-                            >
-                              {ds.costType}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status Badge */}
-                      <span
-                        className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
-                          ds.status === 'CONNECTED'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            : ds.status === 'DISABLED'
-                            ? 'bg-slate-800 text-slate-400 border-slate-700'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        }`}
-                      >
-                        {ds.status}
-                      </span>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      {ds.description}
-                    </p>
-
-                    {/* Credential & Tested Details */}
-                    <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800/80 space-y-1.5 text-xs">
-                      {ds.requiresCredential ? (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400 flex items-center gap-1.5">
-                            <Lock className="w-3.5 h-3.5 text-slate-500" />
-                            Stored Credential:
-                          </span>
-                          <span className="font-mono text-slate-200">
-                            {ds.credentialMasked ? ds.credentialMasked : 'Not Configured'}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-400">Authentication:</span>
-                          <span className="text-emerald-400 font-medium">No Key Required (Free Public)</span>
-                        </div>
-                      )}
-
-                      {ds.lastTestedAt && (
-                        <div className="flex items-center justify-between text-slate-400">
-                          <span>Last Tested:</span>
-                          <span>{formatDate(ds.lastTestedAt)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {/* Test Connection Button */}
-                      <button
-                        onClick={() => handleTestConnection(ds.provider)}
-                        disabled={isTesting || (ds.requiresCredential && !isConfigured)}
-                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 transition flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        <Activity className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
-                        {isTesting ? 'Testing...' : 'Test Connection'}
-                      </button>
-
-                      {/* Configure / Rotate Key */}
-                      {ds.requiresCredential && (
-                        <button
-                          onClick={() => {
-                            setModalProvider(ds.provider);
-                            setApiKeyInput('');
-                          }}
-                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1.5"
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                          {isConfigured ? 'Rotate Key' : 'Configure Key'}
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Enable / Disable Toggle */}
-                      <button
-                        onClick={() => handleToggleEnabled(ds.provider, ds.isEnabled)}
-                        disabled={isToggling}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition flex items-center gap-1.5 ${
-                          ds.isEnabled
-                            ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                            : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                        }`}
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        {ds.isEnabled ? 'Disable' : 'Enable'}
-                      </button>
-                    </div>
-                  </div>
+          <div className="space-y-10">
+            {/* GROUP 1: Buyer Discovery Sources */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-emerald-400" />
+                    Buyer Discovery Sources
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Live providers with DISCOVERY capability searched automatically by Sales Missions to find wholesale buyers.
+                  </p>
                 </div>
-              );
-            })}
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
+                  {dataSources.filter((ds) => ds.group === 'DISCOVERY' || (ds.capabilities && ds.capabilities.includes('DISCOVERY'))).length} Sources
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {dataSources
+                  .filter((ds) => ds.group === 'DISCOVERY' || (ds.capabilities && ds.capabilities.includes('DISCOVERY')))
+                  .map((ds) => renderCard(ds))}
+              </div>
+            </div>
+
+            {/* GROUP 2: Inbound Lead Sources */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-cyan-400" />
+                    Inbound Lead Sources
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Authorized advertising lead forms and inbound buyer inquiries (INBOUND_LEADS). Ingested into missions via webhook/sync — NOT called as arbitrary keyword search engines.
+                  </p>
+                </div>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-semibold">
+                  {dataSources.filter((ds) => ds.group === 'INBOUND_LEADS' || (ds.capabilities?.includes('INBOUND_LEADS') && !ds.capabilities?.includes('DISCOVERY'))).length} Sources
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {dataSources
+                  .filter((ds) => ds.group === 'INBOUND_LEADS' || (ds.capabilities?.includes('INBOUND_LEADS') && !ds.capabilities?.includes('DISCOVERY')))
+                  .map((ds) => renderCard(ds))}
+              </div>
+            </div>
+
+            {/* GROUP 3: Enrichment / Authorized Account Sources */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                <div>
+                  <h2 className="text-base font-bold text-white flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-indigo-400" />
+                    Enrichment / Authorized Account Sources
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Connected commercial accounts, owned business page assets, and website domain verification (OWNED_ASSET, ENRICHMENT).
+                  </p>
+                </div>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">
+                  {dataSources.filter((ds) => ds.group === 'ENRICHMENT_ACCOUNT' || (!ds.capabilities?.includes('DISCOVERY') && !ds.capabilities?.includes('INBOUND_LEADS'))).length} Sources
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {dataSources
+                  .filter((ds) => ds.group === 'ENRICHMENT_ACCOUNT' || (!ds.capabilities?.includes('DISCOVERY') && !ds.capabilities?.includes('INBOUND_LEADS')))
+                  .map((ds) => renderCard(ds))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -492,7 +735,7 @@ export default function DataSourcesSettingsPage() {
               <div className="flex items-center justify-between pb-3 border-b border-slate-800">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Lock className="w-4 h-4 text-indigo-400" />
-                  Configure Google Places API Key
+                  Configure {modalProvider || 'Provider'} Credentials
                 </h3>
                 <button
                   onClick={() => setModalProvider(null)}
@@ -505,18 +748,28 @@ export default function DataSourcesSettingsPage() {
               <form onSubmit={handleConfigureKey} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
-                    Google Places API (New) Key
+                    {modalProvider === 'facebook-business' || modalProvider === 'facebook-lead-ads'
+                      ? 'Meta Page Access Token'
+                      : modalProvider === 'tiktok-business' || modalProvider === 'tiktok-lead-gen'
+                      ? 'TikTok Business Access Token'
+                      : 'API Key / Token'}
                   </label>
                   <input
                     type="password"
                     required
-                    placeholder="AIzaSy..."
+                    placeholder={
+                      modalProvider?.startsWith('facebook')
+                        ? 'EAAB...'
+                        : modalProvider?.startsWith('tiktok')
+                        ? 'act_...'
+                        : 'AIzaSy...'
+                    }
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-lg text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                   <p className="text-[11px] text-slate-400 mt-1.5">
-                    Stored securely using AES-256-GCM. The plaintext key is discarded immediately after encryption.
+                    Stored securely using server-side AES-256-GCM. Plaintext is never saved, logged, or exposed.
                   </p>
                 </div>
 
@@ -530,13 +783,13 @@ export default function DataSourcesSettingsPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSavingKey || apiKeyInput.trim().length < 10}
+                    disabled={isSavingKey || apiKeyInput.trim().length < 5}
                     className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-50 flex items-center gap-2"
                   >
                     {isSavingKey ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        Verifying & Encrypting...
+                        Encrypting...
                       </>
                     ) : (
                       'Save & Encrypt'

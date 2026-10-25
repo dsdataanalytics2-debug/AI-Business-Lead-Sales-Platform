@@ -81,3 +81,18 @@ export class ProviderTimeoutError extends DataSourceError {
     this.providerName = providerName;
   }
 }
+
+export class ProviderCapabilityUnsupportedError extends DataSourceError {
+  public readonly providerName: string;
+  public readonly capability: string;
+
+  constructor(providerName: string, capability = 'DISCOVERY', reason?: string) {
+    super(
+      `Datasource provider "${providerName}" does not support "${capability}" capability${reason ? `: ${reason}` : ''}`,
+      'UNSUPPORTED_CAPABILITY'
+    );
+    this.name = 'ProviderCapabilityUnsupportedError';
+    this.providerName = providerName;
+    this.capability = capability;
+  }
+}

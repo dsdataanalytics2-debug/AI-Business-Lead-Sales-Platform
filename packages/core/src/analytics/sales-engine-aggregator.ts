@@ -308,14 +308,20 @@ export function computeDashboardKpis(
 /**
  * Standard list of providers and their display metadata.
  */
-export const KNOWN_PROVIDERS = [
-  { key: 'openstreetmap', displayName: 'OpenStreetMap' },
-  { key: 'google-places', displayName: 'Google Places' },
-  { key: 'company-website', displayName: 'Company Website' },
-  { key: 'public-directory', displayName: 'Public Directory' },
-  { key: 'rfq', displayName: 'RFQ / Public Buying' },
-  { key: 'facebook-business', displayName: 'Facebook Business' },
-  { key: 'tiktok-business', displayName: 'TikTok Business' }
+export const KNOWN_PROVIDERS: Array<{
+  key: string;
+  displayName: string;
+  sourceType: 'DISCOVERY' | 'INBOUND_LEADS' | 'ENRICHMENT';
+}> = [
+  { key: 'openstreetmap', displayName: 'OpenStreetMap', sourceType: 'DISCOVERY' },
+  { key: 'google-places', displayName: 'Google Places', sourceType: 'DISCOVERY' },
+  { key: 'public-directory', displayName: 'Public Directory', sourceType: 'DISCOVERY' },
+  { key: 'rfq', displayName: 'RFQ / Public Buying', sourceType: 'DISCOVERY' },
+  { key: 'company-website', displayName: 'Company Website', sourceType: 'ENRICHMENT' },
+  { key: 'facebook-business', displayName: 'Facebook Business', sourceType: 'ENRICHMENT' },
+  { key: 'facebook-lead-ads', displayName: 'Facebook Lead Ads', sourceType: 'INBOUND_LEADS' },
+  { key: 'tiktok-business', displayName: 'TikTok Business', sourceType: 'ENRICHMENT' },
+  { key: 'tiktok-lead-gen', displayName: 'TikTok Lead Gen', sourceType: 'INBOUND_LEADS' }
 ];
 
 /**
@@ -461,7 +467,9 @@ export function computeSourceEffectiveness(
       wonValueByCurrency: data.wonValues,
       assistedBuyerCount: data.assistedCount,
       enrichmentContributionCount: data.enrichmentCount,
-      attributionNote: 'Primary discovery credits conversions and deal values. Supporting sources receive assisted counts.'
+      attributionNote: 'Primary discovery credits conversions and deal values. Supporting sources receive assisted counts.',
+      sourceType: kp.sourceType,
+      inboundLeadsCount: kp.sourceType === 'INBOUND_LEADS' ? data.primaryFound : 0
     };
   });
 }

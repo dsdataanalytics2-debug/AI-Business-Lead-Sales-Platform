@@ -203,6 +203,11 @@ describe('SalesEngineAggregator', () => {
       expect(web.primaryBuyersFound).toBe(0);
       expect(web.wonBuyers).toBe(0);
       expect(web.assistedBuyerCount).toBe(1);
+      expect(web.sourceType).toBe('ENRICHMENT');
+
+      const fbLead = effectiveness.find((e) => e.provider === 'facebook-lead-ads')!;
+      expect(fbLead.sourceType).toBe('INBOUND_LEADS');
+      expect(fbLead.inboundLeadsCount).toBe(0);
     });
 
     it('honestly reports NOT_CONFIGURED status for unconfigured providers without artificial conclusions', () => {
@@ -215,6 +220,7 @@ describe('SalesEngineAggregator', () => {
       expect(fb.status).toBe('NOT_CONFIGURED');
       expect(fb.statusMessage).toContain('not configured');
       expect(fb.primaryBuyersFound).toBe(0);
+      expect(fb.sourceType).toBe('ENRICHMENT');
     });
   });
 

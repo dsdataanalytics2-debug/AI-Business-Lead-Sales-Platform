@@ -2,7 +2,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { datasourceSettingsService } from '../services/datasource-settings.service.js';
 import {
   configureGooglePlacesSchema,
-  testGooglePlacesSchema
+  testGooglePlacesSchema,
+  configureProviderCredentialSchema
 } from '@leadmate/shared';
 import { BadRequestError } from '../lib/errors.js';
 
@@ -58,29 +59,42 @@ export class DatasourceSettingsController {
     }
   }
 
+  async configureProvider(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const organizationId = req.user!.organizationId;
+      const userId = req.user!.id;
+      const { provider } = req.params;
+      const parsed = configureProviderCredentialSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new BadRequestError(parsed.error.errors[0]?.message || 'Invalid request body');
+      }
+
+      const result = await datasourceSettingsService.configureProvider(
+        organizationId,
+        userId,
+        provider,
+        parsed.data.apiKey
+      );
+
+      res.status(200).json(result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async testProvider(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const organizationId = req.user!.organizationId;
       const { provider } = req.params;
+      const apiKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey : undefined;
 
-      if (provider === 'google-places') {
-        const result = await datasourceSettingsService.testGooglePlaces(organizationId);
-        res.status(200).json(result);
-        return;
-      }
-
-      if (provider === 'openstreetmap') {
-        const result = await datasourceSettingsService.testOpenStreetMap(organizationId);
-        res.status(200).json(result);
-        return;
-      }
-
-      // Mock / CSV test
-      res.status(200).json({
-        connected: true,
+      const result = await datasourceSettingsService.testProvider(
+        organizationId,
         provider,
-        message: `${provider} provider is connected and available.`
-      });
+        apiKey
+      );
+
+      res.status(200).json(result);
     } catch (err) {
       next(err);
     }

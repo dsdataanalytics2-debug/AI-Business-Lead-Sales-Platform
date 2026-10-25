@@ -12,8 +12,11 @@ import { CsvDataSourceProvider, CSV_PROVIDER_KEY } from './providers/csv-provide
 import { OpenStreetMapProvider, OPENSTREETMAP_PROVIDER_KEY } from './providers/openstreetmap-provider.js';
 import { GooglePlacesProvider, GOOGLE_PLACES_PROVIDER_KEY } from './providers/google-places-provider.js';
 import { FacebookBusinessProvider, FACEBOOK_BUSINESS_PROVIDER_KEY } from './providers/facebook-business-provider.js';
+import { FacebookLeadAdsProvider, FACEBOOK_LEAD_ADS_PROVIDER_KEY } from './providers/facebook-lead-ads-provider.js';
 import { TikTokBusinessProvider, TIKTOK_BUSINESS_PROVIDER_KEY } from './providers/tiktok-business-provider.js';
+import { TikTokLeadGenProvider, TIKTOK_LEAD_GEN_PROVIDER_KEY } from './providers/tiktok-lead-gen-provider.js';
 import { PublicDirectoryProvider, PUBLIC_DIRECTORY_PROVIDER_KEY } from './providers/public-directory-provider.js';
+import { PublicRfqProvider, PUBLIC_RFQ_PROVIDER_KEY } from './providers/public-rfq-provider.js';
 
 export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
   mock: {
@@ -24,7 +27,8 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsBuyerSearch: true,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['DISCOVERY', 'ENRICHMENT']
   },
   csv: {
     key: 'csv',
@@ -34,7 +38,8 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsBuyerSearch: true,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['DISCOVERY']
   },
   openstreetmap: {
     key: 'openstreetmap',
@@ -44,7 +49,8 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsBuyerSearch: true,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['DISCOVERY']
   },
   'google-places': {
     key: 'google-places',
@@ -54,27 +60,74 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsBuyerSearch: true,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'PAID'
+    costType: 'PAID',
+    capabilities: ['DISCOVERY']
   },
   'facebook-business': {
     key: 'facebook-business',
-    displayName: 'Facebook Business Pages & Leads',
-    description: 'Compliant discovery across authorized connected Facebook business accounts and public pages.',
+    displayName: 'Facebook Business Pages & Metadata',
+    description: 'Authorized connected Facebook business accounts, page metadata, and owned asset details.',
     requiresCredential: true,
-    supportsBuyerSearch: true,
+    supportsBuyerSearch: false,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['OWNED_ASSET']
+  },
+  'facebook-lead-ads': {
+    key: 'facebook-lead-ads',
+    displayName: 'Facebook Lead Ads & Inbound Signals',
+    description: 'Ingest authorized commercial lead forms and inbound buyer inquiries from connected Facebook Pages.',
+    requiresCredential: true,
+    supportsBuyerSearch: false,
+    supportsContactEnrichment: false,
+    supportsConnectionTest: true,
+    costType: 'FREE',
+    capabilities: ['INBOUND_LEADS']
+  },
+  'facebook-messenger': {
+    key: 'facebook-messenger',
+    displayName: 'Facebook Messenger & Page Signals',
+    description: 'Inbound buyer messaging signals and direct commercial inquiries from connected Facebook Page inbox.',
+    requiresCredential: true,
+    supportsBuyerSearch: false,
+    supportsContactEnrichment: false,
+    supportsConnectionTest: true,
+    costType: 'FREE',
+    capabilities: ['MESSAGING_SIGNAL']
   },
   'tiktok-business': {
     key: 'tiktok-business',
-    displayName: 'TikTok Business Profile & Leads',
-    description: 'Compliant discovery across authorized TikTok business accounts and lead generation webhooks.',
+    displayName: 'TikTok Business Profile & Metadata',
+    description: 'Authorized TikTok commercial business accounts, advertiser profiles, and owned asset details.',
     requiresCredential: true,
-    supportsBuyerSearch: true,
+    supportsBuyerSearch: false,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['OWNED_ASSET']
+  },
+  'tiktok-lead-gen': {
+    key: 'tiktok-lead-gen',
+    displayName: 'TikTok Lead Generation Inbound',
+    description: 'Ingest authorized wholesale buyer leads from connected TikTok Lead Generation advertising campaigns.',
+    requiresCredential: true,
+    supportsBuyerSearch: false,
+    supportsContactEnrichment: false,
+    supportsConnectionTest: true,
+    costType: 'FREE',
+    capabilities: ['INBOUND_LEADS']
+  },
+  'company-website': {
+    key: 'company-website',
+    displayName: 'Company Website (Public Domain)',
+    description: 'Direct corporate website verification, structured contact extraction, and commercial validation.',
+    requiresCredential: false,
+    supportsBuyerSearch: false,
+    supportsContactEnrichment: true,
+    supportsConnectionTest: true,
+    costType: 'FREE',
+    capabilities: ['ENRICHMENT']
   },
   'public-directory': {
     key: 'public-directory',
@@ -84,7 +137,19 @@ export const BUILTIN_PROVIDER_METADATA: Record<string, ProviderMetadata> = {
     supportsBuyerSearch: true,
     supportsContactEnrichment: true,
     supportsConnectionTest: true,
-    costType: 'FREE'
+    costType: 'FREE',
+    capabilities: ['DISCOVERY']
+  },
+  'public-rfq': {
+    key: 'public-rfq',
+    displayName: 'Public Procurement & RFQ Notices',
+    description: 'Authorized public procurement portals, open tender notices, and institutional buyer solicitations.',
+    requiresCredential: false,
+    supportsBuyerSearch: true,
+    supportsContactEnrichment: true,
+    supportsConnectionTest: true,
+    costType: 'FREE',
+    capabilities: ['DISCOVERY', 'PROCUREMENT']
   }
 };
 
@@ -104,8 +169,11 @@ export class DataSourceRegistry {
     this.register(new OpenStreetMapProvider());
     this.register(new GooglePlacesProvider());
     this.register(new FacebookBusinessProvider());
+    this.register(new FacebookLeadAdsProvider());
     this.register(new TikTokBusinessProvider());
+    this.register(new TikTokLeadGenProvider());
     this.register(new PublicDirectoryProvider());
+    this.register(new PublicRfqProvider());
   }
 
   /**

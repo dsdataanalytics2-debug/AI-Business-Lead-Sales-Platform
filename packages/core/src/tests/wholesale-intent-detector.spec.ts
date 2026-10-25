@@ -104,4 +104,136 @@ describe('Wholesale Intent Detector Engine', () => {
     expect(result.level).toBe('NONE');
     expect(result.signals).toHaveLength(0);
   });
+
+  describe('Social Inbound Lead Intent Safety', () => {
+    it('generic Facebook lead form does NOT default to HIGH intent (returns NONE)', () => {
+      const result = detectWholesaleIntent({
+        businessName: 'Karim Dental Clinic',
+        sourceEvidences: [
+          {
+            sourceType: 'FACEBOOK_LEAD_ADS',
+            sourceName: 'facebook-lead-ads Inbound Form',
+            evidenceType: 'AUTHORIZED_INBOUND_LEAD',
+            metadata: {
+              campaign_name: 'Lead Generation - Healthcare'
+            }
+          }
+        ],
+        sourceData: {
+          provider: 'facebook-lead-ads',
+          externalLeadId: 'fb_lead_generic_01',
+          businessName: 'Karim Dental Clinic',
+          notes: 'Interested in product range and clinic consultation'
+        }
+      });
+
+      expect(result.level).not.toBe('HIGH');
+      expect(result.level).toBe('NONE');
+      expect(result.signals).toHaveLength(0);
+    });
+
+    it('generic TikTok lead does NOT default to HIGH intent (returns NONE)', () => {
+      const result = detectWholesaleIntent({
+        businessName: 'Fashion Trendz BD',
+        sourceEvidences: [
+          {
+            sourceType: 'TIKTOK_LEAD_GEN',
+            sourceName: 'tiktok-lead-gen Inbound Form',
+            evidenceType: 'AUTHORIZED_INBOUND_LEAD',
+            metadata: {
+              ad_id: 'tiktok_ad_12345'
+            }
+          }
+        ],
+        sourceData: {
+          provider: 'tiktok-lead-gen',
+          externalLeadId: 'tt_lead_generic_02',
+          businessName: 'Fashion Trendz BD'
+        }
+      });
+
+      expect(result.level).not.toBe('HIGH');
+      expect(result.level).toBe('NONE');
+    });
+
+    it('detects HIGH intent for explicit bulk-price / quotation inquiry on inbound lead', () => {
+      const resultQuotation = detectWholesaleIntent({
+        businessName: 'Dhaka Surgical Traders',
+        sourceData: {
+          notes: 'Need quotation for 500 units of digital dental units. Send dealer pricing.'
+        }
+      });
+      expect(resultQuotation.level).toBe('HIGH');
+      expect(resultQuotation.signals).toContain('RFQ');
+      expect(resultQuotation.signals).toContain('dealer pricing');
+
+      const resultBulk = detectWholesaleIntent({
+        businessName: 'Chittagong Supplies',
+        sourceData: {
+          notes: 'Bulk price for 1000 pcs needed. We need a distributor/supplier immediately.'
+        }
+      });
+      expect(resultBulk.level).toBe('HIGH');
+      expect(resultBulk.signals).toContain('bulk price');
+      expect(resultBulk.signals).toContain('distributor/supplier wanted');
+
+      // Standalone benchmark phrases
+      expect(detectWholesaleIntent({ sourceData: { inquiry: 'Need quotation for 500 units' } }).level).toBe('HIGH');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'Bulk price for 1000 pcs' } }).level).toBe('HIGH');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'We need a distributor/supplier' } }).level).toBe('HIGH');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'Send dealer pricing' } }).level).toBe('HIGH');
+    });
+
+    it('detects MEDIUM intent for explicit MOQ / wholesale catalog inquiry', () => {
+      const resultMoq = detectWholesaleIntent({
+        businessName: 'Sylhet Med Store',
+        sourceData: {
+          notes: 'What is your MOQ? Please send wholesale catalog.'
+        }
+      });
+      expect(resultMoq.level).toBe('MEDIUM');
+      expect(resultMoq.signals).toContain('MOQ inquiry');
+      expect(resultMoq.signals).toContain('wholesale catalog');
+
+      const resultWholesaleOffer = detectWholesaleIntent({
+        businessName: 'Barisal Health Hub',
+        sourceData: {
+          notes: 'Do you offer wholesale? Stock inquiry for Q4.'
+        }
+      });
+      expect(resultWholesaleOffer.level).toBe('MEDIUM');
+      expect(resultWholesaleOffer.signals).toContain('wholesale offer inquiry');
+      expect(resultWholesaleOffer.signals).toContain('stock inquiry');
+
+      // Standalone benchmark phrases
+      expect(detectWholesaleIntent({ sourceData: { notes: 'What is your MOQ?' } }).level).toBe('MEDIUM');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'Send wholesale catalog' } }).level).toBe('MEDIUM');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'Do you offer wholesale?' } }).level).toBe('MEDIUM');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'stock / reseller inquiry' } }).level).toBe('MEDIUM');
+    });
+
+    it('detects LOW or NONE for generic commercial inquiry without wholesale request', () => {
+      const resultCommercial = detectWholesaleIntent({
+        businessName: 'Rahim Trading',
+        sourceData: {
+          notes: 'general trading office in Motijheel'
+        }
+      });
+      expect(resultCommercial.level).toBe('LOW');
+
+      const resultVague = detectWholesaleIntent({
+        businessName: 'Vague Store',
+        sourceData: {
+          notes: 'Please contact me about your company'
+        }
+      });
+      expect(resultVague.level).toBe('NONE');
+
+      // Standalone benchmark phrases
+      expect(detectWholesaleIntent({ sourceData: { notes: 'generic lead from social ad' } }).level).toBe('NONE');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'general product interest in new collection' } }).level).toBe('NONE');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'vague inquiry with no commercial request' } }).level).toBe('NONE');
+      expect(detectWholesaleIntent({ sourceData: { notes: 'commercial trade overview' } }).level).toBe('LOW');
+    });
+  });
 });

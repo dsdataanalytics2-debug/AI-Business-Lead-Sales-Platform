@@ -29,6 +29,7 @@ import {
   normalizeBusinessName,
   normalizeWebsite,
   normalizePhone,
+  normalizeEmail,
   computeBuyerScore,
   computeBuyerPriority,
   detectWholesaleIntent,
@@ -666,8 +667,10 @@ export class SalesMissionService {
     const targetNewCount = mission.resultTarget || 20;
     const newDiscoveredItems: MergedBusinessRecord[] = [];
     const newRunSeenKeys = new Set<string>();
+    const providerBreakdown: Record<string, number> = {};
     let previouslyDiscoveredSkipped = 0;
     let providerDuplicatesSkipped = 0;
+    let mergedDuplicatesCount = 0;
     const runStartedAt = new Date();
 
     // 5. Evaluate Multi-Source Provider Capabilities & Configuration Status
@@ -676,8 +679,11 @@ export class SalesMissionService {
       'google-places': 'NOT_CONFIGURED',
       'website-enrichment': 'ACTIVE',
       'public-directory': 'ACTIVE',
+      'public-rfq': 'ACTIVE',
       'facebook-business': 'NOT_CONFIGURED',
-      'tiktok-business': 'NOT_CONFIGURED'
+      'facebook-lead-ads': 'NOT_CONFIGURED',
+      'tiktok-business': 'NOT_CONFIGURED',
+      'tiktok-lead-gen': 'NOT_CONFIGURED'
     };
 
     try {
@@ -694,7 +700,7 @@ export class SalesMissionService {
         where: {
           organizationId: mission.organizationId,
           isEnabled: true,
-          provider: { in: ['facebook-business', 'tiktok-business'] }
+          provider: { in: ['facebook-business', 'facebook-lead-ads', 'tiktok-business', 'tiktok-lead-gen'] }
         }
       });
       for (const sc of socialConfigs) {
@@ -755,6 +761,7 @@ export class SalesMissionService {
         if (existingCandidateIndex !== -1) {
           // Merge into existing candidate record
           providerDuplicatesSkipped++;
+          mergedDuplicatesCount++;
           const targetCandidate = newDiscoveredItems[existingCandidateIndex];
           const merged = mergeBusinessRecords(
             targetCandidate,
@@ -892,7 +899,7 @@ export class SalesMissionService {
       }
     }
 
-    // 7. Safe Progression Step 4: Public Directory Fallback if needed
+    // 7a. Public Directory Fallback if needed
     if (newDiscoveredItems.length < targetNewCount) {
       for (const combo of plannedCombinations) {
         if (newDiscoveredItems.length >= targetNewCount) break;
@@ -912,6 +919,32 @@ export class SalesMissionService {
             }
           );
           ingestCandidateResults(dirResults, combo.target, combo.location, 'public-directory');
+        } catch {
+          // Non-blocking
+        }
+      }
+    }
+
+    // 7b. Public RFQ / Procurement notices if needed
+    if (newDiscoveredItems.length < targetNewCount) {
+      for (const combo of plannedCombinations) {
+        if (newDiscoveredItems.length >= targetNewCount) break;
+        try {
+          const rfqResults = await businessSearchService.search(
+            {
+              q: combo.target,
+              location: combo.location,
+              limit: Math.min(targetNewCount - newDiscoveredItems.length, 10),
+              provider: 'PUBLIC_RFQ',
+              targetCategories: [combo.target]
+            },
+            {
+              organizationId: mission.organizationId,
+              userId: context?.userId || mission.createdByUserId,
+              correlationId: `rfq-${mission.id}-${combo.target}`
+            }
+          );
+          ingestCandidateResults(rfqResults, combo.target, combo.location, 'public-rfq');
         } catch {
           // Non-blocking
         }
@@ -1044,6 +1077,24 @@ export class SalesMissionService {
       searchedCombinations: plannedCombinations.map((c) => c.coordinateKey),
       executedAt: runStartedAt,
       providerStatuses,
+      providerBreakdown: (() => {
+        const breakdown: Record<string, number> = {};
+        for (const b of allBuyers) {
+          const p = b.provider || 'unknown';
+          breakdown[p] = (breakdown[p] || 0) + 1;
+        }
+        return breakdown;
+      })(),
+      mergedDuplicates: mergedDuplicatesCount,
+      contactableCount: allBuyers.filter((b) => Boolean(b.phone || b.website)).length,
+      hotBuyersCount: allBuyers.filter((b) => b.priority === 'HOT').length,
+      highIntentCount: allBuyers.filter((b) => b.wholesaleIntent === 'HIGH').length,
+      discoveredBuyersCount: allBuyers.filter((b) => b.provider !== 'facebook-lead-ads' && b.provider !== 'tiktok-lead-gen').length,
+      inboundLeadsCount: allBuyers.filter((b) => b.provider === 'facebook-lead-ads' || b.provider === 'tiktok-lead-gen').length,
+      assistedSourcesCount: allBuyers.reduce((acc, b) => {
+        const evs = (b.sourceEvidences as any[]) || [];
+        return acc + evs.filter((e) => e && e.sourceType === 'COMPANY_WEBSITE').length;
+      }, 0),
       message:
         newlyCreatedBuyerIds.size > 0
           ? `${newlyCreatedBuyerIds.size} new potential buyers found across ${plannedCombinations.length} combination(s)`
@@ -1093,6 +1144,283 @@ export class SalesMissionService {
         leadId
       }
     });
+  }
+
+  /**
+   * Ingests an authorized inbound lead (e.g. Facebook Lead Ads, TikTok Lead Gen)
+   * into a Sales Mission through the standard normalization -> dedupe -> evidence -> scoring pipeline.
+   */
+  async ingestInboundLead(
+    missionId: string,
+    leadInput: {
+      provider: 'facebook-lead-ads' | 'tiktok-lead-gen' | string;
+      externalLeadId: string;
+      businessName: string;
+      contactName?: string;
+      phone?: string;
+      email?: string;
+      city?: string;
+      address?: string;
+      notes?: string;
+      metadata?: Record<string, any>;
+    },
+    context: MissionRequestContext
+  ): Promise<{ buyer: any; action: 'CREATED' | 'MERGED' | 'DUPLICATE' }> {
+    const mission = await prisma.salesMission.findFirst({
+      where: {
+        id: missionId,
+        organizationId: context.organizationId
+      },
+      include: {
+        product: true
+      }
+    });
+
+    if (!mission) {
+      throw new NotFoundError(`Sales Mission "${missionId}" not found`);
+    }
+
+    const normPhone = leadInput.phone ? normalizePhone(leadInput.phone) : null;
+    const normEmail = leadInput.email ? normalizeEmail(leadInput.email) : null;
+    const phoneVal = normPhone?.normalizedValue || leadInput.phone || null;
+
+    const dedupeKeys = this.extractDedupeKeys({
+      provider: leadInput.provider,
+      externalBusinessId: leadInput.externalLeadId,
+      businessName: leadInput.businessName,
+      address: leadInput.address,
+      city: leadInput.city,
+      phone: phoneVal,
+      website: null
+    });
+
+    // Check existing buyers in this mission
+    const existingBuyers = await prisma.salesMissionBuyer.findMany({
+      where: {
+        salesMissionId: mission.id,
+        organizationId: mission.organizationId
+      }
+    });
+
+    const existingMatch = existingBuyers.find((b) => {
+      const bKeys = this.extractDedupeKeys({
+        provider: b.provider,
+        externalBusinessId: b.externalBusinessId,
+        businessName: b.businessName,
+        address: b.address,
+        city: b.city,
+        phone: b.phone,
+        website: b.website
+      });
+      return dedupeKeys.some((k) => bKeys.includes(k));
+    });
+
+    const initialEvidences = [
+      {
+        sourceType: leadInput.provider.toUpperCase().replace(/-/g, '_'),
+        sourceName: `${leadInput.provider} Inbound Form`,
+        observedAt: new Date(),
+        evidenceType: 'AUTHORIZED_INBOUND_LEAD',
+        externalLeadId: leadInput.externalLeadId,
+        metadata: {
+          ...(leadInput.metadata || {}),
+          ...(leadInput.notes ? { notes: leadInput.notes } : {}),
+          ...(leadInput.contactName ? { contactName: leadInput.contactName } : {})
+        }
+      }
+    ];
+
+    const initialContacts: any[] = [];
+    if (phoneVal) {
+      initialContacts.push({
+        type: 'PHONE',
+        value: phoneVal,
+        source: leadInput.provider,
+        verifiedAt: new Date(),
+        confidence: 'HIGH'
+      });
+    }
+    if (normEmail?.normalizedValue) {
+      initialContacts.push({
+        type: 'EMAIL',
+        value: normEmail.normalizedValue,
+        source: leadInput.provider,
+        verifiedAt: new Date(),
+        confidence: 'HIGH'
+      });
+    }
+
+    const productContext: ProductContextInput = {
+      productName: mission.product ? mission.product.name : mission.name,
+      productDescription: mission.product ? mission.product.description : mission.name,
+      productCategory: mission.product?.category || undefined,
+      targetMarket: mission.targetMarket,
+      primaryCategories: [],
+      secondaryCategories: []
+    };
+
+    if (existingMatch) {
+      const mergedEvidences = [
+        ...((existingMatch.sourceEvidences as any[]) || []),
+        ...initialEvidences
+      ];
+
+      // Merge enriched contacts without duplicates
+      const existingContacts = (existingMatch.enrichedContacts as any[]) || [];
+      const mergedContacts = [...existingContacts];
+      for (const newContact of initialContacts) {
+        const alreadyExists = mergedContacts.some(
+          (c) => c.type === newContact.type && c.value === newContact.value
+        );
+        if (!alreadyExists) {
+          mergedContacts.push(newContact);
+        }
+      }
+
+      // Combine source data for text evidence inspection
+      const combinedSourceData = {
+        ...((existingMatch.sourceData as any) || {}),
+        ...leadInput,
+        ...(leadInput.metadata || {}),
+        notes: [
+          ((existingMatch.sourceData as any)?.notes || ''),
+          (leadInput.notes || leadInput.metadata?.notes || '')
+        ].filter(Boolean).join(' | '),
+        inquiry: [
+          ((existingMatch.sourceData as any)?.inquiry || ''),
+          (leadInput.notes || leadInput.metadata?.inquiry || leadInput.metadata?.inquiryText || '')
+        ].filter(Boolean).join(' | ')
+      };
+
+      // Re-run wholesale intent on combined evidence
+      const combinedIntentResult = detectWholesaleIntent({
+        businessName: existingMatch.businessName || leadInput.businessName,
+        category: existingMatch.category || 'Inbound Lead',
+        matchedBuyerCategory: existingMatch.matchedBuyerCategory || 'Inbound Lead',
+        sourceEvidences: mergedEvidences,
+        sourceData: combinedSourceData
+      });
+
+      // Preserve stronger historical intent: HIGH > MEDIUM > LOW > NONE
+      const intentHierarchy: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 };
+      const existingIntent = (existingMatch.wholesaleIntent as string) || 'NONE';
+      const finalIntentLevel =
+        (intentHierarchy[combinedIntentResult.level] ?? 0) >= (intentHierarchy[existingIntent] ?? 0)
+          ? combinedIntentResult.level
+          : (existingIntent as any);
+
+      // Recalculate Buyer Score V2 with merged data and final intent level
+      const mergedScoreResult = computeBuyerScore(
+        {
+          businessName: existingMatch.businessName || leadInput.businessName,
+          category: existingMatch.category || 'Inbound Lead',
+          matchedBuyerCategory: existingMatch.matchedBuyerCategory || 'Inbound Lead',
+          address: existingMatch.address || leadInput.address || null,
+          city: existingMatch.city || leadInput.city || null,
+          phone: existingMatch.phone || phoneVal,
+          website: existingMatch.website || null,
+          provider: existingMatch.provider,
+          externalBusinessId: existingMatch.externalBusinessId,
+          sourceEvidences: mergedEvidences,
+          enrichedContacts: mergedContacts,
+          wholesaleIntent: finalIntentLevel
+        },
+        productContext
+      );
+
+      const mergedSignals = Array.from(new Set([
+        ...((existingMatch.wholesaleIntentSignals as string[]) || []),
+        ...combinedIntentResult.signals
+      ]));
+
+      const updated = await prisma.salesMissionBuyer.update({
+        where: { id: existingMatch.id },
+        data: {
+          phone: existingMatch.phone || phoneVal,
+          sourceEvidences: mergedEvidences as any,
+          enrichedContacts: mergedContacts as any,
+          buyerScore: mergedScoreResult.buyerScore,
+          scoreBreakdown: mergedScoreResult.breakdown as any,
+          priority: mergedScoreResult.priority,
+          wholesaleIntent: finalIntentLevel,
+          wholesaleIntentSignals: mergedSignals as any,
+          sourceConfidence: getSourceConfidenceLevel(mergedScoreResult.breakdown.sourceConfidence || 70)
+        }
+      });
+
+      return { buyer: updated, action: 'MERGED' };
+    }
+
+    // 1. Detect deterministic wholesale buying intent from inbound form evidence
+    const intentResult = detectWholesaleIntent({
+      businessName: leadInput.businessName,
+      category: 'Inbound Lead',
+      matchedBuyerCategory: 'Inbound Lead',
+      sourceEvidences: initialEvidences,
+      sourceData: {
+        ...leadInput,
+        ...(leadInput.metadata || {}),
+        notes: leadInput.notes || leadInput.metadata?.notes,
+        inquiry: leadInput.notes || leadInput.metadata?.inquiry || leadInput.metadata?.inquiryText
+      }
+    });
+
+    // 2. Compute Buyer Score V2 using detected intent level (never assume HIGH or HOT)
+    const scoreResult = computeBuyerScore(
+      {
+        businessName: leadInput.businessName,
+        category: 'Inbound Lead',
+        matchedBuyerCategory: 'Inbound Lead',
+        address: leadInput.address || null,
+        city: leadInput.city || null,
+        phone: phoneVal,
+        website: null,
+        provider: leadInput.provider,
+        externalBusinessId: leadInput.externalLeadId,
+        sourceEvidences: initialEvidences,
+        enrichedContacts: initialContacts,
+        wholesaleIntent: intentResult.level
+      },
+      productContext
+    );
+
+    const created = await prisma.salesMissionBuyer.create({
+      data: {
+        organizationId: mission.organizationId,
+        salesMissionId: mission.id,
+        externalBusinessId: leadInput.externalLeadId,
+        provider: leadInput.provider,
+        businessName: leadInput.businessName,
+        category: 'Inbound Lead',
+        address: leadInput.address || null,
+        city: leadInput.city || null,
+        country: 'BD',
+        website: null,
+        phone: phoneVal,
+        buyerScore: scoreResult.buyerScore,
+        scoreBreakdown: scoreResult.breakdown as any,
+        matchedBuyerCategory: 'Inbound Lead',
+        searchTargetUsed: `Authorized Inbound Lead (${leadInput.provider})`,
+        sourceData: leadInput as any,
+        status: MissionBuyerStatus.POTENTIAL,
+        sourceEvidences: initialEvidences as any,
+        enrichedContacts: initialContacts as any,
+        sourceConfidence: getSourceConfidenceLevel(scoreResult.breakdown.sourceConfidence || 70),
+        whatsappStatus: 'NOT_VERIFIED',
+        priority: scoreResult.priority,
+        wholesaleIntent: intentResult.level,
+        wholesaleIntentSignals: intentResult.signals as any
+      }
+    });
+
+    await prisma.salesMission.update({
+      where: { id: missionId },
+      data: {
+        resultCount: { increment: 1 }
+      }
+    });
+
+    return { buyer: created, action: 'CREATED' };
   }
 }
 

@@ -27,7 +27,8 @@ import type {
   ProviderContext,
   BusinessSearchInput,
   BusinessSearchResult,
-  DiscoveredContact
+  DiscoveredContact,
+  ProviderCapability
 } from '../types.js';
 import {
   ProviderAuthError,
@@ -98,6 +99,7 @@ export interface GooglePlaceRawItem {
 
 export class GooglePlacesProvider implements DataSourceProvider {
   public readonly name: string = GOOGLE_PLACES_PROVIDER_KEY;
+  public readonly capabilities: ProviderCapability[] = ['DISCOVERY'];
   private readonly customFetch: typeof fetch;
 
   constructor(deps?: GooglePlacesDependencies) {

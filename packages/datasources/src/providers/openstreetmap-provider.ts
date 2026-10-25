@@ -25,7 +25,8 @@ import type {
   ProviderContext,
   BusinessSearchInput,
   BusinessSearchResult,
-  DiscoveredContact
+  DiscoveredContact,
+  ProviderCapability
 } from '../types.js';
 import {
   ProviderRateLimitError,
@@ -72,6 +73,7 @@ export interface OsmElementRaw {
 
 export class OpenStreetMapProvider implements DataSourceProvider {
   public readonly name: string = OPENSTREETMAP_PROVIDER_KEY;
+  public readonly capabilities: ProviderCapability[] = ['DISCOVERY'];
   private readonly customFetch: typeof fetch;
   private readonly defaultEndpoint: string;
 

@@ -110,4 +110,10 @@ describe('Data Sources Settings Page UI', () => {
     expect(html).toContain('Test Connection');
     expect(html).toContain('Configure Key');
   });
+
+  it('4. Enforces Mock provider safety (clearly marked DEV / TEST ONLY and prohibited from production use)', () => {
+    const html = renderToStaticMarkup(<DataSourcesSettingsPage />);
+    expect(html).toContain('DEV / TEST ONLY');
+    expect(html).toContain('Notice: Mock data source is strictly for local dev/test simulations. It is disabled in production environments.');
+  });
 });

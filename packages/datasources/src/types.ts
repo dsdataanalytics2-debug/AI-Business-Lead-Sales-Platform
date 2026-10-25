@@ -5,7 +5,8 @@
 import type {
   BusinessSearchQuery,
   BusinessSearchResult,
-  DiscoveredContact
+  DiscoveredContact,
+  ProviderCapability
 } from '@leadmate/shared';
 
 export type BusinessSearchInput = {
@@ -16,7 +17,7 @@ export type BusinessSearchInput = {
   cursor?: string;
 };
 
-export type { BusinessSearchQuery, BusinessSearchResult, DiscoveredContact };
+export type { BusinessSearchQuery, BusinessSearchResult, DiscoveredContact, ProviderCapability };
 
 /**
  * Execution context passed to provider search and resolution methods.
@@ -46,6 +47,7 @@ export interface ProviderMetadata {
   supportsContactEnrichment: boolean;
   supportsConnectionTest: boolean;
   costType: 'FREE' | 'PAID' | 'HYBRID';
+  capabilities: ProviderCapability[];
 }
 
 /**
@@ -57,6 +59,8 @@ export interface ProviderMetadata {
 export interface DataSourceProvider {
   /** Unique, stable provider identifier (e.g., 'mock', 'openstreetmap', 'google-places') */
   readonly name: string;
+  /** Declared capabilities */
+  readonly capabilities?: ProviderCapability[];
 
   /**
    * Searches businesses based on query parameters.

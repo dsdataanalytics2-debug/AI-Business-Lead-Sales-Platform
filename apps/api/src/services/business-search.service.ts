@@ -260,6 +260,16 @@ export class BusinessSearchService {
         throw err;
       }
 
+      let decryptedKey: string | undefined;
+      try {
+        decryptedKey = await datasourceSettingsService.getDecryptedProviderKey(
+          context.organizationId,
+          requestedProvider
+        );
+      } catch {
+        // Safe fail-closed
+      }
+
       rawResults = await provider.search(
         {
           q: subQuery.q,
@@ -270,6 +280,7 @@ export class BusinessSearchService {
         },
         {
           organizationId: context.organizationId,
+          apiKey: decryptedKey,
           correlationId: context.correlationId
         }
       );

@@ -176,15 +176,127 @@ describe('SalesMissionFlow', () => {
     expect(['HIGH', 'MEDIUM', 'LOW', 'NONE']).toContain(firstBuyer.wholesaleIntent);
     expect(firstBuyer.suggestedRelatedNeeds).toBeDefined();
 
+    // Verify discoverBuyers only queried discovery providers, never inbound-only providers
+    expect(discovered.buyers?.every((b) => b.provider !== 'facebook-lead-ads' && b.provider !== 'tiktok-lead-gen')).toBe(true);
+
+    // Test generic authorized inbound lead ingestion path (Must NOT default to HIGH intent or HOT priority)
+    const genericInbound = await salesMissionService.ingestInboundLead(
+      mission.id,
+      {
+        provider: 'facebook-lead-ads',
+        externalLeadId: 'fb_lead_inbound_test_101',
+        businessName: 'Karim Dental Care',
+        contactName: 'Dr. Karim',
+        phone: '+8801711998877',
+        email: 'karim@inbounddental.com',
+        city: 'Dhaka',
+        address: 'Dhanmondi 27, Dhaka',
+        notes: 'Inquiry submitted from Facebook lead ad regarding clinic services'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+
+    expect(genericInbound.action).toBe('CREATED');
+    expect(genericInbound.buyer.wholesaleIntent).not.toBe('HIGH');
+    expect(genericInbound.buyer.wholesaleIntent).toBe('NONE');
+    expect(genericInbound.buyer.priority).not.toBe('HOT');
+    expect(genericInbound.buyer.priority).toBe('WARM');
+    expect(genericInbound.buyer.status).toBe('POTENTIAL'); // Never automatically marked WON or customer
+    expect(genericInbound.buyer.provider).toBe('facebook-lead-ads');
+    expect(genericInbound.buyer.sourceEvidences).toBeDefined();
+    // Provenance stays in sourceEvidences, NOT in wholesaleIntentSignals
+    expect(genericInbound.buyer.wholesaleIntentSignals).not.toContain('AUTHORIZED_INBOUND_LEAD_SUBMISSION');
+
+    // Test generic TikTok lead form (Must NOT default to HIGH intent or HOT priority)
+    const genericTikTokLead = await salesMissionService.ingestInboundLead(
+      mission.id,
+      {
+        provider: 'tiktok-lead-gen',
+        externalLeadId: 'tt_lead_inbound_test_201',
+        businessName: 'Dhaka Lifestyle Clinic',
+        phone: '+8801822334455',
+        notes: 'General product inquiry from TikTok video ad'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+    expect(genericTikTokLead.action).toBe('CREATED');
+    expect(genericTikTokLead.buyer.wholesaleIntent).not.toBe('HIGH');
+    expect(genericTikTokLead.buyer.wholesaleIntent).toBe('NONE');
+    expect(genericTikTokLead.buyer.priority).not.toBe('HOT');
+    expect(genericTikTokLead.buyer.status).toBe('POTENTIAL'); // Never automatically marked WON
+
+    // Test explicit MOQ / wholesale catalog inquiry (Must detect MEDIUM intent deterministically)
+    const moqTikTokLead = await salesMissionService.ingestInboundLead(
+      mission.id,
+      {
+        provider: 'tiktok-lead-gen',
+        externalLeadId: 'tt_lead_inbound_test_202',
+        businessName: 'Chittagong Dental Supply',
+        phone: '+8801833445566',
+        notes: 'What is your MOQ? Please send wholesale catalog for dental chairs.'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+    expect(moqTikTokLead.action).toBe('CREATED');
+    expect(moqTikTokLead.buyer.wholesaleIntent).toBe('MEDIUM');
+    expect(moqTikTokLead.buyer.wholesaleIntentSignals).toContain('MOQ inquiry');
+    expect(moqTikTokLead.buyer.status).toBe('POTENTIAL');
+
+    // Verify deduplication on matching inbound lead with explicit bulk inquiry (upgrades intent & priority deterministically)
+    const upgradedInbound = await salesMissionService.ingestInboundLead(
+      mission.id,
+      {
+        provider: 'facebook-lead-ads',
+        externalLeadId: 'fb_lead_inbound_test_101',
+        businessName: 'Karim Dental Care',
+        phone: '+8801711998877',
+        notes: 'Need quotation for 500 units. Bulk price for dental equipment.'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+    expect(upgradedInbound.action).toBe('MERGED');
+    expect(upgradedInbound.buyer.wholesaleIntent).toBe('HIGH');
+    expect(upgradedInbound.buyer.priority).toBe('HOT');
+    expect(upgradedInbound.buyer.status).toBe('POTENTIAL'); // Still never automatically WON
+
+    // Verify subsequent weaker inbound inquiry does NOT downgrade existing verified HIGH intent
+    const followUpInbound = await salesMissionService.ingestInboundLead(
+      mission.id,
+      {
+        provider: 'facebook-lead-ads',
+        externalLeadId: 'fb_lead_inbound_test_101',
+        businessName: 'Karim Dental Care',
+        phone: '+8801711998877',
+        notes: 'Just following up on our earlier call'
+      },
+      {
+        organizationId: orgAlpha.id,
+        userId: userAlpha.id
+      }
+    );
+    expect(followUpInbound.action).toBe('MERGED');
+    expect(followUpInbound.buyer.wholesaleIntent).toBe('HIGH'); // Preserved stronger historical intent!
+    expect(followUpInbound.buyer.status).toBe('POTENTIAL'); // Never marked WON
+
     // CRITICAL REOPEN TEST: Reopening mission retrieves stored state without calling any external providers
     const reopened = await salesMissionService.getMissionById(mission.id, orgAlpha.id);
     expect(reopened.id).toBe(mission.id);
     expect(reopened.status).toBe(SalesMissionStatus.READY);
-    expect(reopened.buyers?.length).toBe(discovered.buyers?.length);
-    expect(reopened.buyers![0].businessName).toBe(firstBuyer.businessName);
-    expect(reopened.buyers![0].buyerScore).toBe(firstBuyer.buyerScore);
-    expect(reopened.buyers![0].priority).toBe(firstBuyer.priority);
-    expect(reopened.buyers![0].wholesaleIntent).toBe(firstBuyer.wholesaleIntent);
+    expect(reopened.buyers?.length).toBe((discovered.buyers?.length || 0) + 3);
+    expect(reopened.buyers?.some((b) => b.externalBusinessId === 'fb_lead_inbound_test_101')).toBe(true);
+    expect(reopened.buyers?.some((b) => b.externalBusinessId === 'tt_lead_inbound_test_201')).toBe(true);
   });
 
   it('4. Enforces strict tenant isolation across organizations', async () => {

@@ -137,6 +137,14 @@ export interface DiscoveryRunMetrics {
   searchedCombinations?: string[];
   executedAt?: string | Date;
   providerStatuses?: Record<string, string>;
+  providerBreakdown?: Record<string, number>;
+  mergedDuplicates?: number;
+  contactableCount?: number;
+  hotBuyersCount?: number;
+  highIntentCount?: number;
+  discoveredBuyersCount?: number;
+  inboundLeadsCount?: number;
+  assistedSourcesCount?: number;
   message?: string;
 }
 
@@ -158,6 +166,8 @@ export interface SourceEvidence {
   evidenceType: string;
   snippet?: string | null;
   confidence?: 'VERY_HIGH' | 'HIGH' | 'MEDIUM' | 'LOW' | number;
+  notes?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 export type EnrichedContactType =

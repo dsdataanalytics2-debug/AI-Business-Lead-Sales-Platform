@@ -411,24 +411,68 @@ export default function SalesMissionDetailPage() {
                 : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
             }`}
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-start gap-2.5">
               {discoveryFeedback.newBuyersAdded > 0 ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
               ) : (
-                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
               )}
-              <div>
+              <div className="space-y-1.5">
                 <div className="font-semibold text-sm">
                   {discoveryFeedback.newBuyersAdded > 0
                     ? `${discoveryFeedback.newBuyersAdded} new potential buyers found`
                     : 'No new buyers were found for the executed search combinations.'}
                 </div>
-                <div className="text-xs opacity-90 mt-0.5 space-y-0.5">
+                <div className="text-xs opacity-90 space-y-1">
                   <div>
                     {discoveryFeedback.newBuyersAdded > 0
-                      ? `${discoveryFeedback.newBuyersAdded} new buyers added · ${discoveryFeedback.duplicatesSkipped ?? (discoveryFeedback.previouslyDiscoveredSkipped + discoveryFeedback.providerDuplicatesSkipped)} duplicates skipped · Mission total: ${discoveryFeedback.missionTotal} unique buyers`
+                      ? `${discoveryFeedback.newBuyersAdded} new buyers added · ${discoveryFeedback.duplicatesSkipped ?? (discoveryFeedback.previouslyDiscoveredSkipped + discoveryFeedback.providerDuplicatesSkipped)} duplicates skipped · Mission total: ${discoveryFeedback.missionTotal ?? mission?.buyers?.length ?? 0} unique buyers`
                       : `${discoveryFeedback.duplicatesSkipped ?? (discoveryFeedback.previouslyDiscoveredSkipped + discoveryFeedback.providerDuplicatesSkipped)} duplicates were skipped.`}
                   </div>
+
+                  {/* Summary Metric Badges */}
+                  <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+                    <span className="px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/60 text-slate-300">
+                      Merged Duplicates: <strong className="text-slate-100">{discoveryFeedback.mergedDuplicates ?? (discoveryFeedback.duplicatesSkipped ?? 0)}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/60 text-slate-300">
+                      Contactable: <strong className="text-emerald-400">{discoveryFeedback.contactableCount ?? 0}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/60 text-slate-300">
+                      HOT Buyers: <strong className="text-rose-400">{discoveryFeedback.hotBuyersCount ?? 0}</strong>
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900/80 border border-slate-700/60 text-slate-300">
+                      High-Intent Buyers: <strong className="text-purple-400">{discoveryFeedback.highIntentCount ?? 0}</strong>
+                    </span>
+                  </div>
+
+                  {/* Multi-Source Provider Breakdown */}
+                  {discoveryFeedback.providerBreakdown && Object.keys(discoveryFeedback.providerBreakdown).length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+                      <span className="text-slate-400 font-medium">Source Breakdown:</span>
+                      {Object.entries(discoveryFeedback.providerBreakdown).map(([prov, count]) => {
+                        const labels: Record<string, string> = {
+                          'osm': 'OpenStreetMap',
+                          'google-places': 'Google Places',
+                          'facebook-business': 'Facebook Business',
+                          'facebook-lead-ads': 'Facebook Lead Ads',
+                          'tiktok-business': 'TikTok Business',
+                          'tiktok-lead-gen': 'TikTok Lead Gen',
+                          'public-directory': 'Public Directory',
+                          'public-rfq': 'Public RFQ'
+                        };
+                        return (
+                          <span
+                            key={prov}
+                            className="px-2 py-0.5 rounded bg-indigo-950/50 border border-indigo-500/30 text-indigo-200 font-mono text-[10px]"
+                          >
+                            {labels[prov] || prov}: <strong>{count}</strong>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {discoveryFeedback.targetsUsed && discoveryFeedback.targetsUsed.length > 0 && (
                     <div className="text-[11px] opacity-80 pt-0.5">
                       Targets: {discoveryFeedback.targetsUsed.join(', ')} | Locations: {discoveryFeedback.locationsUsed?.join(', ') || 'Base Market'}
@@ -439,7 +483,7 @@ export default function SalesMissionDetailPage() {
             </div>
             <button
               onClick={() => setDiscoveryFeedback(null)}
-              className="text-xs opacity-60 hover:opacity-100"
+              className="text-xs opacity-60 hover:opacity-100 flex-shrink-0"
             >
               Dismiss
             </button>
@@ -886,35 +930,85 @@ export default function SalesMissionDetailPage() {
                             </div>
                           )}
 
-                          {/* Provenance Tags & Multi-Source Badges */}
-                          <div className="flex flex-wrap gap-1.5 pt-1">
-                            {buyer.matchedBuyerCategory && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                                Target: {buyer.matchedBuyerCategory}
-                              </span>
-                            )}
-                            <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-900 border border-slate-800 text-slate-400">
-                              via {buyer.provider}
-                            </span>
-                            {buyer.sourceConfidence && (
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                                  buyer.sourceConfidence === 'VERY_HIGH'
-                                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                                    : buyer.sourceConfidence === 'HIGH'
-                                    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                }`}
-                              >
-                                Confidence: {buyer.sourceConfidence}
-                              </span>
-                            )}
-                            {buyer.sourceEvidences && buyer.sourceEvidences.length > 1 && (
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-600/30">
-                                {buyer.sourceEvidences.length} Verified Sources
-                              </span>
-                            )}
-                          </div>
+                          {/* Provenance Tags & Multi-Source Badges (Section 18) */}
+                          {(() => {
+                            const formatSourceName = (nameOrType: string) => {
+                              const map: Record<string, string> = {
+                                'facebook-business': 'Facebook Business',
+                                'FACEBOOK_BUSINESS': 'Facebook Business',
+                                'facebook-lead-ads': 'Facebook Lead Ads',
+                                'FACEBOOK_LEAD_ADS': 'Facebook Lead Ads',
+                                'tiktok-business': 'TikTok Business',
+                                'TIKTOK_BUSINESS': 'TikTok Business',
+                                'tiktok-lead-gen': 'TikTok Lead Gen',
+                                'TIKTOK_LEAD_GEN': 'TikTok Lead Gen',
+                                'google-places': 'Google Places',
+                                'GOOGLE_PLACES': 'Google Places',
+                                'osm': 'OSM',
+                                'OPENSTREETMAP': 'OSM',
+                                'public-rfq': 'Public RFQ',
+                                'PUBLIC_RFQ': 'Public RFQ',
+                                'company-website': 'Company Website',
+                                'COMPANY_WEBSITE': 'Company Website',
+                                'public-directory': 'Public Directory',
+                                'PUBLIC_DIRECTORY': 'Public Directory'
+                              };
+                              return map[nameOrType] || nameOrType;
+                            };
+
+                            const primaryLabel = formatSourceName(buyer.provider);
+                            const otherSources = Array.isArray(buyer.sourceEvidences)
+                              ? Array.from(new Set(
+                                  buyer.sourceEvidences
+                                    .map((se: any) => formatSourceName(se.sourceType || se.sourceName || ''))
+                                    .filter((s: string) => s && s.toLowerCase() !== primaryLabel.toLowerCase())
+                                ))
+                              : [];
+
+                            return (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                                {buyer.matchedBuyerCategory && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                                    Target: {buyer.matchedBuyerCategory}
+                                  </span>
+                                )}
+
+                                {/* Primary Source Chip */}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-slate-900 border border-slate-700 text-slate-200">
+                                  <span className="text-slate-400">Primary:</span>
+                                  <strong>{primaryLabel}</strong>
+                                </span>
+
+                                {/* Also found via secondary sources */}
+                                {otherSources.length > 0 && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-950/40 border border-indigo-500/30 text-indigo-300">
+                                    <span className="text-indigo-400/80">Also via:</span>
+                                    <span>{otherSources.join(', ')}</span>
+                                  </span>
+                                )}
+
+                                {buyer.sourceConfidence && (
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                      buyer.sourceConfidence === 'VERY_HIGH'
+                                        ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                        : buyer.sourceConfidence === 'HIGH'
+                                        ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/30'
+                                        : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                    }`}
+                                  >
+                                    Confidence: {buyer.sourceConfidence}
+                                  </span>
+                                )}
+
+                                {buyer.sourceEvidences && buyer.sourceEvidences.length > 1 && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/40 text-emerald-400 border border-emerald-600/30">
+                                    {buyer.sourceEvidences.length} Verified Sources
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
 
                           {/* Sub-Phase B: AI Suggested Related Needs for this Buyer */}
                           {buyer.suggestedRelatedNeeds && buyer.suggestedRelatedNeeds.length > 0 && (

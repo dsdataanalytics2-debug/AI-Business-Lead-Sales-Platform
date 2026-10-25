@@ -707,6 +707,11 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ apiKey })
     }),
+  configureProvider: (provider: string, apiKey: string): Promise<{ success: boolean; credentialMasked: string; credentialLastFour: string; status: DataSourceCardStatus }> =>
+    request(`/settings/data-sources/${encodeURIComponent(provider)}/configure`, {
+      method: 'POST',
+      body: JSON.stringify({ apiKey })
+    }),
   testGooglePlaces: (apiKey?: string): Promise<{ connected: boolean; provider: string; message: string }> =>
     request('/settings/data-sources/google-places/test', {
       method: 'POST',
